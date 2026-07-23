@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+.env
+*.log
+.DS_Store
+infra/srs/vendor/
+apps/e2e/test-results/
+apps/e2e/playwright-report/
+infra/zap/*.html
+infra/zap/*.json
+infra/zap/zap.yaml

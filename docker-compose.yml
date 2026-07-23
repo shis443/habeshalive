@@ -1,0 +1,223 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: habeshalive
+      POSTGRES_PASSWORD: habeshalive
+      POSTGRES_DB: habeshalive
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U habeshalive"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-habeshalive}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev-only-change-me}
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Nightly pg_dump -> gzip -> MinIO, with retention cleanup. Runs one
+  # backup immediately on start (see infra/backup/backup.sh) so a fresh
+  # deployment isn't unprotected for up to 24h, then settles into the
+  # BACKUP_HOUR_UTC schedule.
+  backup:
+    build:
+      context: ./infra/backup
+    environment:
+      DATABASE_URL: postgres://habeshalive:habeshalive@postgres:5432/habeshalive
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-habeshalive}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev-only-change-me}
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-2}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    command: centrifugo --config=/centrifugo/config.json
+    volumes:
+      - ./centrifugo/config.json:/centrifugo/config.json
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  # Two identical SRS nodes, both internal-only — haproxy is the single
+  # external entry point (see infra/haproxy/haproxy.cfg for the topology
+  # and scaling knob). Both nodes share srs_hls_data as their HLS output
+  # dir: RTMP ingest for a given stream key can only ever land on ONE node
+  # (that's inherent to a single TCP connection), but with shared storage
+  # for hls_path, EITHER node can serve that stream's segments over HTTP —
+  # so HAProxy's independent uri-hash routing for HLS requests can never
+  # 404 a stream that's actually live. (SRS's own origin_cluster/coworkers
+  # feature was tried first and reverted: it only relays RTMP/HTTP-FLV
+  # play requests, not static HLS file serving — see srs.conf.template.)
+  srs-1:
+    image: ossrs/srs:6
+    entrypoint: ["/entrypoint/docker-entrypoint.sh"]
+    environment:
+      SRS_WEBHOOK_SECRET: ${VIDEO_WEBHOOK_SECRET:-dev-only-change-me}
+    volumes:
+      - ./infra/srs/conf/srs.conf.template:/usr/local/srs/conf/srs.conf.template
+      - ./infra/srs/docker-entrypoint.sh:/entrypoint/docker-entrypoint.sh
+      - srs_hls_data:/usr/local/srs/objs/nginx/html
+    restart: unless-stopped
+
+  srs-2:
+    image: ossrs/srs:6
+    entrypoint: ["/entrypoint/docker-entrypoint.sh"]
+    environment:
+      SRS_WEBHOOK_SECRET: ${VIDEO_WEBHOOK_SECRET:-dev-only-change-me}
+    volumes:
+      - ./infra/srs/conf/srs.conf.template:/usr/local/srs/conf/srs.conf.template
+      - ./infra/srs/docker-entrypoint.sh:/entrypoint/docker-entrypoint.sh
+      - srs_hls_data:/usr/local/srs/objs/nginx/html
+    restart: unless-stopped
+
+  haproxy:
+    image: haproxy:3.0-alpine
+    volumes:
+      - ./infra/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "1935:1935" # RTMP ingest — what OBS pushes to
+      - "1985:1985" # SRS HTTP API (round-robin, not stream-critical)
+      - "8080:8080" # HTTP server (HLS playback)
+      - "9101:9101" # HAProxy's own Prometheus exporter (/metrics)
+    depends_on:
+      - srs-1
+      - srs-2
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      # postgres/redis: internal service-to-service traffic, use compose
+      # hostnames. SRS_*_HOST: addresses external clients (OBS, browsers)
+      # actually connect to, so localhost (mapped by SRS's published ports)
+      # even from inside this container — never the internal "srs" hostname.
+      DATABASE_URL: postgres://habeshalive:habeshalive@postgres:5432/habeshalive
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      VIDEO_WEBHOOK_SECRET: ${VIDEO_WEBHOOK_SECRET:-dev-only-change-me}
+      SRS_RTMP_HOST: ${SRS_RTMP_HOST:-localhost:1935}
+      SRS_HTTP_HOST: ${SRS_HTTP_HOST:-localhost:8080}
+      # Empty by default (no real Chapa account) — wallet/chapa-client.ts
+      # falls back to a stub, and the webhook route refuses with 501
+      # rather than silently accept unauthenticated wallet credits.
+      CHAPA_SECRET_KEY: ${CHAPA_SECRET_KEY:-}
+      CHAPA_WEBHOOK_SECRET: ${CHAPA_WEBHOOK_SECRET:-}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:4000}
+      WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-http://localhost:3000}
+      API_PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      # This container's own server-side fetches must reach the api
+      # container by its internal Docker hostname, not "localhost" (which
+      # inside this container refers to itself) — see lib/config.ts.
+      API_INTERNAL_URL: http://api:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://habeshalive:habeshalive@postgres:5432/habeshalive?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.63.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+      - haproxy
+      - postgres-exporter
+      - redis-exporter
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-dev-only-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  srs_hls_data:
+  prometheus_data:
+  grafana_data:
+  minio_data:

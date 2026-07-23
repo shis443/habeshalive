@@ -1,0 +1,51 @@
+.main {
+  padding: calc(var(--shell-top-height) + var(--space-3)) var(--space-3)
+    calc(var(--shell-bottom-height) + var(--space-4));
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.heading {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: 24px;
+  color: var(--on-background);
+  margin: 0 0 4px;
+}
+
+.subtext {
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  margin: 0 0 var(--space-3);
+}
+
+.profileRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.profileAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  object-fit: cover;
+}
+
+.editAvatarLink {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}

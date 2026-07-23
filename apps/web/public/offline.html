@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HabeshaLive — Offline</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #0b1326;
+    color: #f2f0f7;
+    font-family: system-ui, sans-serif;
+    text-align: center;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  p { margin: 0; color: #c8c5d0; font-size: 14px; }
+  button {
+    margin-top: 12px;
+    background: #d0bcff;
+    color: #0b1326;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <h1>You're offline</h1>
+  <p>HabeshaLive needs a connection to load streams and chat.</p>
+  <button onclick="location.reload()">Try again</button>
+</body>
+</html>

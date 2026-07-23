@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # apps/api and apps/web both import compiled @habeshalive/shared
+      # (its package.json points at dist/, not src/ — see the earlier
+      # incident this caused: a stale dist/ silently hid real type errors
+      # until this was rebuilt), so it must exist before typechecking them.
+      - run: npm run build --workspace=packages/shared
+      - run: npm run typecheck
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: habeshalive
+          POSTGRES_PASSWORD: habeshalive
+          POSTGRES_DB: habeshalive
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U habeshalive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://habeshalive:habeshalive@localhost:5432/habeshalive
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace=packages/shared
+      - run: node db/migrate.mjs
+      # Only apps/api has a Vitest suite (the ledger invariant tests) —
+      # scoped explicitly rather than the root `npm test` (which now also
+      # picks up apps/e2e's Playwright suite via --workspaces --if-present,
+      # and that needs the full docker compose stack, not a bare Postgres
+      # service container).
+      - run: npm run test --workspace=apps/api
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [typecheck, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # The real 13-container stack, not a lighter CI-only substitute —
+      # this repo's whole point since the SRS pass was "no separate
+      # future-migration plan," and that extends to how it's tested.
+      - name: Boot the stack
+        run: docker compose up -d --build
+        env:
+          JWT_SECRET: ci-test-secret
+          VIDEO_WEBHOOK_SECRET: ci-test-secret
+
+      - name: Wait for web and api to respond
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:4000/health >/dev/null && curl -sf http://localhost:3000/ >/dev/null; then
+              echo "stack is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "stack did not become ready in time"; docker compose logs; exit 1
+
+      - run: node db/migrate.mjs
+        env:
+          DATABASE_URL: postgres://habeshalive:habeshalive@localhost:5432/habeshalive
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/e2e
+
+      - run: npm run test --workspace=apps/e2e
+        env:
+          JWT_SECRET: ci-test-secret
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+
+      # playwright.config.ts uses trace: "retain-on-failure" (not the html
+      # reporter, so there's no playwright-report/ dir to upload) — traces
+      # land under test-results/ and are viewable with
+      # `npx playwright show-trace <file>`.
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/e2e/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

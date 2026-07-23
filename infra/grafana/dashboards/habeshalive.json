@@ -1,0 +1,95 @@
+{
+  "title": "HabeshaLive — Platform Overview",
+  "uid": "habeshalive-overview",
+  "timezone": "utc",
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Live streams",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "streams_live_total", "refId": "A" }]
+    },
+    {
+      "id": 2,
+      "title": "SRS clients (viewers) per node",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 9, "x": 6, "y": 0 },
+      "targets": [{ "expr": "srs_clients", "legendFormat": "{{instance}}", "refId": "A" }]
+    },
+    {
+      "id": 3,
+      "title": "SRS streams per node",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 9, "x": 15, "y": 0 },
+      "targets": [{ "expr": "srs_streams", "legendFormat": "{{instance}}", "refId": "A" }]
+    },
+    {
+      "id": 4,
+      "title": "HAProxy backend server status (1 = UP)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "haproxy_server_status{state=\"UP\"}", "legendFormat": "{{proxy}}/{{server}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "API request rate by route",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total[1m])) by (route)", "legendFormat": "{{route}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "API p95 latency by route",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Postgres active connections (habeshalive db)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 18 },
+      "targets": [
+        {
+          "expr": "pg_stat_database_numbackends{datname=\"habeshalive\"}",
+          "legendFormat": "connections",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Redis memory used",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 18 },
+      "targets": [{ "expr": "redis_memory_used_bytes", "legendFormat": "bytes", "refId": "A" }]
+    },
+    {
+      "id": 9,
+      "title": "API process memory (RSS)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 18 },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"api\"}",
+          "legendFormat": "bytes",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

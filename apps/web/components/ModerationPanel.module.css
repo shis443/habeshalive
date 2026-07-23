@@ -1,0 +1,66 @@
+.panel {
+  background: var(--surface-container);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.heading {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-3);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.row:last-of-type {
+  border-bottom: none;
+}
+
+.rowLabel {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--on-background);
+}
+
+.rowValue {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.statusOff {
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-high);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.manageLink {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  cursor: not-allowed;
+}

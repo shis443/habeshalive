@@ -1,0 +1,58 @@
+# HabeshaLive SRS config — RTMP ingest, HLS output, HTTP callback wiring to
+# the API. Adapted from vendor/trunk/conf/hls.conf + http.hooks.callback.conf
+# (the real technical docs, read before the vendor .claude/ injection was
+# found and removed — see infra/srs/README.md).
+#
+# __SRS_WEBHOOK_SECRET__ is substituted by docker-entrypoint.sh at container
+# start: SRS's config format has no generic ${VAR} interpolation, only
+# specific whole-directive env overrides, so templating it ourselves with a
+# verified sed placeholder was safer than relying on unconfirmed syntax.
+
+listen              1935;
+max_connections     1000;
+daemon              off;
+srs_log_tank        console;
+
+http_api {
+    enabled         on;
+    listen          1985;
+}
+
+http_server {
+    enabled         on;
+    listen          8080;
+    dir             ./objs/nginx/html;
+}
+
+# Native Prometheus exporter, shipped in SRS itself since v5.0.67 (verified
+# against vendor/trunk/doc/CHANGELOG.md and conf/prometheus.conf) — no
+# separate sidecar exporter needed.
+exporter {
+    enabled         on;
+    listen          9972;
+}
+
+vhost __defaultVhost__ {
+    hls {
+        enabled         on;
+        hls_path        ./objs/nginx/html;
+        hls_fragment    4;
+        hls_window      30;
+    }
+
+    # NOTE: SRS's origin_cluster/coworkers feature was tried here and
+    # reverted — it relays RTMP/HTTP-FLV *play* requests via redirect
+    # (srs_app_coworkers.cpp: SrsCoWorkers::dumps() builds a redirect
+    # response for a streaming-protocol play request), it does not affect
+    # http_server's static file serving of on-disk HLS segments. Verified
+    # live: with the cluster block configured and no parse errors, a node
+    # that never ingested a stream still 404s on that stream's .m3u8 over
+    # HTTP. The actual fix for cross-node HLS availability is a shared
+    # Docker volume for hls_path, mounted into every SRS node — see
+    # docker-compose.yml (srs_hls_data) and infra/haproxy/haproxy.cfg.
+    http_hooks {
+        enabled         on;
+        on_publish      http://api:4000/streams/webhooks/live-started?secret=__SRS_WEBHOOK_SECRET__;
+        on_unpublish    http://api:4000/streams/webhooks/live-ended?secret=__SRS_WEBHOOK_SECRET__;
+    }
+}

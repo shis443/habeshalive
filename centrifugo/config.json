@@ -1,0 +1,18 @@
+{
+  "token_hmac_secret_key": "dev-only-change-me",
+  "api_key": "dev-only-change-me",
+  "admin": true,
+  "admin_password": "admin",
+  "admin_secret": "dev-only-change-me",
+  "allowed_origins": ["http://localhost:3000"],
+  "namespaces": [
+    {
+      "name": "stream-chat",
+      "presence": true,
+      "join_leave": false,
+      "force_push_join_leave": false,
+      "history_size": 50,
+      "history_ttl": "300s"
+    }
+  ]
+}

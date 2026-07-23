@@ -1,0 +1,127 @@
+.card {
+  background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container-lowest));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.label {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: var(--space-1);
+}
+
+.balance {
+  font-family: var(--font-headline);
+  font-weight: 700;
+  font-size: 36px;
+  color: var(--on-background);
+  margin: 0;
+}
+
+.delta {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 4px 0 var(--space-3);
+}
+
+.deltaPositive {
+  color: var(--secondary);
+}
+
+.deltaNegative {
+  color: var(--error);
+}
+
+.deltaNeutral {
+  color: var(--on-surface-variant);
+}
+
+.withdrawButton {
+  padding: 12px var(--space-3);
+  border-radius: 4px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(208, 188, 255, 0.35);
+}
+
+.withdrawButton:disabled {
+  opacity: 0.6;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.form {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.field {
+  margin-bottom: var(--space-2);
+}
+
+.fieldLabel {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 4px;
+}
+
+.input,
+.select {
+  width: 100%;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  padding: 10px var(--space-2);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.cancelButton {
+  padding: 10px var(--space-3);
+  border-radius: 4px;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-background);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.error {
+  color: var(--error);
+  font-size: 13px;
+  margin: var(--space-2) 0 0;
+}
+
+.success {
+  color: var(--secondary);
+  font-size: 13px;
+  margin: var(--space-2) 0 0;
+}

@@ -1,0 +1,93 @@
+.section {
+  margin-bottom: var(--space-4);
+}
+
+.heading {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-2);
+}
+
+.empty {
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.title {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--on-background);
+  margin: 0;
+}
+
+.timestamp {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  margin: 2px 0 0;
+}
+
+.amountWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.amountCredit {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--secondary);
+}
+
+.amountDebit {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--error);
+}
+
+.statusPill {
+  font-family: var(--font-label);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.statusCompleted {
+  background: rgba(76, 215, 246, 0.14);
+  color: var(--secondary);
+}
+
+.statusPending {
+  background: var(--surface-container-high);
+  color: var(--tertiary);
+}
+
+.statusFailed {
+  background: rgba(255, 180, 171, 0.14);
+  color: var(--error);
+}

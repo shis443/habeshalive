@@ -1,0 +1,22 @@
+{
+  "name": "habeshalive",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "node --env-file=.env db/migrate.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  }
+}

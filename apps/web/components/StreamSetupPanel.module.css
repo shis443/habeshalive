@@ -1,0 +1,100 @@
+.panel {
+  background: var(--surface-container);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.heading {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-3);
+}
+
+.field {
+  margin-bottom: var(--space-3);
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.fieldLabel {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 4px;
+}
+
+.readonlyValue {
+  display: block;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  padding: 8px var(--space-2);
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--on-background);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.keyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.keyValue {
+  flex: 1;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  padding: 8px var(--space-2);
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--on-background);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.smallButton {
+  padding: 8px var(--space-2);
+  border-radius: 4px;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-background);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rotateButton {
+  margin-top: var(--space-2);
+  padding: 8px var(--space-2);
+  border-radius: 4px;
+  border: 1px solid var(--error);
+  color: var(--error);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: transparent;
+}
+
+.rotateButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

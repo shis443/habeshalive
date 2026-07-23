@@ -1,0 +1,145 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import { pool } from "../common/db.js";
+
+export interface TestUser {
+  id: string;
+  walletId: string;
+}
+
+async function createUserWithWallet(prefix: string): Promise<TestUser> {
+  const suffix = randomBytes(4).toString("hex");
+  const phone = `+2519${suffix.slice(0, 8)}`.padEnd(13, "0").slice(0, 13);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const userResult = await client.query<{ id: string }>(
+      `INSERT INTO users (phone_number, username, display_name, is_verified)
+       VALUES ($1, $2, $3, TRUE) RETURNING id`,
+      [phone, `${prefix}_${suffix}`, `${prefix} ${suffix}`]
+    );
+    const userId = userResult.rows[0]!.id;
+
+    const walletResult = await client.query<{ id: string }>(
+      `INSERT INTO wallets (owner_type, owner_id, currency) VALUES ('user', $1, 'ETB') RETURNING id`,
+      [userId]
+    );
+    const walletId = walletResult.rows[0]!.id;
+
+    await client.query(`INSERT INTO wallet_balances_cache (wallet_id, balance_santim) VALUES ($1, 0)`, [
+      walletId,
+    ]);
+
+    await client.query("COMMIT");
+    return { id: userId, walletId };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function createTestViewer(): Promise<TestUser> {
+  return createUserWithWallet("viewer");
+}
+
+export interface TestCreator extends TestUser {
+  streamId: string;
+}
+
+export async function createTestCreator(revenueShareBps = 8000): Promise<TestCreator> {
+  const user = await createUserWithWallet("creator");
+  const streamKey = randomBytes(16).toString("hex");
+
+  await pool.query(
+    `INSERT INTO creator_profiles (user_id, stream_key, revenue_share_bps) VALUES ($1, $2, $3)`,
+    [user.id, streamKey, revenueShareBps]
+  );
+
+  const streamResult = await pool.query<{ id: string }>(
+    `INSERT INTO streams (creator_id, title, status, started_at) VALUES ($1, 'Test Stream', 'live', now()) RETURNING id`,
+    [user.id]
+  );
+
+  return { ...user, streamId: streamResult.rows[0]!.id };
+}
+
+export async function getGiftTypeId(name: "Buna" | "Injera" | "Lion" | "Crown"): Promise<string> {
+  const { rows } = await pool.query<{ id: string }>(`SELECT id FROM gift_types WHERE name = $1`, [name]);
+  const row = rows[0];
+  if (!row) throw new Error(`Gift type ${name} not seeded — run db:migrate`);
+  return row.id;
+}
+
+export async function getWalletBalance(walletId: string): Promise<number> {
+  const { rows } = await pool.query<{ balance_santim: number }>(
+    `SELECT balance_santim FROM wallet_balances_cache WHERE wallet_id = $1`,
+    [walletId]
+  );
+  return rows[0]?.balance_santim ?? 0;
+}
+
+export async function assertTransactionBalanced(ledgerTransactionId: string): Promise<void> {
+  const { rows } = await pool.query<{ direction: "debit" | "credit"; amount_santim: number }>(
+    `SELECT direction, amount_santim FROM ledger_entries WHERE ledger_transaction_id = $1`,
+    [ledgerTransactionId]
+  );
+  if (rows.length < 2) {
+    throw new Error(`Transaction ${ledgerTransactionId} has fewer than 2 entries`);
+  }
+  const credits = rows.filter((r) => r.direction === "credit").reduce((sum, r) => sum + r.amount_santim, 0);
+  const debits = rows.filter((r) => r.direction === "debit").reduce((sum, r) => sum + r.amount_santim, 0);
+  if (credits !== debits) {
+    throw new Error(`Transaction ${ledgerTransactionId} does not balance: credits=${credits} debits=${debits}`);
+  }
+}
+
+export function uniqueTxRef(): string {
+  return `topup_${randomUUID()}`;
+}
+
+export async function cleanupTestUsers(userIds: string[]): Promise<void> {
+  if (userIds.length === 0) return;
+
+  // Gift transactions also leave an entry on the shared platform wallet, so
+  // "owned by one of our test wallets" isn't enough to find every entry —
+  // collect full transaction ids first via every path that can reach them.
+  const { rows: txRows } = await pool.query<{ id: string }>(
+    `SELECT DISTINCT lt.id
+     FROM ledger_transactions lt
+     LEFT JOIN gifts_sent gs ON gs.ledger_transaction_id = lt.id
+     LEFT JOIN payouts p ON p.ledger_transaction_id = lt.id
+     LEFT JOIN streams s ON s.id = lt.stream_id
+     WHERE gs.sender_id = ANY($1) OR gs.creator_id = ANY($1) OR p.creator_id = ANY($1) OR s.creator_id = ANY($1)
+        OR lt.id IN (
+          SELECT ledger_transaction_id FROM ledger_entries
+          WHERE wallet_id IN (SELECT id FROM wallets WHERE owner_type = 'user' AND owner_id = ANY($1))
+        )`,
+    [userIds]
+  );
+  const ledgerTransactionIds = txRows.map((r) => r.id);
+
+  await pool.query(`DELETE FROM gifts_sent WHERE sender_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
+  await pool.query(`DELETE FROM payouts WHERE creator_id = ANY($1)`, [userIds]);
+  await pool.query(`DELETE FROM ledger_entries WHERE ledger_transaction_id = ANY($1)`, [ledgerTransactionIds]);
+  await pool.query(`DELETE FROM ledger_transactions WHERE id = ANY($1)`, [ledgerTransactionIds]);
+  await pool.query(
+    `DELETE FROM wallet_balances_cache WHERE wallet_id IN (SELECT id FROM wallets WHERE owner_type = 'user' AND owner_id = ANY($1))`,
+    [userIds]
+  );
+  await pool.query(`DELETE FROM wallets WHERE owner_type = 'user' AND owner_id = ANY($1)`, [userIds]);
+  await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [userIds]);
+
+  // Deleting entries that belonged to the shared platform wallet leaves its
+  // cache stale — reconcile it from the remaining entries (this is exactly
+  // the periodic reconciliation the ledger design calls for).
+  await pool.query(
+    `UPDATE wallet_balances_cache
+     SET balance_santim = COALESCE((
+       SELECT SUM(CASE WHEN direction = 'credit' THEN amount_santim ELSE -amount_santim END)
+       FROM ledger_entries WHERE wallet_id = wallet_balances_cache.wallet_id
+     ), 0), updated_at = now()
+     WHERE wallet_id = (SELECT id FROM wallets WHERE owner_type = 'platform' AND currency = 'ETB')`
+  );
+}

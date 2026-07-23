@@ -1,0 +1,57 @@
+.wrap {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4) 0 var(--space-3);
+}
+
+.frame {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 4px solid var(--primary);
+  box-shadow: 0 0 32px rgba(208, 188, 255, 0.45);
+  background: radial-gradient(circle at 30% 20%, rgba(208, 188, 255, 0.15), rgba(76, 215, 246, 0.08) 60%, transparent);
+  overflow: hidden;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+.framePulse {
+  transform: scale(1.03);
+  box-shadow: 0 0 44px rgba(208, 188, 255, 0.65);
+}
+
+.svgWrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.svgWrap :global(svg) {
+  width: 100%;
+  height: 100%;
+}
+
+.sparkle {
+  position: absolute;
+  top: 14px;
+  right: 22px;
+  color: var(--secondary);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}

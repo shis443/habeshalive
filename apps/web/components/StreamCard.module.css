@@ -1,0 +1,97 @@
+.card {
+  display: block;
+}
+
+.thumbnailWrap {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container-lowest));
+  margin-bottom: var(--space-2);
+}
+
+.thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnailPlaceholder {
+  width: 100%;
+  height: 100%;
+}
+
+.liveBadge {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.viewerCount {
+  position: absolute;
+  bottom: var(--space-2);
+  left: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(6, 14, 32, 0.75);
+  color: var(--on-background);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--on-background);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator {
+  margin: 0;
+  font-family: var(--font-label);
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.tags {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: 4px;
+}
+
+.tag {
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}

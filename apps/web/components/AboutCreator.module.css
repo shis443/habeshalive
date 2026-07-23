@@ -1,0 +1,26 @@
+.section {
+  padding: var(--space-3) 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.heading {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--on-background);
+  margin: 0 0 var(--space-1);
+}
+
+.followerCount {
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-2);
+}
+
+.bio {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--on-background);
+  margin: 0;
+}

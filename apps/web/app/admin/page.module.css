@@ -1,0 +1,45 @@
+.main {
+  padding: calc(var(--shell-top-height) + var(--space-4)) var(--space-3)
+    calc(var(--shell-bottom-height) + var(--space-4));
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.heading {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--on-background);
+  margin: 0 0 var(--space-4);
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.grafanaLink {
+  display: inline-block;
+  margin-bottom: var(--space-5);
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.section {
+  margin-bottom: var(--space-5);
+}
+
+.sectionTitle {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-3);
+}

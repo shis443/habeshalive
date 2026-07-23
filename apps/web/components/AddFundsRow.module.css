@@ -1,0 +1,157 @@
+.row {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  width: 100%;
+  text-align: left;
+  background: var(--surface-container);
+}
+
+.header:hover {
+  background: var(--surface-container-high);
+}
+
+.iconWrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--surface-container-high);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.textWrap {
+  flex: 1;
+}
+
+.name {
+  display: block;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--on-background);
+}
+
+.description {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.form {
+  padding: 0 var(--space-3) var(--space-3);
+  background: var(--surface-container);
+}
+
+.field {
+  margin-bottom: var(--space-2);
+}
+
+.fieldLabel {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 4px;
+}
+
+.input {
+  width: 100%;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  padding: 10px var(--space-2);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.submitButton {
+  width: 100%;
+  padding: 10px var(--space-3);
+  border-radius: 4px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.checkoutBox {
+  background: var(--surface-container-low);
+  border: 1px dashed var(--outline-variant);
+  border-radius: 4px;
+  padding: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.checkoutLabel {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  margin-bottom: 4px;
+}
+
+.checkoutText {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-2);
+  word-break: break-all;
+}
+
+.simulateButton {
+  width: 100%;
+  padding: 8px var(--space-2);
+  border-radius: 4px;
+  border: 1px solid var(--secondary);
+  color: var(--secondary);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: transparent;
+}
+
+.simulateButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--error);
+  font-size: 12px;
+  margin: var(--space-1) 0 0;
+}
+
+.success {
+  color: var(--secondary);
+  font-size: 12px;
+  margin: var(--space-1) 0 0;
+}

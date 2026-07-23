@@ -1,0 +1,81 @@
+:root {
+  --background: #0b1326;
+  --surface-container-lowest: #060e20;
+  --surface-container-low: #131b2e;
+  --surface-container: #171f33;
+  --surface-container-high: #222a3d;
+  --surface-container-highest: #2d3449;
+  --on-background: #dae2fd;
+  --on-surface-variant: #cbc3d7;
+  --outline-variant: #494454;
+  --primary: #d0bcff;
+  --on-primary: #3c0091;
+  --primary-container: #a078ff;
+  --secondary: #4cd7f6;
+  --on-secondary: #003640;
+  --tertiary: #ffb869;
+  --error: #ffb4ab;
+  --on-error: #690005;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+  --space-6: 64px;
+
+  --font-headline: var(--font-hanken), sans-serif;
+  --font-body: var(--font-inter), sans-serif;
+  --font-label: var(--font-geist), sans-serif;
+
+  --shell-top-height: 56px;
+  --shell-bottom-height: 64px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
