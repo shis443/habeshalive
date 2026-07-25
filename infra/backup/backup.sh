@@ -1,20 +1,21 @@
 #!/bin/sh
 set -eu
 
-mc alias set backupstore "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
-mc mb --ignore-existing backupstore/habeshalive-backups >/dev/null
+mc alias set backupstore "$BACKUP_S3_ENDPOINT" "$BACKUP_S3_ACCESS_KEY_ID" "$BACKUP_S3_SECRET_ACCESS_KEY" >/dev/null
+mc mb --ignore-existing "backupstore/${BACKUP_S3_BUCKET:-habeshalive-backups}" >/dev/null
 
 run_backup() {
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
   file="/tmp/habeshalive-${ts}.sql.gz"
+  bucket="${BACKUP_S3_BUCKET:-habeshalive-backups}"
   echo "[backup] ${ts} starting pg_dump -> ${file}"
   pg_dump "$DATABASE_URL" | gzip > "$file"
-  mc cp "$file" "backupstore/habeshalive-backups/$(basename "$file")"
+  mc cp "$file" "backupstore/${bucket}/$(basename "$file")"
   rm -f "$file"
   echo "[backup] ${ts} uploaded $(basename "$file")"
   # Retention: drop backups older than BACKUP_RETENTION_DAYS so the bucket
   # doesn't grow unbounded.
-  mc rm --recursive --force --older-than "${BACKUP_RETENTION_DAYS:-14}d" backupstore/habeshalive-backups/ >/dev/null 2>&1 || true
+  mc rm --recursive --force --older-than "${BACKUP_RETENTION_DAYS:-14}d" "backupstore/${bucket}/" >/dev/null 2>&1 || true
 }
 
 seconds_until_next_run() {

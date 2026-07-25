@@ -105,20 +105,26 @@ server, state}`, not the more guessable `haproxy_server_up`.
 ## Backups
 
 `infra/backup` (built as the `backup` service) runs `pg_dump | gzip`, uploads
-to a MinIO bucket (`habeshalive-backups`) via the `mc` client, and prunes
-objects older than `BACKUP_RETENTION_DAYS` (default 14). It runs once
-immediately on container start — verified live: a fresh `docker compose up`
-produces a real, valid `.sql.gz` in the bucket within seconds, not after
-waiting for the first scheduled run — then settles into a nightly schedule
-at `BACKUP_HOUR_UTC` (default 02:00 UTC), computed with plain arithmetic on
-`date -u` fields since the image's shell is busybox ash (no GNU `date -d` /
-BSD `date -v`). MinIO itself (`:9000` API, `:9001` console) is a single
-node here — fine for local/single-host dev, but MinIO's own multi-node
-erasure-coded mode is what you'd want before trusting this as your only
-backup copy in production; that's not configured. MinIO's Prometheus
-metrics endpoint (`mc admin prometheus generate`) is not wired into
-Prometheus — the six scrape targets in the Observability section above are
-everything that's actually being monitored.
+to a Cloudflare R2 bucket (`habeshalive-backups`, S3-compatible, via the `mc`
+client pointed at R2's endpoint — see `.env.example`'s `BACKUP_S3_*` vars),
+and prunes objects older than `BACKUP_RETENTION_DAYS` (default 14). It runs
+once immediately on container start — verified live: a fresh
+`docker compose up` produces a real, valid `.sql.gz` in the bucket within
+seconds, not after waiting for the first scheduled run — then settles into a
+nightly schedule at `BACKUP_HOUR_UTC` (default 02:00 UTC), computed with
+plain arithmetic on `date -u` fields since the image's shell is busybox ash
+(no GNU `date -d` / BSD `date -v`). R2 replicates data across multiple
+locations by default (unlike the single-node MinIO container this replaced),
+so there's no equivalent multi-node caveat here. R2's free tier covers 10GB
+storage and has no egress fees, which is what makes it a reasonable fit for
+this at demo/small scale rather than a paid bucket.
+
+Separately: this backup mechanism only runs where `docker-compose.yml` runs
+(local/single-host). The production API on Fly.io does not run the `backup`
+service — production's actual data-loss protection today is whatever Neon
+(the managed Postgres provider) does on its own (point-in-time recovery on
+its free tier, typically a multi-day window). Wiring a scheduled production
+backup of the Neon database into R2 is a separate, not-yet-done task.
 
 ## Auth
 

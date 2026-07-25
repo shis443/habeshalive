@@ -15,42 +15,25 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-habeshalive}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev-only-change-me}
-    ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # web console
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  # Nightly pg_dump -> gzip -> MinIO, with retention cleanup. Runs one
-  # backup immediately on start (see infra/backup/backup.sh) so a fresh
-  # deployment isn't unprotected for up to 24h, then settles into the
-  # BACKUP_HOUR_UTC schedule.
+  # Nightly pg_dump -> gzip -> Cloudflare R2 (S3-compatible), with retention
+  # cleanup. Runs one backup immediately on start (see
+  # infra/backup/backup.sh) so a fresh deployment isn't unprotected for up
+  # to 24h, then settles into the BACKUP_HOUR_UTC schedule. R2 credentials
+  # come from your own Cloudflare dashboard (R2 > Manage API Tokens) — see
+  # .env.example.
   backup:
     build:
       context: ./infra/backup
     environment:
       DATABASE_URL: postgres://habeshalive:habeshalive@postgres:5432/habeshalive
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-habeshalive}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev-only-change-me}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-habeshalive-backups}
       BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-2}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
     depends_on:
       postgres:
-        condition: service_healthy
-      minio:
         condition: service_healthy
     restart: unless-stopped
 
@@ -224,4 +207,3 @@ volumes:
   srs_hls_data:
   prometheus_data:
   grafana_data:
-  minio_data:
