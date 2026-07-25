@@ -146,7 +146,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
             <Link href="/login" className={styles.loginLink}>
               Log in
             </Link>
-            <Link href="/login" className={styles.signupButton}>
+            <Link href="/signup" className={styles.signupButton}>
               Sign up
             </Link>
           </>

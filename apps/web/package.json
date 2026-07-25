@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@habeshalive/shared": "*",
+    "centrifuge": "^5.2.4",
     "hls.js": "^1.5.20",
     "next": "^16.2.11",
     "react": "^18.3.1",

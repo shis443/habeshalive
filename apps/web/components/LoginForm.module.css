@@ -135,3 +135,19 @@
   text-transform: uppercase;
   background: transparent;
 }
+
+.crossLink {
+  text-align: center;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  margin: var(--space-3) 0 0;
+}
+
+.crossLink a {
+  color: var(--secondary);
+  font-weight: 600;
+}
+
+.crossLink a:hover {
+  text-decoration: underline;
+}

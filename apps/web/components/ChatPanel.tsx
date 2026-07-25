@@ -1,8 +1,10 @@
 "use client";
 
-import type { GiftType, StreamActivity } from "@habeshalive/shared";
+import type { ChatMessage, GiftType, StreamActivity } from "@habeshalive/shared";
+import { Centrifuge } from "centrifuge";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
 import { formatViewerCount } from "@/lib/format";
 import { usernameColor } from "@/lib/userColor";
 import { EmojiPickerButton } from "./EmojiPickerButton";
@@ -16,11 +18,22 @@ type ChatEntry =
   | { id: string; kind: "system"; text: string }
   | { id: string; kind: "message"; username: string; text: string };
 
-const INITIAL_MESSAGES: ChatEntry[] = [
-  { id: "sys-1", kind: "system", text: "Welcome to the chat! Please be respectful." },
-  { id: "m-1", kind: "message", username: "Abebe12", text: "This mix is fire! 🔥" },
-  { id: "m-2", kind: "message", username: "Selamawit", text: "አሪፍ ነው!" },
-];
+const WELCOME_MESSAGE: ChatEntry = {
+  id: "sys-welcome",
+  kind: "system",
+  text: "Welcome to the chat! Please be respectful.",
+};
+
+async function fetchChatToken(): Promise<string> {
+  // Deliberately hits the API directly (not the /api/backend proxy) — this
+  // route is public on purpose, so anonymous viewers get real-time updates
+  // too. Going through the proxy would 401 anyone without a session, since
+  // the proxy itself requires one regardless of what the target route
+  // needs. See apps/api/src/chat/token.ts.
+  const res = await fetch(`${API_BASE_URL}/chat/token`, { method: "POST" });
+  const data = await res.json();
+  return data.token as string;
+}
 
 export function ChatPanel({
   streamId,
@@ -38,26 +51,84 @@ export function ChatPanel({
   activity: StreamActivity;
 }) {
   const router = useRouter();
-  const [messages, setMessages] = useState<ChatEntry[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatEntry[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
   const [giftModalOpen, setGiftModalOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const centrifuge = new Centrifuge(CENTRIFUGO_WS_URL, {
+      getToken: fetchChatToken,
+    });
+
+    fetch(`${API_BASE_URL}/chat/${streamId}/messages`)
+      .then((res) => res.json())
+      .then((history: ChatMessage[]) => {
+        if (cancelled) return;
+        setMessages((prev) => [
+          ...prev,
+          ...history.map((m) => ({ id: m.id, kind: "message" as const, username: m.displayName, text: m.body })),
+        ]);
+      })
+      .catch(() => {
+        // A history load failure shouldn't block live updates from still
+        // working — the WS subscription below is independent of this.
+      });
+
+    const sub = centrifuge.newSubscription(`stream-chat:${streamId}`);
+    sub.on("publication", (ctx) => {
+      const m = ctx.data as ChatMessage;
+      setMessages((prev) => [...prev, { id: m.id, kind: "message", username: m.displayName, text: m.body }]);
+    });
+    sub.subscribe();
+    centrifuge.connect();
+
+    return () => {
+      cancelled = true;
+      sub.unsubscribe();
+      centrifuge.disconnect();
+    };
+  }, [streamId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
 
   function dismissSystemMessage(id: string) {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   }
 
-  function handleSend(e: FormEvent) {
+  async function handleSend(e: FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
+    const body = input.trim();
+    if (!body) return;
     if (!isAuthed) {
       router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
-    setMessages((prev) => [
-      ...prev,
-      { id: `local-${Date.now()}`, kind: "message", username: currentUsername ?? "You", text: input.trim() },
-    ]);
+    setSending(true);
     setInput("");
+    try {
+      const res = await fetch(`/api/backend/chat/${streamId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) throw new Error("Failed to send");
+      // Not appended optimistically here — the Centrifugo subscription
+      // above delivers it back to everyone, including this client, once
+      // the server has actually stored it. Avoids a duplicate-message bug
+      // from adding it twice.
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { id: `err-${Date.now()}`, kind: "system", text: "Message failed to send — try again." },
+      ]);
+    } finally {
+      setSending(false);
+    }
   }
 
   function handleGiftClick() {
@@ -108,6 +179,7 @@ export function ChatPanel({
             </p>
           )
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className={styles.counters}>
@@ -123,6 +195,7 @@ export function ChatPanel({
             className={styles.input}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            disabled={sending}
           />
           <EmojiPickerButton onSelect={(emoji) => setInput((prev) => prev + emoji)} />
           <button
@@ -133,7 +206,7 @@ export function ChatPanel({
           >
             <GiftIcon />
           </button>
-          <button type="submit" className={`${styles.iconButton} ${styles.sendButton}`} aria-label="Send">
+          <button type="submit" className={`${styles.iconButton} ${styles.sendButton}`} aria-label="Send" disabled={sending}>
             <SendIcon />
           </button>
         </form>

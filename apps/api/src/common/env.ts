@@ -32,6 +32,17 @@ const envSchema = z.object({
   // verified in the Resend dashboard.
   RESEND_API_KEY: z.string().default(""),
   RESEND_FROM_EMAIL: z.string().min(1).default("HabeshaLive <onboarding@resend.dev>"),
+  // Real-time chat (Centrifugo). CENTRIFUGO_URL is this server's path to
+  // Centrifugo's HTTP API (server-to-server publish) — differs from
+  // NEXT_PUBLIC_CENTRIFUGO_URL (apps/web), which is the browser's path to
+  // Centrifugo's WebSocket endpoint; the two are the same host in
+  // production but never conflate them, since a container-internal
+  // hostname (local dev) isn't reachable from a browser. Token secret must
+  // match Centrifugo's own CENTRIFUGO_TOKEN_HMAC_SECRET_KEY exactly, or
+  // every client connection gets rejected.
+  CENTRIFUGO_URL: z.string().min(1).default("http://localhost:8000"),
+  CENTRIFUGO_API_KEY: z.string().min(1).default("dev-only-change-me"),
+  CENTRIFUGO_TOKEN_HMAC_SECRET: z.string().min(1).default("dev-only-change-me"),
 });
 
 export const env = envSchema.parse(process.env);

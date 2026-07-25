@@ -1,30 +1,27 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 100;
+/* Anchored panel, matching the pattern in TopNav.module.css's
+   .dropdownWrap/.dropdown: a zero-size relatively-positioned wrapper
+   sitting where the trigger is in the DOM flow, with the panel itself
+   absolutely positioned off it. GiftModal's trigger (the gift button in
+   ChatPanel) sits at the bottom of the chat column, so this opens upward
+   (bottom: 100%) rather than downward like TopNav's header dropdowns. */
+.anchor {
+  position: relative;
 }
 
 .panel {
-  width: 100%;
-  max-width: 420px;
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  right: 0;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  overflow-y: auto;
   background: var(--surface-container-high);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px 16px 0 0;
+  border-radius: 12px;
   padding: var(--space-4);
-  box-shadow: 0 -8px 32px rgba(208, 188, 255, 0.15);
-}
-
-@media (min-width: 640px) {
-  .overlay {
-    align-items: center;
-  }
-  .panel {
-    border-radius: 16px;
-  }
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 60;
 }
 
 .header {

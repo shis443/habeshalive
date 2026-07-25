@@ -19,6 +19,13 @@
   cursor: not-allowed;
 }
 
+.buttonEnd {
+  background: var(--surface-container-high);
+  color: var(--error);
+  box-shadow: none;
+  border: 1px solid var(--error);
+}
+
 .error {
   color: var(--error);
   font-size: 13px;

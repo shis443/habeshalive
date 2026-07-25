@@ -71,9 +71,76 @@ which connects to Centrifugo directly from the browser.
 - **Player**: `apps/web`'s `VideoPlayer` component uses `hls.js` against
   whatever `playback_url` the API returns, with a native-HLS fallback for
   Safari.
+- **Stale-stream reaper** (`reapStaleStreams` in
+  `apps/api/src/streams/service.ts`, run every 5 minutes from
+  `server.ts`): a stream's `status` flips to `'live'` the moment a creator
+  clicks "Go live" in the dashboard — independent of whether their encoder
+  has actually connected yet. If it never does (or disconnects uncleanly),
+  the `live-ended` webhook above never fires, since a publish never truly
+  started, and the stream sits showing "live" with zero video indefinitely
+  — this happened for real during RTMP debugging earlier in this project.
+  The reaper HEAD-checks each live stream's `playback_url` (unreachable ⇒
+  ended) with a 12-hour max-duration force-end as a backstop regardless of
+  that check. A creator can also end their own stream manually — `POST
+  /streams/end`, exposed as an "End stream" button on both the dashboard
+  and the creator's own watch page.
 
 See `infra/srs/README.md` for port numbers, the config-templating mechanism,
 and a security note about the vendored SRS source clone.
+
+## Real-time chat (Centrifugo)
+
+`apps/api/src/chat/` — message send/history is a normal REST resource
+backed by `chat_messages`, but delivery to other viewers is real-time via
+Centrifugo, deployed as its own Fly app (`infra/centrifugo/`, `habeshalive-
+centrifugo`) separate from the API and SRS apps. Scaled to a single machine
+deliberately: Centrifugo's presence/history here run in-memory (no Redis
+engine configured, matching local dev's `centrifugo/config.json`), so a
+second unclustered node would silently drop messages between viewers
+connected to different machines — the same class of bug the SRS HLS
+cross-node issue was, fixed the same way (see Video pipeline above).
+
+Server-mediated, not direct client publish: a client POSTs a message to
+`POST /chat/:streamId/messages` (session-cookie-authenticated, via
+`apps/web`'s `/api/backend` proxy since a client component can't read the
+httpOnly cookie itself), which stores it in `chat_messages` and then calls
+Centrifugo's HTTP API (`X-API-Key`-authenticated) to publish it to
+`stream-chat:<streamId>`. Clients only ever *subscribe* to that channel —
+they never hold the API key, so they can't forge a publish from the
+browser. Chosen over letting clients publish straight to Centrifugo
+because it keeps the same ban/moderation checks (`app.rejectIfBanned`) and
+rate limiting (see Rate limiting below) that every other write in this API
+goes through, and keeps `chat_messages` as the durable source of truth —
+Centrifugo is only responsible for low-latency fan-out, not storage.
+
+Connection tokens (`POST /chat/token`, a plain HS256 JWT signed with
+Centrifugo's own `CENTRIFUGO_TOKEN_HMAC_SECRET` — a different secret than
+this app's own session `JWT_SECRET`, see `apps/api/src/chat/token.ts`) are
+issued to *everyone*, logged in or not — deliberately not auth-gated. A
+connection token only grants permission to open the socket and subscribe;
+it has nothing to do with who's allowed to *post* (that's the separate,
+properly authenticated REST endpoint above). Letting anonymous viewers
+hold one too means live chat updates work for anyone watching, not just
+people who happen to be logged in — matching how chat behaves on
+comparable platforms.
+
+Two non-obvious things that had to be true before any of this actually
+worked, found by testing with two real browser sessions rather than
+assuming the wiring was correct:
+
+- **CSP**: `apps/web/next.config.mjs`'s `connect-src` only allowlisted the
+  API origin. Without the Centrifugo origin added too, the browser silently
+  blocks the WebSocket connection (and separately, the SRS origin was
+  missing too — meaning HLS *video* playback itself was equally broken,
+  found the same way; `media-src 'self' blob:` also had to be added since
+  `hls.js`'s MediaSource-based playback loads through a `blob:` URL that
+  `default-src 'self'` doesn't cover).
+- **Centrifugo permissions**: v5 rejects every client-initiated subscribe
+  by default (`103: permission denied`) unless the channel's namespace has
+  `allow_subscribe_for_client: true` — set on the `stream-chat` namespace in
+  both `centrifugo/config.json` (local) and `infra/centrifugo/config.json`
+  (production). Without it, connections succeed but every subscribe attempt
+  is silently rejected.
 
 ## Observability
 
@@ -170,6 +237,16 @@ behind both get two separate accounts — there's no "is this email
 already tied to an existing phone account" check. Real account linking
 (prompt to link, merge wallets/history) is a materially bigger feature
 than "add email as a sign-in option" and wasn't in scope here.
+
+**`/login` and `/signup` are two routes, one flow.** There's no separate
+signup form — an account is created automatically on the first verified
+code for a new phone/email, same as any other verification. `/signup`
+(`apps/web/app/signup/page.tsx`) renders the same `LoginForm` as `/login`
+with a `mode="signup"` prop that only changes copy (headline, the
+login/signup cross-link) — no auth logic is duplicated between the two
+routes. This exists purely so TopNav's "Log in" and "Sign up" links go
+somewhere visibly different, not because the underlying mechanism needed
+two forms.
 
 The web app's `LoginForm` has a Phone/Email toggle at the identifier
 step; `POST /api/session` (the Route Handler that exchanges a verified
@@ -280,13 +357,15 @@ overrides:
   keying everyone by `undefined` if the limiter's hook happened to run
   first. IP-based still stops scripted abuse without that risk.
 
-**Not covered: chat.** There is no backend chat-send endpoint to rate-limit
-— `ChatPanel.tsx` only appends to local React state (`INITIAL_MESSAGES`,
-hardcoded seed data) and was never actually wired to Centrifugo, despite
-Centrifugo running in the stack and `CENTRIFUGO_*` env vars already
-existing. That's a real, separate gap (chat isn't real yet, not just
-unlimited) — worth flagging plainly rather than inventing a rate limit for
-an endpoint that doesn't exist.
+- `POST /chat/:streamId/messages`: 20/min, user-keyed — same rationale as
+  gifts above (chat spam is a real abuse vector on a fresh write endpoint).
+
+**Chat is now real** (`apps/api/src/chat/`) — see the Real-time chat
+section below for how message send/delivery and the Centrifugo connection
+itself work; `POST /chat/token` (issues a Centrifugo connection JWT) is
+deliberately *not* rate-limited or auth-gated the same way, since it grants
+read-only real-time delivery, not the ability to post — see that route's
+own comment for why anonymous viewers get one too.
 
 ## Moderation queue
 
@@ -621,8 +700,6 @@ not something to fake here.
 
 ## What's still a stub
 
-- **Chat**: not wired to Centrifugo at all — see the Rate limiting section
-  above. Local-only fake messages in the UI, no backend involvement.
 - **SMS**: OTP codes are logged to the console in dev
   (`apps/api/src/auth/sms-gateway.ts`), behind the same kind of interface
   pattern as Chapa.

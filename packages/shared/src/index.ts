@@ -3,6 +3,7 @@ export * from "./money.js";
 export * from "./schemas/admin.js";
 export * from "./schemas/auth.js";
 export * from "./schemas/avatars.js";
+export * from "./schemas/chat.js";
 export * from "./schemas/follows.js";
 export * from "./schemas/moderation.js";
 export * from "./schemas/reports.js";

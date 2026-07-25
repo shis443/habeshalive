@@ -2,7 +2,8 @@
 
 import { formatSantimAsBirr, type GiftType } from "@habeshalive/shared";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useDropdown } from "@/lib/useDropdown";
 import { CloseIcon } from "./icons";
 import styles from "./GiftModal.module.css";
 
@@ -30,6 +31,20 @@ export function GiftModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // GiftModal is only ever mounted by its trigger (the gift button in
+  // ChatPanel) while it should be visible, so `dropdown.open` here purely
+  // drives useDropdown's outside-click detection — flip it on as soon as
+  // this mounts, and treat it flipping back off (an outside click) the same
+  // as an explicit close.
+  const dropdown = useDropdown<HTMLDivElement>();
+  const { setOpen } = dropdown;
+  useEffect(() => {
+    setOpen(true);
+  }, [setOpen]);
+  useEffect(() => {
+    if (!dropdown.open) onClose();
+  }, [dropdown.open, onClose]);
 
   async function handleSend() {
     if (!isAuthed) {
@@ -59,8 +74,8 @@ export function GiftModal({
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
+    <div className={styles.anchor} ref={dropdown.ref}>
+      <div className={styles.panel}>
         <div className={styles.header}>
           <h3 className={styles.title}>Send a gift</h3>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Close">

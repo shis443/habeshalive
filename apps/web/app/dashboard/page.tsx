@@ -13,6 +13,7 @@ import {
   getCreatorStats,
   getCurrentUser,
   getEarningsThisMonth,
+  getLiveStreamByUsername,
   getStreamKey,
   getWalletBalance,
 } from "@/lib/api";
@@ -24,11 +25,12 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/dashboard");
 
-  const [streamKey, balance, earnings, stats] = await Promise.all([
+  const [streamKey, balance, earnings, stats, liveStream] = await Promise.all([
     getStreamKey(),
     getWalletBalance(),
     getEarningsThisMonth(),
     getCreatorStats(),
+    getLiveStreamByUsername(user.username),
   ]);
 
   return (
@@ -46,7 +48,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <GoLiveButton displayName={user.displayName} />
+        <GoLiveButton displayName={user.displayName} isLive={!!liveStream} />
 
         <div className={styles.statGrid}>
           <StatCard

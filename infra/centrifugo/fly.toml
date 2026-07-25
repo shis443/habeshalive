@@ -1,0 +1,27 @@
+app = "habeshalive-centrifugo"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# CENTRIFUGO_TOKEN_HMAC_SECRET_KEY, CENTRIFUGO_API_KEY, CENTRIFUGO_ADMIN_PASSWORD,
+# CENTRIFUGO_ADMIN_SECRET are set via `flyctl secrets set`, not here — see
+# the deploy steps in docs/architecture.md. Centrifugo reads any
+# CENTRIFUGO_<OPTION_NAME> env var as an override on top of config.json.
+
+# WebSocket-over-HTTPS — unlike SRS's raw RTMP, this speaks plain HTTP (the
+# WS upgrade handshake is HTTP), so it works fine through Fly's shared
+# IPv4 proxy (which routes on Host header/SNI) without the dedicated-IP
+# dance RTMP needed. force_https matters: the browser client connects from
+# an https:// page (Vercel) and would block a plain ws:// (non-TLS)
+# connection as mixed content, same reasoning as SRS's HLS port.
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

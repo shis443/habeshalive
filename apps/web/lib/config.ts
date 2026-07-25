@@ -14,3 +14,12 @@ export const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? API_BASE_URL;
 // through this app, just linked to (see docs/architecture.md's
 // Observability section for what's on the dashboard).
 export const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL ?? "http://localhost:3001";
+
+// The browser connects directly to Centrifugo's WebSocket endpoint (not
+// proxied through /api/backend — that proxy is request/response, not a
+// persistent connection). Distinct from the API's own CENTRIFUGO_URL
+// (apps/api/src/common/env.ts): that's this server's path to Centrifugo's
+// HTTP API for server-to-server publish, same host in production but
+// never the same value in local dev (container-internal hostname isn't
+// reachable from a browser).
+export const CENTRIFUGO_WS_URL = process.env.NEXT_PUBLIC_CENTRIFUGO_URL ?? "ws://localhost:8000/connection/websocket";

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { API_BASE_URL } from "@/lib/config";
@@ -8,7 +9,7 @@ import styles from "./LoginForm.module.css";
 type Method = "phone" | "email";
 type Step = "identifier" | "code";
 
-export function LoginForm() {
+export function LoginForm({ mode = "login" }: { mode?: "login" | "signup" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") ?? "/dashboard";
@@ -84,7 +85,8 @@ export function LoginForm() {
       <div className={styles.card}>
         <p className={styles.wordmark}>HabeshaLive</p>
         <p className={styles.subtext}>
-          Sign in with your {method === "phone" ? "phone number" : "email"}
+          {mode === "signup" ? "Create your account with your" : "Sign in with your"}{" "}
+          {method === "phone" ? "phone number" : "email"}
         </p>
 
         {step === "identifier" && (
@@ -199,6 +201,18 @@ export function LoginForm() {
             </button>
           </form>
         )}
+
+        <p className={styles.crossLink}>
+          {mode === "signup" ? (
+            <>
+              Already have an account? <Link href="/login">Log in</Link>
+            </>
+          ) : (
+            <>
+              New here? <Link href="/signup">Create an account</Link>
+            </>
+          )}
+        </p>
       </div>
     </div>
   );

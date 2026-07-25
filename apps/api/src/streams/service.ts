@@ -243,6 +243,85 @@ export async function endStream(userId: string): Promise<void> {
   if (!rowCount) throw new AppError(404, "No live stream to end");
 }
 
+// Shared by reapStaleStreams below — unlike endStream()/markEndedByProviderStreamId(),
+// this ends a specific stream by id rather than scoping by creator/provider key, since
+// the reaper isn't acting on behalf of any particular caller.
+async function endStreamById(streamId: string): Promise<void> {
+  await pool.query(`UPDATE streams SET status = 'ended', ended_at = now() WHERE id = $1`, [streamId]);
+}
+
+const STALE_STREAM_MAX_DURATION_MS = 12 * 60 * 60 * 1000; // 12 hours
+const PLAYBACK_CHECK_TIMEOUT_MS = 5_000;
+
+async function isPlaybackUrlReachable(playbackUrl: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PLAYBACK_CHECK_TIMEOUT_MS);
+  try {
+    const res = await fetch(playbackUrl, { method: "HEAD", signal: controller.signal });
+    return res.ok;
+  } catch {
+    // Timeout, DNS failure, connection refused, TLS error, etc. — all read
+    // as "not actually live" for our purposes.
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+interface LiveStreamRow {
+  id: string;
+  playback_url: string | null;
+  started_at: string | null;
+}
+
+// goLive() (above) flips a stream's status to 'live' the moment a creator
+// clicks "Go live" in the dashboard — independent of whether their
+// OBS/encoder has actually connected via RTMP yet. When a creator clicks Go
+// Live but never gets their encoder working (or it disconnects uncleanly,
+// e.g. mid-test), the on_unpublish webhook that would normally flip status
+// back to 'ended' never fires, since a publish never truly started. The
+// stream is then stuck showing "live" with zero video indefinitely.
+//
+// This sweeps every 'live' stream (see server.ts for the interval that
+// calls it) and force-ends any that are actually dead, via two independent
+// checks:
+//   1. An HTTP HEAD against the stream's playback_url — a non-2xx (or a
+//      timeout/connection failure) means there's nothing actually playing.
+//   2. A hard backstop: any stream still marked 'live' after 12h is ended
+//      regardless of what the HEAD check said, since a real live stream
+//      running that long is implausible for this product. This catches
+//      whatever the HTTP check might miss (e.g. a stale-but-still-technically
+//      -200 URL).
+// Each stream is checked independently — one stream's check failing (e.g.
+// a network blip) must not stop the sweep from reaching the rest.
+export async function reapStaleStreams(): Promise<void> {
+  const { rows } = await pool.query<LiveStreamRow>(
+    `SELECT id, playback_url, started_at FROM streams WHERE status = 'live'`
+  );
+
+  for (const row of rows) {
+    try {
+      const startedAtMs = row.started_at ? new Date(row.started_at).getTime() : null;
+      const isPastMaxDuration =
+        startedAtMs !== null && Date.now() - startedAtMs > STALE_STREAM_MAX_DURATION_MS;
+
+      if (isPastMaxDuration) {
+        await endStreamById(row.id);
+        console.log(`[reaper] ended stream ${row.id}: max duration exceeded`);
+        continue;
+      }
+
+      const reachable = row.playback_url ? await isPlaybackUrlReachable(row.playback_url) : false;
+      if (!reachable) {
+        await endStreamById(row.id);
+        console.log(`[reaper] ended stream ${row.id}: no playback`);
+      }
+    } catch (err) {
+      console.error(`[reaper] failed checking stream ${row.id}:`, err);
+    }
+  }
+}
+
 export async function markLiveByProviderStreamId(providerStreamId: string): Promise<void> {
   const profile = await pool.query<CreatorProfileRow>(
     `SELECT user_id, stream_key FROM creator_profiles WHERE stream_key = $1`,

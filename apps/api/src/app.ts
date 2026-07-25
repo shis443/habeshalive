@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 import { adminRoutes } from "./admin/routes.js";
 import { authRoutes } from "./auth/routes.js";
 import { avatarRoutes } from "./avatars/routes.js";
+import { chatRoutes } from "./chat/routes.js";
 import { env } from "./common/env.js";
 import { AppError } from "./common/errors.js";
 import { followRoutes } from "./follows/routes.js";
@@ -147,6 +148,7 @@ export function buildApp() {
 
   app.register(authRoutes, { prefix: "/auth" });
   app.register(avatarRoutes, { prefix: "/avatars" });
+  app.register(chatRoutes, { prefix: "/chat" });
   app.register(followRoutes, { prefix: "/follows" });
   app.register(streamRoutes, { prefix: "/streams" });
   app.register(walletRoutes, { prefix: "/wallet" });

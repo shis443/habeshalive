@@ -58,6 +58,7 @@ export default async function WatchPage({ params }: { params: Promise<{ username
               creatorId={stream.creator.id}
               isAuthed={!!user}
               isFollowing={followStatus.following}
+              isOwner={!!user && user.id === stream.creator.id}
               tiers={tiers}
             />
             <AboutCreator

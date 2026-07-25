@@ -1,10 +1,6 @@
 {
-  "token_hmac_secret_key": "dev-only-change-me",
-  "api_key": "dev-only-change-me",
   "admin": true,
-  "admin_password": "admin",
-  "admin_secret": "dev-only-change-me",
-  "allowed_origins": ["http://localhost:3000"],
+  "allowed_origins": ["*"],
   "namespaces": [
     {
       "name": "stream-chat",
