@@ -161,6 +161,16 @@
   z-index: 60;
 }
 
+/* The "More" dropdown's trigger sits at the far left of the header — a
+   right-anchored panel opens almost entirely off-screen to the left from
+   there (fine for the right-side dropdowns this positioning was written
+   for, wrong here). Left-anchor this one instead so it opens onto the
+   page like every other dropdown does. */
+.dropdownLeft {
+  right: auto;
+  left: 0;
+}
+
 .dropdownWide {
   min-width: 260px;
 }

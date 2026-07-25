@@ -28,11 +28,26 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
   const more = useDropdown<HTMLDivElement>();
   const notifications = useDropdown<HTMLDivElement>();
   const settings = useDropdown<HTMLDivElement>();
+  const account = useDropdown<HTMLDivElement>();
   const [darkTheme, setDarkTheme] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
     router.push(`/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/session", { method: "DELETE" });
+    } finally {
+      // Redirect regardless of whether the DELETE call succeeded — an
+      // expired/already-invalid session shouldn't be able to strand
+      // someone on a page that still thinks they're logged in.
+      router.push("/");
+      router.refresh();
+    }
   }
 
   return (
@@ -48,7 +63,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
             <MoreIcon />
           </button>
           {more.open && (
-            <div className={`${styles.dropdown} ${styles.dropdownWide}`}>
+            <div className={`${styles.dropdown} ${styles.dropdownWide} ${styles.dropdownLeft}`}>
               <span className={styles.groupLabel}>General</span>
               {MORE_GENERAL.map((item) => (
                 <span key={item} className={styles.menuItem} title="Coming soon">
@@ -138,9 +153,35 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
         </div>
 
         {isAuthed ? (
-          <Link href="/dashboard" className={styles.iconButton} aria-label="Your account">
-            <ProfileIcon />
-          </Link>
+          <div className={styles.dropdownWrap} ref={account.ref}>
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label="Your account"
+              onClick={() => account.setOpen((o) => !o)}
+            >
+              <ProfileIcon />
+            </button>
+            {account.open && (
+              <div className={styles.dropdown}>
+                <Link href="/dashboard" className={styles.menuItem} onClick={() => account.setOpen(false)}>
+                  Dashboard
+                </Link>
+                <Link href="/wallet" className={styles.menuItem} onClick={() => account.setOpen(false)}>
+                  Wallet
+                </Link>
+                <div className={styles.divider} />
+                <button
+                  type="button"
+                  className={styles.menuItem}
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                >
+                  {loggingOut ? "Logging out…" : "Log out"}
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           <>
             <Link href="/login" className={styles.loginLink}>
