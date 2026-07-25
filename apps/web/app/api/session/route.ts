@@ -1,4 +1,4 @@
-import { authResponseSchema, verifyEmailOtpSchema, verifyOtpSchema } from "@habeshalive/shared";
+import { authResponseSchema, loginSchema, verifyEmailOtpSchema, verifyOtpSchema } from "@habeshalive/shared";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
@@ -8,12 +8,19 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days, matches typical J
 
 export async function POST(req: Request) {
   const rawBody = await req.json();
-  // Two request shapes share this one endpoint — phone OTP (phoneNumber
-  // field) and email OTP (email field) — routed to their matching upstream
-  // API endpoint based on which one the body actually has.
-  const isEmail = typeof rawBody === "object" && rawBody !== null && "email" in rawBody;
-  const body = isEmail ? verifyEmailOtpSchema.parse(rawBody) : verifyOtpSchema.parse(rawBody);
-  const upstreamPath = isEmail ? "/auth/verify-email-otp" : "/auth/verify-otp";
+  // Three request shapes share this one endpoint — password login
+  // (identifier field, checked first since it's the default returning-user
+  // path), phone OTP (phoneNumber field), and email OTP (email field) —
+  // routed to their matching upstream API endpoint based on which one the
+  // body actually has.
+  const isLogin = typeof rawBody === "object" && rawBody !== null && "identifier" in rawBody;
+  const isEmail = !isLogin && typeof rawBody === "object" && rawBody !== null && "email" in rawBody;
+  const body = isLogin
+    ? loginSchema.parse(rawBody)
+    : isEmail
+      ? verifyEmailOtpSchema.parse(rawBody)
+      : verifyOtpSchema.parse(rawBody);
+  const upstreamPath = isLogin ? "/auth/login" : isEmail ? "/auth/verify-email-otp" : "/auth/verify-otp";
 
   // Route Handler — runs server-side, needs API_INTERNAL_URL (see config.ts).
   const res = await fetch(`${API_INTERNAL_URL}${upstreamPath}`, {

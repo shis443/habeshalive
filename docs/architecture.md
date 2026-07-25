@@ -238,6 +238,68 @@ already tied to an existing phone account" check. Real account linking
 (prompt to link, merge wallets/history) is a materially bigger feature
 than "add email as a sign-in option" and wasn't in scope here.
 
+### Password login (returning users) — OTP moves to signup/recovery only
+
+OTP-per-login doesn't scale as the primary sign-in mechanism: every login
+costs a real SMS/email send and a network round-trip, fine for a one-time
+signup, not for the 50th time a daily viewer opens the app. `/login` now
+defaults to identifier (phone or email — auto-detected server-side by
+whether it contains `@`, `identifierToIdentity` in `auth/service.ts`) +
+password, `POST /auth/login`, no OTP involved. OTP's job narrows to what
+it's actually good for: proving a phone/email is real once (signup) and
+re-proving identity for password recovery.
+
+- **Signup** (`POST /auth/verify-otp` / `/verify-email-otp`): a `password`
+  field is now required alongside `username`/`displayName` for new
+  accounts — `findOrCreateUser` hashes and stores it in the same
+  transaction as account/wallet creation, not as a separate later step.
+  An account created without going through this exact path (there isn't
+  one anymore) would have no password and be unable to use `/auth/login`.
+- **Password hashing** (`auth/password.ts`): same salt:hash scrypt pattern
+  already proven in this codebase for OTP codes (`auth/otp.ts`) — not a
+  new dependency (no bcrypt/argon2), not a new scheme, just applied to a
+  longer-lived secret.
+- **Forgot password** (`POST /auth/password/forgot` → `/password/reset`):
+  `forgot` reuses `requestOtp`/`requestEmailOtp` verbatim (same cooldown,
+  same delivery gateways) rather than a parallel send path. `reset`
+  verifies the OTP the same way login/signup do, then updates
+  `password_hash` — deliberately does *not* create an account if none
+  exists for the identifier (unlike signup's `findOrCreateUser`), since a
+  password-reset request isn't a signup.
+- **Enumeration**: `login`'s error is the same generic "Incorrect
+  identifier or password" whether the account doesn't exist or the
+  password's wrong — distinguishing them would let an attacker enumerate
+  which phone numbers/emails have accounts. The one exception:  an
+  account that exists but has no `password_hash` (created before this
+  shipped, or somehow only ever used OTP) gets a distinct, actionable
+  message pointing at "Forgot password" instead of a generic failure.
+- **Rate limiting**: `/auth/login` is 5 attempts per identifier per 15
+  minutes — tighter and longer-windowed than the OTP routes' 5-per-5-min,
+  since this is the one endpoint a leaked/guessed password would actually
+  get hammered against, and burst tolerance matters less here than for a
+  genuinely mistyped OTP code.
+- **Frontend** (`components/LoginForm.tsx`): `/login` and `/signup` still
+  share this one component (`mode` prop, copy-only difference) — login's
+  identifier field is a single unified input (no phone/email tabs; the
+  backend auto-detects), forgot-password is an inline view switch within
+  the same component rather than a separate route. After a successful
+  password reset, the reset handler immediately calls the same login path
+  with the new password — no separate "now go log back in" step.
+- **A real bug found while testing this end-to-end, not assumed away**:
+  `router.push(redirectTo)` immediately followed by `router.refresh()`
+  (the pattern this file's `handleVerifyOtp` already used, and the one
+  `GoLiveButton.tsx` hit earlier for the same reason — see the Video
+  pipeline section's stale-stream reaper note) intermittently left the
+  browser showing stale content on repeat cross-route navigations to an
+  already-visited page, confirmed via server logs showing the correct
+  RSC fetch completing while the visible URL/content stayed on the old
+  page. `LoginForm.tsx`'s three navigation points and `TopNav.tsx`'s
+  logout both now use a hard `window.location.href` navigation instead —
+  slightly less smooth than a client-side transition, but auth is a
+  low-frequency, correctness-critical path where that tradeoff is an easy
+  call, and it sidesteps the Next.js Router Cache subtlety entirely
+  rather than trying to out-time it.
+
 **`/login` and `/signup` are two routes, one flow.** There's no separate
 signup form — an account is created automatically on the first verified
 code for a new phone/email, same as any other verification. `/signup`

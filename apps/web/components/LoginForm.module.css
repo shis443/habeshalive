@@ -136,6 +136,20 @@
   background: transparent;
 }
 
+.forgotLink {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: var(--space-2);
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.forgotLink:hover {
+  color: var(--secondary);
+  text-decoration: underline;
+}
+
 .crossLink {
   text-align: center;
   color: var(--on-surface-variant);
