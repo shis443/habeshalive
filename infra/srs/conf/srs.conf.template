@@ -24,6 +24,16 @@ http_server {
     dir             ./objs/nginx/html;
 }
 
+# WHIP (WebRTC-HTTP Ingestion Protocol) — lets a browser publish directly
+# via getUserMedia + RTCPeerConnection, no OBS/RTMP client needed.
+# __SRS_WEBRTC_CANDIDATE__ is substituted by docker-entrypoint.sh — see its
+# own comment for why `*` (auto-detect all interfaces) is wrong on Fly.
+rtc_server {
+    enabled         on;
+    listen          __SRS_WEBRTC_LISTEN__;
+    candidate       __SRS_WEBRTC_CANDIDATE__;
+}
+
 # Native Prometheus exporter, shipped in SRS itself since v5.0.67 (verified
 # against vendor/trunk/doc/CHANGELOG.md and conf/prometheus.conf) — no
 # separate sidecar exporter needed.
@@ -38,6 +48,17 @@ vhost __defaultVhost__ {
         hls_path        ./objs/nginx/html;
         hls_fragment    4;
         hls_window      30;
+    }
+
+    # rtmp_to_rtc/rtc_to_rtmp off: a WHIP-published stream stays WebRTC-in,
+    # HLS-out only (still transmuxes to HLS the same as an RTMP publish
+    # does — hls{} above applies regardless of ingest protocol). Not
+    # bridging to/from RTMP since nothing here needs to play a WHIP stream
+    # back out as RTMP or vice versa.
+    rtc {
+        enabled         on;
+        rtmp_to_rtc     off;
+        rtc_to_rtmp     off;
     }
 
     # NOTE: SRS's origin_cluster/coworkers feature was tried here and

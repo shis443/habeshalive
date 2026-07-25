@@ -28,6 +28,16 @@ const centrifugoOrigin = new URL(
   process.env.NEXT_PUBLIC_CENTRIFUGO_URL ?? "ws://localhost:8000/connection/websocket"
 ).origin;
 
+// Browser-based "go live" (WHIP): the signaling POST goes to a *different*
+// port than srsOrigin above (SRS's http_api, not http_server — see
+// infra/srs/fly.toml's comment on why WHIP needs its own exposed port).
+// CSP host-sources without an explicit port only match the scheme's
+// default port, so this needs the port spelled out or the fetch is
+// silently blocked same as the other two were.
+const srsWhipOrigin = new URL(
+  process.env.NEXT_PUBLIC_SRS_WHIP_URL ?? "http://localhost:8443/rtc/v1/whip/"
+).origin;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {
@@ -41,7 +51,12 @@ const nextConfig = {
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // camera/microphone allowed for this origin only (needed for
+          // browser-based "go live" via getUserMedia) — was previously
+          // camera=(), microphone=() with no allowlist at all, which
+          // silently blocks getUserMedia everywhere, before this feature
+          // existed to need it.
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
           {
             key: "Content-Security-Policy",
             value: [
@@ -51,7 +66,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               `img-src 'self' data: ${apiOrigin}`,
-              `connect-src 'self' ${apiOrigin} ${srsOrigin} ${centrifugoOrigin}`,
+              `connect-src 'self' ${apiOrigin} ${srsOrigin} ${centrifugoOrigin} ${srsWhipOrigin}`,
               // hls.js plays back via MediaSource, which loads segments
               // through a blob: URL — default-src alone doesn't cover
               // blob:, so without this the <video> element's own playback

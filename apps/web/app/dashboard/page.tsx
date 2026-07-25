@@ -2,6 +2,7 @@ import { formatSantimAsBirr } from "@habeshalive/shared";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
+import { BrowserGoLivePanel } from "@/components/BrowserGoLivePanel";
 import { GoLiveButton } from "@/components/GoLiveButton";
 import { ModerationPanel } from "@/components/ModerationPanel";
 import { StatCard } from "@/components/StatCard";
@@ -59,7 +60,12 @@ export default async function DashboardPage() {
           <StatCard label="Stream hours" value={`${stats?.streamHoursTotal ?? 0}h`} />
         </div>
 
-        {streamKey && <StreamSetupPanel rtmpUrl={streamKey.rtmpUrl} streamKey={streamKey.streamKey} />}
+        {streamKey && (
+          <>
+            <StreamSetupPanel rtmpUrl={streamKey.rtmpUrl} streamKey={streamKey.streamKey} />
+            <BrowserGoLivePanel streamKey={streamKey.streamKey} displayName={user.displayName} />
+          </>
+        )}
         <WalletPanel balanceSantim={balance?.balanceSantim ?? 0} />
         <ModerationPanel />
       </main>

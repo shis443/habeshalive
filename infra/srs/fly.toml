@@ -7,6 +7,17 @@ primary_region = "ams"
 # SRS_WEBHOOK_SECRET and API_WEBHOOK_BASE are set via `flyctl secrets set`,
 # not here — see the deploy steps in docs/architecture.md.
 
+# Public, not sensitive — this app's dedicated IPv4 (required for WebRTC/UDP,
+# see the services.protocol="udp" block below). Pins the ICE candidate SRS
+# advertises for WHIP publishing; see docker-entrypoint.sh's own comment for
+# why config-time `*` auto-detection is wrong here. Port is explicit (8000,
+# not SRS's actual internal listen port) because without it SRS derives the
+# candidate's port from whatever it's really bound to — which, behind the
+# socat relay (see docker-entrypoint.sh), is the internal-only 18000, not
+# the real public port clients must connect to.
+[env]
+  SRS_WEBRTC_CANDIDATE = "169.155.60.123:8000"
+
 # RTMP ingest — raw TCP, no TLS (OBS/RTMP clients use plain rtmp://, not
 # rtmps://). Fly's http_service block below handles TLS for HLS instead;
 # this port doesn't need it.
@@ -19,6 +30,42 @@ primary_region = "ams"
 
   [[services.ports]]
     port = 1935
+
+# WHIP (browser-based) ingest — two distinct paths, both needed:
+#  1. Signaling: the WHIP handshake (SDP offer/answer) is a plain HTTPS POST
+#     to SRS's http_api server, port 1985 — NOT the same as http_service's
+#     8080 (that's http_server, for HLS file serving only; confirmed via
+#     SRS's own WHIP docs, whose example URL is :1985, and by testing 8080
+#     directly, which 404s). Exposed on external 8443 (443 is already
+#     claimed by http_service below) with its own TLS termination — a
+#     browser on an HTTPS page (Vercel) can't POST to a plain http:// WHIP
+#     endpoint any more than it could fetch an http:// HLS manifest.
+#  2. Media: once signaling completes, actual audio/video flows over UDP
+#     (ICE/SRTP) on port 8000 below. Unverified whether Fly's UDP proxying
+#     "just works" with SRS's default 0.0.0.0 bind or needs more — Fly's own
+#     docs note UDP services must be reached via a specific internal address
+#     (fly-global-services) on some setups; testing this empirically rather
+#     than assuming, same as the RTMP shared-IPv4 issue earlier.
+[[services]]
+  internal_port = 1985
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 8443
+    handlers = ["tls", "http"]
+
+[[services]]
+  internal_port = 8000
+  protocol = "udp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 8000
 
 # HLS playback — needs real TLS: apps/web is deployed on Vercel over
 # HTTPS, and a browser loading an https:// page will block a plain

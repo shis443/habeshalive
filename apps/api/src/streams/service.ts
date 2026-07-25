@@ -333,8 +333,14 @@ export async function markLiveByProviderStreamId(providerStreamId: string): Prom
   // SRS's on_publish callback carries no playback URL — build it ourselves.
   const playbackUrl = videoProvider.getPlaybackUrl(providerStreamId);
 
+  // Reuse whichever row is already tracking this creator's current session:
+  // either a pending 'offline' row, or — the browser/WHIP go-live flow's
+  // only path — a row goLive() already flipped to 'live' moments earlier,
+  // before the WHIP publish actually landed. Without matching 'live' here
+  // too, that flow always falls through to the INSERT below and produces a
+  // second live row for the same stream.
   const pending = await pool.query<{ id: string }>(
-    `SELECT id FROM streams WHERE creator_id = $1 AND status = 'offline'
+    `SELECT id FROM streams WHERE creator_id = $1 AND status IN ('offline', 'live')
      ORDER BY created_at DESC LIMIT 1`,
     [creatorId]
   );

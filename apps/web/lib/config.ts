@@ -23,3 +23,26 @@ export const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL ?? "http://localh
 // never the same value in local dev (container-internal hostname isn't
 // reachable from a browser).
 export const CENTRIFUGO_WS_URL = process.env.NEXT_PUBLIC_CENTRIFUGO_URL ?? "ws://localhost:8000/connection/websocket";
+
+// Browser-based "go live" — a viewer/creator publishes straight from their
+// own camera via WHIP (WebRTC-HTTP Ingestion Protocol), no OBS needed. This
+// is SRS's http_api (port 1985), not the http_server (8080) that serves
+// HLS — a different port, exposed separately in infra/srs/fly.toml, since
+// WHIP signaling and HLS playback are different SRS subsystems entirely.
+export const SRS_WHIP_URL = process.env.NEXT_PUBLIC_SRS_WHIP_URL ?? "http://localhost:8443/rtc/v1/whip/";
+
+// The WHIP URL's host is for HTTP routing (works fine as a hostname) — the
+// ICE candidate SRS advertises (the `eip` WHIP param) is a *different*
+// thing entirely and must be a real IP literal, not a DNS name: WebRTC
+// candidates aren't resolved, so a hostname here silently produces an
+// unusable candidate and the whole connection hangs at the DTLS stage
+// (confirmed live: real symptom was SRS logging "DTLS: Hang, done=0" and
+// tearing the session down after its own timeout, not any HTTP-level
+// error — the signaling handshake itself was already succeeding).
+//
+// Includes an explicit :8000 port. Without it, SRS derives the candidate's
+// port from whatever it's actually bound to — which, behind the socat
+// relay that fronts it on Fly (see infra/srs/docker-entrypoint.sh), is an
+// internal-only port, not the real public one a client can reach. `eip`
+// supports "ip:port" for exactly this reason.
+export const SRS_WEBRTC_PUBLIC_IP = process.env.NEXT_PUBLIC_SRS_WEBRTC_IP ?? "127.0.0.1:8000";
