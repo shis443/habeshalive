@@ -22,7 +22,7 @@ class SrsVideoProvider implements VideoProvider {
   }
 
   getPlaybackUrl(streamKey: string): string {
-    return `http://${env.SRS_HTTP_HOST}/live/${streamKey}.m3u8`;
+    return `${env.SRS_HTTP_SCHEME}://${env.SRS_HTTP_HOST}/live/${streamKey}.m3u8`;
   }
 }
 

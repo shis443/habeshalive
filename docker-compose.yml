@@ -142,6 +142,10 @@ services:
       CHAPA_WEBHOOK_SECRET: ${CHAPA_WEBHOOK_SECRET:-}
       API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:4000}
       WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-http://localhost:3000}
+      # Empty by default (no real Resend account) — auth/email-gateway.ts
+      # falls back to a console-log stub, same pattern as Chapa above.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-HabeshaLive <onboarding@resend.dev>}
       API_PORT: 4000
     ports:
       - "4000:4000"

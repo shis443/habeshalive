@@ -28,14 +28,23 @@ CREATE TABLE users (
 );
 CREATE INDEX idx_users_search ON users USING GIN (search_vector);
 
+-- Exactly one of phone_number/email is set per row — powers both the
+-- phone OTP flow and the email OTP flow with the same mechanism.
 CREATE TABLE otp_codes (
     id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    phone_number      VARCHAR(20) NOT NULL,
+    phone_number      VARCHAR(20),
+    email             VARCHAR(255),
     code_hash         TEXT NOT NULL,
     expires_at        TIMESTAMPTZ NOT NULL,
     consumed_at       TIMESTAMPTZ,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (
+        (phone_number IS NOT NULL AND email IS NULL) OR
+        (phone_number IS NULL AND email IS NOT NULL)
+    )
 );
+CREATE INDEX idx_otp_codes_phone ON otp_codes (phone_number, created_at) WHERE phone_number IS NOT NULL;
+CREATE INDEX idx_otp_codes_email ON otp_codes (email, created_at) WHERE email IS NOT NULL;
 
 CREATE TABLE follows (
     follower_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

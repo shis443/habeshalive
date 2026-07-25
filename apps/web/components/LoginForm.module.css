@@ -29,6 +29,35 @@
   margin: 0 0 var(--space-4);
 }
 
+.methodToggle {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  background: var(--surface-container-low);
+  border-radius: 4px;
+  padding: 3px;
+}
+
+.methodButton {
+  flex: 1;
+  padding: 8px var(--space-2);
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.methodButtonActive {
+  background: var(--surface-container-high);
+  color: var(--on-background);
+}
+
 .field {
   margin-bottom: var(--space-3);
 }

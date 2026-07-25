@@ -1,0 +1,37 @@
+app = "habeshalive-srs"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# SRS_WEBHOOK_SECRET and API_WEBHOOK_BASE are set via `flyctl secrets set`,
+# not here — see the deploy steps in docs/architecture.md.
+
+# RTMP ingest — raw TCP, no TLS (OBS/RTMP clients use plain rtmp://, not
+# rtmps://). Fly's http_service block below handles TLS for HLS instead;
+# this port doesn't need it.
+[[services]]
+  internal_port = 1935
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 1935
+
+# HLS playback — needs real TLS: apps/web is deployed on Vercel over
+# HTTPS, and a browser loading an https:// page will block a plain
+# http:// HLS fetch as mixed content. Fly's http_service (unlike a raw
+# TCP passthrough) terminates TLS automatically, so this becomes
+# https://habeshalive-srs.fly.dev/live/<key>.m3u8 for free.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

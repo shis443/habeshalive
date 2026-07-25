@@ -9,14 +9,25 @@ import { execSync } from "node:child_process";
 const API_CONTAINER = process.env.API_CONTAINER ?? "habeshalive-api-1";
 
 export async function getLatestOtpForPhone(phoneNumber: string, timeoutMs = 5000): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
   const pattern = new RegExp(`\\[dev sms\\] OTP for ${phoneNumber.replace(/\+/g, "\\+")}: (\\d{6})`);
+  return pollForOtp(pattern, timeoutMs, `phone ${phoneNumber}`);
+}
 
+// Same mechanism as getLatestOtpForPhone, for the email OTP gateway
+// (apps/api/src/auth/email-gateway.ts) — also console-only in dev, same
+// no-backdoor reasoning.
+export async function getLatestOtpForEmail(email: string, timeoutMs = 5000): Promise<string> {
+  const pattern = new RegExp(`\\[dev email\\] OTP for ${email.replace(/[.@]/g, "\\$&")}: (\\d{6})`);
+  return pollForOtp(pattern, timeoutMs, `email ${email}`);
+}
+
+async function pollForOtp(pattern: RegExp, timeoutMs: number, label: string): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const logs = execSync(`docker logs ${API_CONTAINER} --since 2m 2>&1`, { encoding: "utf8" });
     const matches = [...logs.matchAll(new RegExp(pattern, "g"))];
     if (matches.length > 0) return matches[matches.length - 1]![1]!;
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  throw new Error(`No OTP found in ${API_CONTAINER} logs for ${phoneNumber} within ${timeoutMs}ms`);
+  throw new Error(`No OTP found in ${API_CONTAINER} logs for ${label} within ${timeoutMs}ms`);
 }

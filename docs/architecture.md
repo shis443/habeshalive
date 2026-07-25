@@ -120,6 +120,62 @@ metrics endpoint (`mc admin prometheus generate`) is not wired into
 Prometheus — the six scrape targets in the Observability section above are
 everything that's actually being monitored.
 
+## Auth
+
+Two independent sign-in channels, same mechanism (6-digit code, 5-minute
+expiry, 30s resend cooldown, both rate-limited per-identifier — see the
+Rate limiting section below): phone OTP (`POST /auth/request-otp` /
+`/verify-otp`, the original flow) and email OTP
+(`/auth/request-email-otp` / `/verify-email-otp`, added later).
+
+**Phone (SMS) delivery is still a stub** — `apps/api/src/auth/sms-gateway.ts`
+just console.logs the code, no real Ethiopian SMS gateway wired up.
+
+**Email delivery is real** when `RESEND_API_KEY` is set —
+`apps/api/src/auth/email-gateway.ts`'s `ResendEmailGateway` calls
+Resend's actual `POST /emails` API (contract verified against Resend's
+own docs, same pattern as the Chapa integration: endpoint, auth header,
+required fields, and the response shape checked before writing any code).
+With the key unset (the local-dev default), it falls back to the same
+console-log stub the SMS gateway uses. Verified live, not just
+typechecked: a deliberately-invalid test key produced a real 401 from
+Resend's actual API (`{"name":"validation_error","message":"API key is
+invalid"}`), and the application code correctly surfaced that exact
+message through a real HTTP request/response cycle (`500`, logged
+server-side as `"Resend send failed: 401 API key is invalid"`) rather
+than either crashing unhandled or silently succeeding — confirming the
+integration itself is correct; a real `RESEND_API_KEY` is the only thing
+missing to actually deliver mail. `RESEND_FROM_EMAIL` defaults to
+Resend's sandbox sender (`onboarding@resend.dev`), which sends
+successfully with zero domain-verification setup — switch it to a
+verified domain's address once one exists.
+
+`otp_codes` has one row shape for both: `phone_number`/`email` are each
+nullable with a CHECK constraint requiring exactly one set
+(`db/migrations/0009_email_otp.sql`). The user-lookup-or-create-with-wallet
+logic (`findOrCreateUser` in `auth/service.ts`) is shared between both
+verify paths rather than duplicated — it's the one part that touches
+money (provisioning a wallet for a new account), so writing it twice
+risked the two copies drifting.
+
+**Known limitation, not implemented**: no account linking. A user who
+signs up by phone and one who signs up by email with the same person
+behind both get two separate accounts — there's no "is this email
+already tied to an existing phone account" check. Real account linking
+(prompt to link, merge wallets/history) is a materially bigger feature
+than "add email as a sign-in option" and wasn't in scope here.
+
+The web app's `LoginForm` has a Phone/Email toggle at the identifier
+step; `POST /api/session` (the Route Handler that exchanges a verified
+code for a session cookie) detects which one the request body is by
+checking for an `email` vs `phoneNumber` field and forwards to the
+matching upstream endpoint. Verified live end-to-end through the actual
+browser UI (not just the API): toggle switches the visible field, a real
+OTP requested and scraped from `docker logs` (same no-backdoor pattern as
+the phone E2E tests), wrong-code correctly rejected, reused-code
+correctly rejected, and a real user + wallet row confirmed in Postgres
+after signup — see `apps/e2e/tests/email-login.spec.ts`.
+
 ## Data model
 
 Money is always integer `santim` (birr cents), never floats. Every economic

@@ -24,6 +24,19 @@ export const verifyOtpSchema = z.object({
 });
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
+export const requestEmailOtpSchema = z.object({
+  email: z.string().email(),
+});
+export type RequestEmailOtpInput = z.infer<typeof requestEmailOtpSchema>;
+
+export const verifyEmailOtpSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6),
+  username: usernameSchema.optional(),
+  displayName: z.string().min(1).max(50).optional(),
+});
+export type VerifyEmailOtpInput = z.infer<typeof verifyEmailOtpSchema>;
+
 export const authUserSchema = z.object({
   id: z.string().uuid(),
   username: z.string(),

@@ -52,7 +52,7 @@ vhost __defaultVhost__ {
     # docker-compose.yml (srs_hls_data) and infra/haproxy/haproxy.cfg.
     http_hooks {
         enabled         on;
-        on_publish      http://api:4000/streams/webhooks/live-started?secret=__SRS_WEBHOOK_SECRET__;
-        on_unpublish    http://api:4000/streams/webhooks/live-ended?secret=__SRS_WEBHOOK_SECRET__;
+        on_publish      __API_WEBHOOK_BASE__/streams/webhooks/live-started?secret=__SRS_WEBHOOK_SECRET__;
+        on_unpublish    __API_WEBHOOK_BASE__/streams/webhooks/live-ended?secret=__SRS_WEBHOOK_SECRET__;
     }
 }
