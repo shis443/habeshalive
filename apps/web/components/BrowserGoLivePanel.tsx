@@ -92,8 +92,13 @@ export function BrowserGoLivePanel({ streamKey, displayName }: { streamKey: stri
       // media/DTLS handshake happens after, and can still fail (e.g. an
       // unreachable ICE candidate). Wait for the real connection state
       // instead of declaring victory right after setRemoteDescription.
+      // 30s, not something tighter: verified live that a real-world path
+      // (through Vercel's edge, real internet routing to Fly) can take
+      // noticeably longer to finish ICE/DTLS than a direct/local path —
+      // 15s was cutting off connections that would have succeeded seconds
+      // later, and SRS itself already allows a 30s session timeout.
       const connected = new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Timed out connecting to the stream server")), 15000);
+        const timeout = setTimeout(() => reject(new Error("Timed out connecting to the stream server")), 30000);
         pc.addEventListener("connectionstatechange", () => {
           if (pc.connectionState === "connected") {
             clearTimeout(timeout);
