@@ -24,7 +24,7 @@
 }
 
 .tabActive {
-  background: rgba(208, 188, 255, 0.16);
+  background: rgba(232, 163, 61, 0.16);
   border: 1px solid var(--primary);
   color: var(--primary);
 }

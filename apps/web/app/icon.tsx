@@ -13,9 +13,9 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0b1326",
+          background: "#151312",
           borderRadius: 6,
-          color: "#d0bcff",
+          color: "#e8a33d",
           fontSize: 20,
           fontWeight: 700,
         }}

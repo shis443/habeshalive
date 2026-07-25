@@ -78,7 +78,7 @@
 }
 
 .statusCompleted {
-  background: rgba(76, 215, 246, 0.14);
+  background: rgba(122, 155, 126, 0.14);
   color: var(--secondary);
 }
 
@@ -88,6 +88,6 @@
 }
 
 .statusFailed {
-  background: rgba(255, 180, 171, 0.14);
+  background: rgba(184, 76, 76, 0.14);
   color: var(--error);
 }

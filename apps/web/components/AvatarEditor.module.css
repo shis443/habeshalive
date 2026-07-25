@@ -89,7 +89,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  box-shadow: 0 0 24px rgba(208, 188, 255, 0.35);
+  box-shadow: 0 0 24px rgba(232, 163, 61, 0.35);
 }
 
 .saveButton:disabled {
@@ -113,7 +113,7 @@
   width: 140px;
   height: 140px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(208, 188, 255, 0.25), transparent 70%);
+  background: radial-gradient(circle, rgba(232, 163, 61, 0.25), transparent 70%);
   pointer-events: none;
 }
 

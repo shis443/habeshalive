@@ -1,13 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Hanken_Grotesk, Inter } from "next/font/google";
+import { Fraunces, IBM_Plex_Mono, Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
-const hankenGrotesk = Hanken_Grotesk({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  weight: ["600", "700"],
-  variable: "--font-hanken",
+  weight: ["500", "600"],
+  variable: "--font-fraunces",
   display: "swap",
 });
 
@@ -18,10 +18,10 @@ const inter = Inter({
   display: "swap",
 });
 
-const geist = Geist({
+const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  weight: ["500"],
-  variable: "--font-geist",
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
   display: "swap",
 });
 
@@ -31,13 +31,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b1326",
+  themeColor: "#151312",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${hankenGrotesk.variable} ${inter.variable} ${geist.variable}`}>
+      <body className={`${fraunces.variable} ${inter.variable} ${plexMono.variable}`}>
         {children}
         <ServiceWorkerRegister />
       </body>
