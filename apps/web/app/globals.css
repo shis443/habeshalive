@@ -1,25 +1,21 @@
 :root {
-  /* Coffee-charcoal / honey-gold / berbere-terracotta palette — see
-     docs/design-system.md. Token names kept stable so every existing
-     component (all reference these by name) picks up the new palette
-     without per-component edits. */
-  --background: #151312;
-  --surface-container-lowest: #100e0d;
-  --surface-container-low: #1b1816;
-  --surface-container: #1f1b19;
-  --surface-container-high: #2a2422;
-  --surface-container-highest: #332c29;
-  --on-background: #f5efe6;
-  --on-surface-variant: #a99c8f;
-  --outline-variant: #38312d;
-  --primary: #e8a33d;
-  --on-primary: #151312;
-  --primary-container: #f2b354;
-  --secondary: #7a9b7e;
-  --on-secondary: #151312;
-  --tertiary: #c9542c;
-  --error: #b84c4c;
-  --on-error: #f5efe6;
+  --background: #0b1326;
+  --surface-container-lowest: #060e20;
+  --surface-container-low: #131b2e;
+  --surface-container: #171f33;
+  --surface-container-high: #222a3d;
+  --surface-container-highest: #2d3449;
+  --on-background: #dae2fd;
+  --on-surface-variant: #cbc3d7;
+  --outline-variant: #494454;
+  --primary: #d0bcff;
+  --on-primary: #3c0091;
+  --primary-container: #a078ff;
+  --secondary: #4cd7f6;
+  --on-secondary: #003640;
+  --tertiary: #ffb869;
+  --error: #ffb4ab;
+  --on-error: #690005;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -28,9 +24,9 @@
   --space-5: 40px;
   --space-6: 64px;
 
-  --font-headline: var(--font-fraunces), serif;
+  --font-headline: var(--font-hanken), sans-serif;
   --font-body: var(--font-inter), sans-serif;
-  --font-label: var(--font-plex-mono), monospace;
+  --font-label: var(--font-geist), sans-serif;
 
   --shell-top-height: 56px;
   --shell-bottom-height: 64px;
