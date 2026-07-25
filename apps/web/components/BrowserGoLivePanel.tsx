@@ -2,7 +2,7 @@
 
 import { streamDetailSchema } from "@habeshalive/shared";
 import { useEffect, useRef, useState } from "react";
-import { SRS_WEBRTC_PUBLIC_IP, SRS_WHIP_URL } from "@/lib/config";
+import { SRS_WHIP_URL } from "@/lib/config";
 import styles from "./BrowserGoLivePanel.module.css";
 
 type Phase = "idle" | "previewing" | "starting" | "live" | "error";
@@ -11,9 +11,17 @@ function buildWhipUrl(streamKey: string): string {
   const url = new URL(SRS_WHIP_URL);
   url.searchParams.set("app", "live");
   url.searchParams.set("stream", streamKey);
-  // Must be a real IP literal, not the WHIP host's hostname — see
-  // SRS_WEBRTC_PUBLIC_IP's own comment in lib/config.ts for why.
-  url.searchParams.set("eip", SRS_WEBRTC_PUBLIC_IP);
+  // No `eip` param here on purpose — SRS's rtc_server.candidate (see
+  // infra/srs/fly.toml's SRS_WEBRTC_CANDIDATE) already advertises the
+  // correct public ip:port on its own. Passing `eip` too used to add a
+  // second, *broken* candidate alongside the good one: URLSearchParams
+  // correctly percent-encodes the colon in "ip:port" (browsers don't skip
+  // that per spec), but SRS doesn't decode the query param before using
+  // it, so it built a candidate from the literal string "1.2.3.4%3A8000"
+  // instead of "1.2.3.4:8000". ICE only needs one working candidate, so
+  // this didn't always fail — confirmed live: it made real-camera publish
+  // attempts genuinely flaky, succeeding on some tries and DTLS-hanging on
+  // others, depending on which candidate the browser happened to race.
   return url.toString();
 }
 
@@ -48,12 +56,22 @@ export function BrowserGoLivePanel({ streamKey, displayName }: { streamKey: stri
     peerRef.current = null;
   }
 
+  // The <video> element only exists in the DOM once phase moves off "idle"
+  // (see the render below) — setting srcObject directly inside
+  // handleStartCamera races the mount, since that runs before the
+  // setPhase("previewing") below has actually re-rendered. This effect
+  // re-attaches whenever phase changes, once the element genuinely exists.
+  useEffect(() => {
+    if (phase !== "idle" && videoRef.current && mediaStreamRef.current) {
+      videoRef.current.srcObject = mediaStreamRef.current;
+    }
+  }, [phase]);
+
   async function handleStartCamera() {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       mediaStreamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setPhase("previewing");
     } catch (err) {
       setError(

@@ -40,6 +40,11 @@
     width: 340px;
     flex-shrink: 0;
     height: 100%;
+    /* BottomNav is fixed/always-on at every width (see its own CSS) — this
+       column fills 100% of .main's height with nothing else reserving
+       space for it, so without this the chat input ends up rendered
+       underneath the nav bar instead of above it. */
+    padding-bottom: var(--shell-bottom-height);
     border-top: none;
     border-left: 1px solid rgba(255, 255, 255, 0.08);
   }
