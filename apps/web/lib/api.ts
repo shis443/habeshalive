@@ -4,6 +4,7 @@ import {
   authUserSchema,
   avatarManifestSchema,
   avatarSelectionSchema,
+  creatorSearchResultSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
   followStatusSchema,
@@ -24,6 +25,7 @@ import {
   type AuthUser,
   type AvatarManifest,
   type AvatarSelection,
+  type CreatorSearchResult,
   type CreatorStats,
   type EarningsThisMonth,
   type FollowStatus,
@@ -136,6 +138,16 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
   return authUserSchema.parse(await res.json());
+}
+
+export async function getFollowedCreators(): Promise<CreatorSearchResult[] | null> {
+  const res = await fetchAuthed("/follows/mine");
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    console.error(`Failed to load followed creators (${res.status})`);
+    return null;
+  }
+  return creatorSearchResultSchema.array().parse(await res.json());
 }
 
 export async function getStreamKey(): Promise<StreamKeyResponse | null> {

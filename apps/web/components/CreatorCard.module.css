@@ -8,6 +8,13 @@
   background: var(--surface-container-lowest);
 }
 
+/* Used on /following to visually separate live creators from offline ones
+   without a second layout — same card, just muted when there's no live
+   badge to draw the eye instead. */
+.cardOffline {
+  opacity: 0.55;
+}
+
 .avatarWrap {
   position: relative;
   flex-shrink: 0;

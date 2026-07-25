@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
-import { getFollowStatus, toggleFollow } from "./service.js";
+import { getFollowedCreators, getFollowStatus, toggleFollow } from "./service.js";
 
 export const followRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/mine", { preHandler: app.authenticate }, async (req) => getFollowedCreators(req.user.sub));
+
   // Follower count is public; "am I following" is personalized when a valid
   // session is present and just defaults to false otherwise — so this route
   // intentionally doesn't require authentication.

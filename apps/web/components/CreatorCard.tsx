@@ -2,9 +2,17 @@ import type { CreatorSearchResult } from "@habeshalive/shared";
 import Link from "next/link";
 import styles from "./CreatorCard.module.css";
 
-export function CreatorCard({ creator }: { creator: CreatorSearchResult }) {
+export function CreatorCard({
+  creator,
+  muteWhenOffline = false,
+}: {
+  creator: CreatorSearchResult;
+  muteWhenOffline?: boolean;
+}) {
+  const cardClassName =
+    muteWhenOffline && !creator.isLive ? `${styles.card} ${styles.cardOffline}` : styles.card;
   return (
-    <Link href={`/watch/${creator.username}`} className={styles.card}>
+    <Link href={`/watch/${creator.username}`} className={cardClassName}>
       <div className={styles.avatarWrap}>
         {creator.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
