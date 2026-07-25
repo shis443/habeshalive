@@ -1,0 +1,74 @@
+.main {
+  padding: calc(var(--shell-top-height) + var(--space-4)) var(--space-3)
+    calc(var(--shell-bottom-height) + var(--space-4));
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.heading {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: 26px;
+  color: var(--on-background);
+  margin: 0 0 var(--space-4);
+}
+
+.prose {
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.prose h2 {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--on-background);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.prose h2:first-child {
+  margin-top: 0;
+}
+
+.prose p {
+  margin: 0 0 var(--space-3);
+}
+
+.prose ul {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-4);
+  list-style: disc;
+}
+
+.prose li {
+  margin-bottom: var(--space-1);
+}
+
+.prose a {
+  color: var(--secondary);
+}
+
+.prose a:hover {
+  text-decoration: underline;
+}
+
+.draftNotice {
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: 6px;
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.placeholderCard {
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: 8px;
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--on-surface-variant);
+}

@@ -14,8 +14,22 @@ import {
 } from "./icons";
 import styles from "./TopNav.module.css";
 
-const MORE_GENERAL = ["About", "Advertisers", "Blog", "Careers", "Anchor Creator Program", "Gift Card"];
-const MORE_LEGAL = ["Community Guidelines", "Privacy Notice", "Terms", "Safety Center"];
+// Advertisers and Gift Card were removed, not just left as placeholders —
+// this platform runs on birr gifting, not ads, and platform gift cards
+// aren't a scoped feature anywhere in the app. Don't link to pages for
+// things that don't exist.
+const MORE_GENERAL = [
+  { label: "About", href: "/about" },
+  { label: "Blog", href: "/blog" },
+  { label: "Careers", href: "/careers" },
+  { label: "Anchor Creator Program", href: "/anchor-creator-program" },
+];
+const MORE_LEGAL = [
+  { label: "Community Guidelines", href: "/community-guidelines" },
+  { label: "Privacy Notice", href: "/privacy" },
+  { label: "Terms", href: "/terms" },
+  { label: "Safety Center", href: "/safety-center" },
+];
 
 // No notifications backend exists yet — 0 is the honest count, not a fake
 // placeholder number. The dropdown below always shows an empty state.
@@ -42,11 +56,13 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
     try {
       await fetch("/api/session", { method: "DELETE" });
     } finally {
-      // Redirect regardless of whether the DELETE call succeeded — an
-      // expired/already-invalid session shouldn't be able to strand
-      // someone on a page that still thinks they're logged in.
-      router.push("/");
-      router.refresh();
+      // Hard navigation, not router.push+refresh — that pairing proved
+      // unreliable on repeat cross-route navigations in this app (see
+      // LoginForm.tsx's login/signup handlers for the same fix and the
+      // full diagnosis). Redirects regardless of whether the DELETE call
+      // succeeded — an expired/already-invalid session shouldn't be able
+      // to strand someone on a page that still thinks they're logged in.
+      window.location.href = "/";
     }
   }
 
@@ -66,16 +82,24 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
             <div className={`${styles.dropdown} ${styles.dropdownWide} ${styles.dropdownLeft}`}>
               <span className={styles.groupLabel}>General</span>
               {MORE_GENERAL.map((item) => (
-                <span key={item} className={styles.menuItem} title="Coming soon">
-                  {item}
-                </span>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={styles.menuItem}
+                >
+                  {item.label}
+                </Link>
               ))}
               <div className={styles.divider} />
               <span className={styles.groupLabel}>Help &amp; Legal</span>
               {MORE_LEGAL.map((item) => (
-                <span key={item} className={styles.menuItem} title="Coming soon">
-                  {item}
-                </span>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={styles.menuItem}
+                >
+                  {item.label}
+                </Link>
               ))}
             </div>
           )}
@@ -164,10 +188,10 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
             </button>
             {account.open && (
               <div className={styles.dropdown}>
-                <Link href="/dashboard" className={styles.menuItem} onClick={() => account.setOpen(false)}>
+                <Link href="/dashboard" className={styles.menuItem}>
                   Dashboard
                 </Link>
-                <Link href="/wallet" className={styles.menuItem} onClick={() => account.setOpen(false)}>
+                <Link href="/wallet" className={styles.menuItem}>
                   Wallet
                 </Link>
                 <div className={styles.divider} />
