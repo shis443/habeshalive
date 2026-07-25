@@ -50,15 +50,18 @@ vhost __defaultVhost__ {
         hls_window      30;
     }
 
-    # rtmp_to_rtc/rtc_to_rtmp off: a WHIP-published stream stays WebRTC-in,
-    # HLS-out only (still transmuxes to HLS the same as an RTMP publish
-    # does — hls{} above applies regardless of ingest protocol). Not
-    # bridging to/from RTMP since nothing here needs to play a WHIP stream
-    # back out as RTMP or vice versa.
+    # rtc_to_rtmp must be on for a WHIP-published (WebRTC) stream to reach
+    # hls{} above at all — HLS muxing hooks off SRS's internal RTMP-style
+    # source, not the raw WebRTC ingest, so without this a WHIP publish
+    # succeeds (media reaches SRS fine) but produces no .m3u8/.ts output —
+    # any viewer just gets a 404 forever. Confirmed live: this was off,
+    # browser-published streams connected but were never actually watchable.
+    # rtmp_to_rtc stays off — nothing here plays a stream back out as
+    # WebRTC, only HLS, so there's no need to bridge in that direction.
     rtc {
         enabled         on;
         rtmp_to_rtc     off;
-        rtc_to_rtmp     off;
+        rtc_to_rtmp     on;
     }
 
     # NOTE: SRS's origin_cluster/coworkers feature was tried here and
