@@ -68,7 +68,15 @@ export function VideoPlayer({ src }: { src: string | null }) {
       return;
     }
 
-    const hls = new Hls();
+    // hls.js's default targets 3 full segments behind the live edge before
+    // it'll play — at this stream's actual segment length (encoder
+    // keyframe interval puts it around ~6s, not the 4s hls_fragment target
+    // in infra/srs/conf/srs.conf.template; segments can only be cut on a
+    // keyframe) that's ~18s of built-in latency on top of encode/package
+    // time. Trimming to 2 segments trades a bit of rebuffer risk on a rough
+    // network for meaningfully lower glass-to-glass delay — real, measured
+    // latency was reported as ~10s at the default of 3.
+    const hls = new Hls({ liveSyncDurationCount: 2 });
 
     function attach() {
       hls.loadSource(src!);
