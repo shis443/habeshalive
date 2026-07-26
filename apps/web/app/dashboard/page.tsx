@@ -2,11 +2,9 @@ import { formatSantimAsBirr } from "@habeshalive/shared";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
-import { BrowserGoLivePanel } from "@/components/BrowserGoLivePanel";
-import { GoLiveButton } from "@/components/GoLiveButton";
+import { GoLivePanel } from "@/components/GoLivePanel";
 import { ModerationPanel } from "@/components/ModerationPanel";
 import { StatCard } from "@/components/StatCard";
-import { StreamSetupPanel } from "@/components/StreamSetupPanel";
 import { TopNav } from "@/components/TopNav";
 import { WalletPanel } from "@/components/WalletPanel";
 import { resolveAvatarUrl } from "@/lib/avatar";
@@ -49,8 +47,6 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <GoLiveButton displayName={user.displayName} isLive={!!liveStream} />
-
         <div className={styles.statGrid}>
           <StatCard
             label="Earnings this month"
@@ -61,10 +57,12 @@ export default async function DashboardPage() {
         </div>
 
         {streamKey && (
-          <>
-            <StreamSetupPanel rtmpUrl={streamKey.rtmpUrl} streamKey={streamKey.streamKey} />
-            <BrowserGoLivePanel streamKey={streamKey.streamKey} displayName={user.displayName} />
-          </>
+          <GoLivePanel
+            rtmpUrl={streamKey.rtmpUrl}
+            streamKey={streamKey.streamKey}
+            displayName={user.displayName}
+            initialIsLive={!!liveStream}
+          />
         )}
         <WalletPanel balanceSantim={balance?.balanceSantim ?? 0} />
         <ModerationPanel />

@@ -6,7 +6,7 @@ import styles from "./EndStreamButton.module.css";
 
 // Shown on a creator's own watch page (see watch/[username]/page.tsx, which
 // only renders this when the logged-in viewer is the stream's creator).
-// Reuses the same POST /streams/end endpoint the dashboard's GoLiveButton
+// Reuses the same POST /streams/end endpoint the dashboard's GoLivePanel
 // uses when live.
 export function EndStreamButton() {
   const router = useRouter();

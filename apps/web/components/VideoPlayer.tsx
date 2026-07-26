@@ -34,12 +34,29 @@ export function VideoPlayer({ src }: { src: string | null }) {
     // playing certain streams natively, so gate on both.
     if (video.canPlayType("application/vnd.apple.mpegurl") && "ManagedMediaSource" in window) {
       const onPlaying = () => setState("playing");
-      const onError = () => setState("waiting");
+      // Unlike hls.js below, native playback gives no structured error
+      // detail — just "it didn't work". Since the same "no manifest yet"
+      // window applies here too (a creator's stream can take 30-50s after
+      // going live before SRS has anything to serve — real, measured
+      // behavior, not a guess), retry on a timer instead of treating the
+      // first failure as final. Without this, Safari loads video.src once,
+      // that 404s during the startup window, and the player is stuck on
+      // "waiting" forever with no way to recover — confirmed live: a real
+      // viewer on iOS Safari never saw a genuinely-live stream because of
+      // exactly this.
+      const onError = () => {
+        setState("waiting");
+        retryTimer = setTimeout(() => {
+          if (!cancelled) video.src = src!;
+        }, RETRY_INTERVAL_MS);
+      };
       video.addEventListener("playing", onPlaying);
       video.addEventListener("error", onError);
       video.addEventListener("stalled", onError);
       video.src = src;
       return () => {
+        cancelled = true;
+        if (retryTimer) clearTimeout(retryTimer);
         video.removeEventListener("playing", onPlaying);
         video.removeEventListener("error", onError);
         video.removeEventListener("stalled", onError);
