@@ -16,6 +16,26 @@ export const sendGiftSchema = z.object({
 });
 export type SendGiftInput = z.infer<typeof sendGiftSchema>;
 
+// Published to Centrifugo channel `gift-alerts:<streamId>` (see
+// apps/api/src/wallet/service.ts) so a live stream's overlay/alert widget
+// can react to a gift in realtime, the same way chatMessageSchema events
+// flow over `stream-chat:<streamId>`.
+export const giftAlertSchema = z.object({
+  id: z.string().uuid(),
+  streamId: z.string().uuid(),
+  senderId: z.string().uuid(),
+  senderUsername: z.string(),
+  senderDisplayName: z.string(),
+  giftTypeId: z.string().uuid(),
+  giftName: z.string(),
+  animationKey: z.string(),
+  quantity: z.number().int().positive(),
+  totalSantim: z.number().int().positive(),
+  message: z.string().max(200).nullable(),
+  createdAt: z.string(),
+});
+export type GiftAlert = z.infer<typeof giftAlertSchema>;
+
 export const payoutMethodSchema = z.enum(["telebirr", "bank"]);
 export type PayoutMethod = z.infer<typeof payoutMethodSchema>;
 

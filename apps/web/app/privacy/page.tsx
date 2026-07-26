@@ -30,7 +30,7 @@ export default function PrivacyPage() {
       <h2>Your data</h2>
       <p>
         You can request account deletion by contacting{" "}
-        <a href="mailto:privacy@habeshalive.com">privacy@habeshalive.com</a>. Chat messages and
+        <a href="mailto:privacy@birq.com">privacy@birq.com</a>. Chat messages and
         transaction records tied to other users&apos; activity (e.g. a gift you received) may be
         retained even after account deletion, for the same reason a financial record isn&apos;t
         simply erased on request.

@@ -1,4 +1,4 @@
-# HabeshaLive
+# Birq
 
 Twitch-style live streaming platform for Ethiopian creators, with birr gifting and payouts to Telebirr/CBE Birr/bank.
 

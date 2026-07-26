@@ -10,6 +10,15 @@
       "history_size": 50,
       "history_ttl": "300s",
       "allow_subscribe_for_client": true
+    },
+    {
+      "name": "gift-alerts",
+      "presence": false,
+      "join_leave": false,
+      "force_push_join_leave": false,
+      "history_size": 20,
+      "history_ttl": "300s",
+      "allow_subscribe_for_client": true
     }
   ]
 }

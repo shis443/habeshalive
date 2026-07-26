@@ -128,7 +128,7 @@ services:
       # Empty by default (no real Resend account) — auth/email-gateway.ts
       # falls back to a console-log stub, same pattern as Chapa above.
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-HabeshaLive <onboarding@resend.dev>}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-Birq <onboarding@resend.dev>}
       API_PORT: 4000
     ports:
       - "4000:4000"

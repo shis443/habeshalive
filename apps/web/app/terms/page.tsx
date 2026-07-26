@@ -34,7 +34,7 @@ export default function TermsPage() {
       </p>
       <h2>Contact</h2>
       <p>
-        Questions about these terms: <a href="mailto:legal@habeshalive.com">legal@habeshalive.com</a>.
+        Questions about these terms: <a href="mailto:legal@birq.com">legal@birq.com</a>.
       </p>
     </StaticPageLayout>
   );

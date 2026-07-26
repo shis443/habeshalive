@@ -37,9 +37,9 @@ class ResendEmailGateway implements EmailGateway {
       body: JSON.stringify({
         from: env.RESEND_FROM_EMAIL,
         to: email,
-        subject: `${code} is your HabeshaLive code`,
-        text: `Your HabeshaLive sign-in code is ${code}. It expires in 5 minutes.`,
-        html: `<p>Your HabeshaLive sign-in code is <strong>${code}</strong>. It expires in 5 minutes.</p>`,
+        subject: `${code} is your Birq code`,
+        text: `Your Birq sign-in code is ${code}. It expires in 5 minutes.`,
+        html: `<p>Your Birq sign-in code is <strong>${code}</strong>. It expires in 5 minutes.</p>`,
       }),
     });
 

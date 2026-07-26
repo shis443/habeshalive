@@ -4,7 +4,7 @@ export default function CommunityGuidelinesPage() {
   return (
     <StaticPageLayout title="Community Guidelines">
       <p>
-        HabeshaLive is built around live chat and gifting between real people. These guidelines cover
+        Birq is built around live chat and gifting between real people. These guidelines cover
         streams, chat messages, and gift messages — anywhere you can post something another person
         will see.
       </p>
@@ -28,7 +28,7 @@ export default function CommunityGuidelinesPage() {
       <h2>Reporting</h2>
       <p>
         Any stream, user, or gift message can be reported directly from the platform. Reports go into
-        a queue reviewed by HabeshaLive moderators/admins, who mark each one as actioned (something
+        a queue reviewed by Birq moderators/admins, who mark each one as actioned (something
         was done — content removed, a user banned, etc.) or dismissed. See{" "}
         <a href="/safety-center">Safety Center</a> for exactly how to file one.
       </p>

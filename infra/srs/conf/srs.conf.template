@@ -1,4 +1,4 @@
-# HabeshaLive SRS config — RTMP ingest, HLS output, HTTP callback wiring to
+# Birq SRS config — RTMP ingest, HLS output, HTTP callback wiring to
 # the API. Adapted from vendor/trunk/conf/hls.conf + http.hooks.callback.conf
 # (the real technical docs, read before the vendor .claude/ injection was
 # found and removed — see infra/srs/README.md).

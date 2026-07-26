@@ -1,4 +1,4 @@
--- HabeshaLive database schema — source of truth.
+-- Birq database schema — source of truth.
 -- Applied incrementally via db/migrations/. This file always reflects
 -- the current combined state of every migration, in order.
 

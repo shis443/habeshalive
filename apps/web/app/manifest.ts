@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "HabeshaLive",
-    short_name: "HabeshaLive",
+    name: "Birq",
+    short_name: "Birq",
     description: "Live streaming and birr gifting for Ethiopian creators",
     start_url: "/",
     display: "standalone",

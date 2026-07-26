@@ -1,5 +1,5 @@
-import { renderPwaIcon } from "@/lib/pwaIcon";
+import { readPwaIcon } from "@/lib/pwaIcon";
 
 export function GET() {
-  return renderPwaIcon(512);
+  return new Response(readPwaIcon(512), { headers: { "Content-Type": "image/png" } });
 }

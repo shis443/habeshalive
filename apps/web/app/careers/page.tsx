@@ -8,7 +8,7 @@ export default function CareersPage() {
         <p>Not hiring yet — check back soon.</p>
         <p>
           In the meantime, reach us at{" "}
-          <a href="mailto:careers@habeshalive.com">careers@habeshalive.com</a>.
+          <a href="mailto:careers@birq.com">careers@birq.com</a>.
         </p>
       </div>
     </StaticPageLayout>

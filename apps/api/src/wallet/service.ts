@@ -2,6 +2,7 @@ import type {
   ChapaTransferWebhook,
   ChapaWebhook,
   EarningsThisMonth,
+  GiftAlert,
   GiftType,
   PayoutQueueItem,
   PayoutResponse,
@@ -12,11 +13,40 @@ import type {
   WalletBalance,
 } from "@habeshalive/shared";
 import { randomUUID } from "node:crypto";
+import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { flagIfMatched } from "../moderation/service.js";
 import { chapaClient, chapaPayoutClient } from "./chapa-client.js";
+
+function channelForGiftAlerts(streamId: string): string {
+  // Mirrors chat/service.ts's channelForStream: same Centrifugo instance,
+  // separate namespace (see infra/centrifugo/config.json) so overlay/alert
+  // widgets can subscribe without also receiving chat traffic.
+  return `gift-alerts:${streamId}`;
+}
+
+// Best-effort fan-out, same philosophy as chat/service.ts's
+// publishToCentrifugo: the gift is already durably recorded in gifts_sent
+// and the ledger by the time this runs, so a publish failure here only
+// costs the live on-stream alert, not the money movement.
+async function publishGiftAlert(alert: GiftAlert): Promise<void> {
+  const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
+    method: "POST",
+    headers: {
+      "X-API-Key": env.CENTRIFUGO_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      method: "publish",
+      params: { channel: channelForGiftAlerts(alert.streamId), data: alert },
+    }),
+  });
+  if (!res.ok) {
+    console.error(`[wallet] Centrifugo gift-alert publish failed: ${res.status} ${await res.text().catch(() => "")}`);
+  }
+}
 
 const PAYOUT_MANUAL_REVIEW_THRESHOLD_SANTIM = 500_000; // 5,000 ETB
 
@@ -88,7 +118,7 @@ export async function initiateTopup(userId: string, amountSantim: number): Promi
   // Chapa requires an email; not every account has one (phone-first auth is
   // the norm here). A synthetic, non-routable placeholder satisfies Chapa's
   // schema without implying we can actually email this address.
-  const email = user.email ?? `${userId}@users.habeshalive.invalid`;
+  const email = user.email ?? `${userId}@users.birq.invalid`;
 
   const client = await pool.connect();
   try {
@@ -115,7 +145,7 @@ export async function initiateTopup(userId: string, amountSantim: number): Promi
 
   const { checkoutUrl } = await chapaClient.initializeCheckout(amountSantim, reference, {
     email,
-    firstName: firstName || "HabeshaLive",
+    firstName: firstName || "Birq",
     lastName: rest.join(" ") || "User",
   });
   return { reference, checkoutUrl };
@@ -255,6 +285,35 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
       await flagIfMatched("gift_message", ledgerTransactionId, senderId, input.message);
     }
 
+    const { rows: alertRows } = await pool.query<{
+      username: string;
+      display_name: string;
+      gift_name: string;
+      animation_key: string;
+    }>(
+      `SELECT u.username, u.display_name, gt.name AS gift_name, gt.animation_key
+       FROM users u, gift_types gt
+       WHERE u.id = $1 AND gt.id = $2`,
+      [senderId, input.giftTypeId]
+    );
+    const alertInfo = alertRows[0];
+    if (alertInfo) {
+      await publishGiftAlert({
+        id: ledgerTransactionId,
+        streamId: input.streamId,
+        senderId,
+        senderUsername: alertInfo.username,
+        senderDisplayName: alertInfo.display_name,
+        giftTypeId: input.giftTypeId,
+        giftName: alertInfo.gift_name,
+        animationKey: alertInfo.animation_key,
+        quantity: input.quantity,
+        totalSantim: totalAmount,
+        message: input.message ?? null,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     return { id: ledgerTransactionId };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -302,7 +361,7 @@ export async function requestPayout(
     `SELECT display_name FROM users WHERE id = $1`,
     [creatorId]
   );
-  const displayName = userRows[0]?.display_name ?? "HabeshaLive Creator";
+  const displayName = userRows[0]?.display_name ?? "Birq Creator";
 
   const bankCode =
     input.method === "telebirr"
@@ -474,7 +533,7 @@ export async function approvePayout(payoutId: string, adminUserId: string): Prom
     `SELECT display_name FROM users WHERE id = $1`,
     [creatorId]
   );
-  const displayName = userRows[0]?.display_name ?? "HabeshaLive Creator";
+  const displayName = userRows[0]?.display_name ?? "Birq Creator";
 
   try {
     const { chapaReference } = await chapaPayoutClient.initiateTransfer({

@@ -4,7 +4,7 @@ export default function SafetyCenterPage() {
   return (
     <StaticPageLayout title="Safety Center">
       <p>
-        This page covers how to report something on HabeshaLive and what actually happens after you
+        This page covers how to report something on Birq and what actually happens after you
         do. For what&apos;s and isn&apos;t allowed, see{" "}
         <a href="/community-guidelines">Community Guidelines</a>.
       </p>
@@ -24,7 +24,7 @@ export default function SafetyCenterPage() {
       </p>
       <h2>What happens after you report something</h2>
       <p>
-        Your report goes into a queue that HabeshaLive moderators/admins review — not an automated
+        Your report goes into a queue that Birq moderators/admins review — not an automated
         system. Each report is marked <strong>actioned</strong> (something was done about it, like
         removing content or banning the account) or <strong>dismissed</strong> (reviewed, no
         violation found). You won&apos;t see a live status update on an individual report right now,
@@ -39,7 +39,7 @@ export default function SafetyCenterPage() {
       <h2>Immediate danger</h2>
       <p>
         If a situation involves immediate danger to someone&apos;s safety, contact your local
-        emergency services first — reporting on HabeshaLive is for platform enforcement, not
+        emergency services first — reporting on Birq is for platform enforcement, not
         emergency response.
       </p>
     </StaticPageLayout>

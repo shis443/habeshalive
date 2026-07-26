@@ -162,7 +162,7 @@ then confirmed `up` in Prometheus's own target list):
 
 Grafana (`:3001`, `admin` / `GRAFANA_ADMIN_PASSWORD` env var) auto-provisions
 the Prometheus datasource and a starter dashboard
-(`infra/grafana/dashboards/habeshalive.json`) covering live streams, SRS
+(`infra/grafana/dashboards/birq.json`) covering live streams, SRS
 viewers/streams per node, HAProxy backend health, API request rate/p95
 latency, Postgres connections, and Redis memory. Every panel query was
 checked against the exporter's real metric names before being written in —

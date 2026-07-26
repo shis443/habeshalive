@@ -105,7 +105,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           )}
         </div>
         <Link href="/" className={styles.wordmark}>
-          HabeshaLive
+          Birq
         </Link>
       </div>
 

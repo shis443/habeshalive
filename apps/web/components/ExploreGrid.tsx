@@ -19,7 +19,7 @@ export function ExploreGrid({ streams }: { streams: LiveStream[] }) {
   return (
     <>
       <CategoryPills selected={selectedCategory} onSelect={setSelectedCategory} />
-      <h2 className={styles.heading}>Live on HabeshaLive</h2>
+      <h2 className={styles.heading}>Live on Birq</h2>
       {filteredStreams.length === 0 ? (
         <p className={styles.empty}>
           {streams.length === 0

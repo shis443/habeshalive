@@ -55,7 +55,7 @@ class RealChapaClient implements ChapaClient {
         tx_ref: txRef,
         callback_url: `${env.API_PUBLIC_URL}/wallet/webhooks/chapa`,
         return_url: `${env.WEB_PUBLIC_URL}/wallet`,
-        customization: { title: "HabeshaLive", description: "Wallet top-up" },
+        customization: { title: "Birq", description: "Wallet top-up" },
       }),
     });
 

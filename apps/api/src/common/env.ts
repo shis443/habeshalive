@@ -31,7 +31,7 @@ const envSchema = z.object({
   // works with zero domain setup — good enough until a real domain is
   // verified in the Resend dashboard.
   RESEND_API_KEY: z.string().default(""),
-  RESEND_FROM_EMAIL: z.string().min(1).default("HabeshaLive <onboarding@resend.dev>"),
+  RESEND_FROM_EMAIL: z.string().min(1).default("Birq <onboarding@resend.dev>"),
   // Real-time chat (Centrifugo). CENTRIFUGO_URL is this server's path to
   // Centrifugo's HTTP API (server-to-server publish) — differs from
   // NEXT_PUBLIC_CENTRIFUGO_URL (apps/web), which is the browser's path to

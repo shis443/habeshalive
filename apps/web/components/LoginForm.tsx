@@ -162,7 +162,7 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "signup" }) {
   return (
     <div className={styles.wrap}>
       <div className={styles.card}>
-        <p className={styles.wordmark}>HabeshaLive</p>
+        <p className={styles.wordmark}>Birq</p>
         <p className={styles.subtext}>
           {mode === "signup" && "Create your account with your "}
           {mode === "signup" && (method === "phone" ? "phone number" : "email")}
