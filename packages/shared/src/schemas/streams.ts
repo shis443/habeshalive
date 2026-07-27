@@ -11,6 +11,7 @@ export const liveStreamSchema = z.object({
   playbackUrl: z.string().nullable(),
   startedAt: z.string().nullable(),
   viewerCount: z.number().int().nonnegative(),
+  isBoosted: z.boolean(),
   creator: z.object({
     id: z.string().uuid(),
     username: z.string(),
@@ -38,6 +39,22 @@ export const streamKeySchema = z.object({
   streamKey: z.string(),
 });
 export type StreamKeyResponse = z.infer<typeof streamKeySchema>;
+
+export const boostStreamResponseSchema = z.object({
+  id: z.string().uuid(),
+  endsAt: z.string(),
+});
+export type BoostStreamResponse = z.infer<typeof boostStreamResponseSchema>;
+
+export const activeBoostSchema = z.object({
+  id: z.string().uuid(),
+  creatorId: z.string().uuid(),
+  creatorUsername: z.string(),
+  priceSantim: z.number().int(),
+  startsAt: z.string(),
+  endsAt: z.string(),
+});
+export type ActiveBoost = z.infer<typeof activeBoostSchema>;
 
 export const creatorStatsSchema = z.object({
   followerCount: z.number().int().nonnegative(),

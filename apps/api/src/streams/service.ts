@@ -1,11 +1,15 @@
-import type {
-  CreateStreamInput,
-  CreatorStats,
-  StreamActivity,
-  StreamDetail,
-  StreamKeyResponse,
+import {
+  BOOST_DURATION_MS,
+  BOOST_PRICE_SANTIM,
+  type BoostStreamResponse,
+  type CreateStreamInput,
+  type CreatorStats,
+  type StreamActivity,
+  type StreamDetail,
+  type StreamKeyResponse,
 } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
+import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { AppError } from "../common/errors.js";
 import { flagIfMatched } from "../moderation/service.js";
 import { videoProvider } from "./video-provider.js";
@@ -30,6 +34,7 @@ interface StreamRow {
   avatar_url: string | null;
   bio: string | null;
   peak_viewers: number;
+  is_boosted: boolean;
 }
 
 function toStreamDetail(row: StreamRow): StreamDetail {
@@ -43,6 +48,7 @@ function toStreamDetail(row: StreamRow): StreamDetail {
     startedAt: row.started_at,
     status: row.status as StreamDetail["status"],
     viewerCount: row.peak_viewers,
+    isBoosted: row.is_boosted,
     creator: {
       id: row.creator_id,
       username: row.username,
@@ -56,7 +62,10 @@ function toStreamDetail(row: StreamRow): StreamDetail {
 const STREAM_SELECT_COLUMNS = `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
   s.started_at, s.status, s.peak_viewers,
-  u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio
+  u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio,
+  EXISTS (
+    SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
+  ) AS is_boosted
 `;
 
 async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> {
@@ -110,7 +119,7 @@ export async function listLiveStreams(): Promise<StreamDetail[]> {
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.status = 'live'
-     ORDER BY s.peak_viewers DESC NULLS LAST, s.started_at DESC`
+     ORDER BY is_boosted DESC, s.peak_viewers DESC NULLS LAST, s.started_at DESC`
   );
   return rows.map(toStreamDetail);
 }
@@ -241,6 +250,58 @@ export async function endStream(userId: string): Promise<void> {
     [userId]
   );
   if (!rowCount) throw new AppError(404, "No live stream to end");
+}
+
+// 100% to platform, no creator/platform split — unlike gifts/subs, the
+// creator here is the buyer, not someone being paid, so there's no revenue
+// to share with themselves. Reuses ledger_transactions the same way, just
+// with a single debit-only leg from the creator's own wallet.
+export async function boostStream(creatorId: string): Promise<BoostStreamResponse> {
+  const { rows: liveRows } = await pool.query(`SELECT 1 FROM streams WHERE creator_id = $1 AND status = 'live'`, [
+    creatorId,
+  ]);
+  if (!liveRows[0]) throw new AppError(400, "You must be live to boost your stream");
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const creatorWalletId = await getUserWalletId(client, creatorId);
+    const platformWalletId = await getPlatformWalletId(client);
+
+    const balanceResult = await client.query<{ balance_santim: number }>(
+      `SELECT balance_santim FROM wallet_balances_cache WHERE wallet_id = $1 FOR UPDATE`,
+      [creatorWalletId]
+    );
+    const balance = balanceResult.rows[0]?.balance_santim ?? 0;
+    if (balance < BOOST_PRICE_SANTIM) throw new AppError(400, "Insufficient balance");
+
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO ledger_transactions (type, status, completed_at)
+       VALUES ('boost', 'completed', now()) RETURNING id`
+    );
+    const ledgerTransactionId = rows[0]!.id;
+
+    await insertEntry(client, ledgerTransactionId, creatorWalletId, "debit", BOOST_PRICE_SANTIM);
+    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", BOOST_PRICE_SANTIM);
+    await applyBalanceDelta(client, creatorWalletId, -BOOST_PRICE_SANTIM);
+    await applyBalanceDelta(client, platformWalletId, BOOST_PRICE_SANTIM);
+
+    const boostResult = await client.query<{ id: string; ends_at: string }>(
+      `INSERT INTO stream_boosts (creator_id, ledger_transaction_id, ends_at, price_santim)
+       VALUES ($1, $2, now() + interval '1 millisecond' * $3, $4)
+       RETURNING id, ends_at`,
+      [creatorId, ledgerTransactionId, BOOST_DURATION_MS, BOOST_PRICE_SANTIM]
+    );
+
+    await client.query("COMMIT");
+    return { id: boostResult.rows[0]!.id, endsAt: boostResult.rows[0]!.ends_at };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Shared by reapStaleStreams below — unlike endStream()/markEndedByProviderStreamId(),

@@ -2,16 +2,21 @@ import { redirect } from "next/navigation";
 import { AddFundsSection } from "@/components/AddFundsSection";
 import { BalanceCard } from "@/components/BalanceCard";
 import { BottomNav } from "@/components/BottomNav";
+import { SubscriptionsList } from "@/components/SubscriptionsList";
 import { TopNav } from "@/components/TopNav";
 import { TransactionsList } from "@/components/TransactionsList";
-import { getCurrentUser, getTransactions, getWalletBalance } from "@/lib/api";
+import { getCurrentUser, getMySubscriptions, getTransactions, getWalletBalance } from "@/lib/api";
 import styles from "./page.module.css";
 
 export default async function WalletPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/wallet");
 
-  const [balance, transactions] = await Promise.all([getWalletBalance(), getTransactions()]);
+  const [balance, transactions, subscriptions] = await Promise.all([
+    getWalletBalance(),
+    getTransactions(),
+    getMySubscriptions(),
+  ]);
 
   return (
     <>
@@ -23,6 +28,7 @@ export default async function WalletPage() {
           weeklyDeltaSantim={balance?.weeklyDeltaSantim ?? 0}
         />
         <AddFundsSection />
+        <SubscriptionsList subscriptions={subscriptions ?? []} />
         <TransactionsList transactions={transactions ?? []} />
       </main>
       <BottomNav active="wallet" />

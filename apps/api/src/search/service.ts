@@ -33,6 +33,7 @@ interface StreamSearchRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  is_boosted: boolean;
 }
 
 export async function searchStreams(query: string, limit = 20): Promise<StreamDetail[]> {
@@ -42,11 +43,14 @@ export async function searchStreams(query: string, limit = 20): Promise<StreamDe
   const { rows } = await pool.query<StreamSearchRow>(
     `SELECT s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
             s.started_at, s.status, s.peak_viewers,
-            u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio
+            u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio,
+            EXISTS (
+              SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
+            ) AS is_boosted
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.status = 'live' AND s.search_vector @@ to_tsquery('simple', $1)
-     ORDER BY ts_rank(s.search_vector, to_tsquery('simple', $1)) DESC
+     ORDER BY is_boosted DESC, ts_rank(s.search_vector, to_tsquery('simple', $1)) DESC
      LIMIT $2`,
     [tsquery, limit]
   );
@@ -61,6 +65,7 @@ export async function searchStreams(query: string, limit = 20): Promise<StreamDe
     startedAt: row.started_at,
     status: row.status as StreamDetail["status"],
     viewerCount: row.peak_viewers,
+    isBoosted: row.is_boosted,
     creator: {
       id: row.creator_id,
       username: row.username,

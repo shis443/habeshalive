@@ -1,6 +1,6 @@
 "use client";
 
-import { streamDetailSchema } from "@habeshalive/shared";
+import { BOOST_PRICE_SANTIM, boostStreamResponseSchema, formatSantimAsBirr, streamDetailSchema } from "@habeshalive/shared";
 import { useEffect, useRef, useState } from "react";
 import { SRS_WHIP_URL } from "@/lib/config";
 import { StreamKeyRow } from "./StreamKeyRow";
@@ -55,6 +55,9 @@ export function GoLivePanel({
   const [method, setMethod] = useState<Method>("obs");
   const [isLive, setIsLive] = useState(initialIsLive);
   const [ending, setEnding] = useState(false);
+  const [boosting, setBoosting] = useState(false);
+  const [boostError, setBoostError] = useState<string | null>(null);
+  const [boostedUntil, setBoostedUntil] = useState<string | null>(null);
 
   const [obsLoading, setObsLoading] = useState(false);
   const [obsError, setObsError] = useState<string | null>(null);
@@ -241,6 +244,22 @@ export function GoLivePanel({
     setEnding(false);
   }
 
+  async function handleBoost() {
+    setBoosting(true);
+    setBoostError(null);
+    try {
+      const res = await fetch("/api/backend/streams/boost", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to boost stream");
+      const boost = boostStreamResponseSchema.parse(data);
+      setBoostedUntil(boost.endsAt);
+    } catch (err) {
+      setBoostError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setBoosting(false);
+    }
+  }
+
   // The browser tab's own "live" view already has its own End stream
   // button embedded alongside the camera preview — don't duplicate it here.
   const showTopBanner = isLive && !(method === "browser" && browserPhase === "live");
@@ -274,6 +293,23 @@ export function GoLivePanel({
           <button type="button" className={styles.endButton} onClick={handleEndStream} disabled={ending}>
             {ending ? "Ending…" : "End stream"}
           </button>
+        </div>
+      )}
+
+      {isLive && (
+        <div className={styles.boostRow}>
+          {boostedUntil ? (
+            <p className={styles.boostActiveText}>
+              Boosted until {new Date(boostedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          ) : (
+            <>
+              <button type="button" className={styles.boostButton} onClick={handleBoost} disabled={boosting}>
+                {boosting ? "Boosting…" : `Boost my stream — ${formatSantimAsBirr(BOOST_PRICE_SANTIM)}/hr`}
+              </button>
+              {boostError && <p className={styles.error}>{boostError}</p>}
+            </>
+          )}
         </div>
       )}
 

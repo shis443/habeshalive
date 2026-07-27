@@ -38,6 +38,21 @@
   border-radius: 6px;
 }
 
+.boostedBadge {
+  position: absolute;
+  top: var(--space-2);
+  left: calc(var(--space-2) + 46px);
+  background: var(--tertiary);
+  color: var(--on-tertiary, #1a1200);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
 .viewerCount {
   position: absolute;
   bottom: var(--space-2);

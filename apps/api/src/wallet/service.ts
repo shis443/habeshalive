@@ -639,6 +639,7 @@ function buildTransactionTitle(row: TransactionRow): string {
   }
   if (row.type === "topup") return "Added funds via Chapa";
   if (row.type === "refund") return "Refund";
+  if (row.type === "boost") return row.direction === "debit" ? "Boosted your stream" : "Stream boost revenue";
   return "Balance adjustment";
 }
 

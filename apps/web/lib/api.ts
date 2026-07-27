@@ -1,4 +1,5 @@
 import {
+  activeBoostSchema,
   adminSummarySchema,
   appealSchema,
   authUserSchema,
@@ -11,6 +12,7 @@ import {
   giftTypeSchema,
   liveStreamSchema,
   moderationFlagSchema,
+  mySubscriptionSchema,
   payoutQueueItemSchema,
   reportSchema,
   searchResultsSchema,
@@ -20,6 +22,7 @@ import {
   subscriptionTierSchema,
   transactionSchema,
   walletBalanceSchema,
+  type ActiveBoost,
   type AdminSummary,
   type Appeal,
   type AuthUser,
@@ -32,6 +35,7 @@ import {
   type GiftType,
   type LiveStream,
   type ModerationFlag,
+  type MySubscription,
   type PayoutQueueItem,
   type Report,
   type SearchResults,
@@ -200,6 +204,16 @@ export async function getTransactions(): Promise<Transaction[] | null> {
   return transactionSchema.array().parse(await res.json());
 }
 
+export async function getMySubscriptions(): Promise<MySubscription[] | null> {
+  const res = await fetchAuthed("/subscriptions/mine");
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    console.error(`Failed to load subscriptions (${res.status})`);
+    return null;
+  }
+  return mySubscriptionSchema.array().parse(await res.json());
+}
+
 // Public: follower count is visible to anonymous viewers, and "following"
 // gracefully defaults to false when there's no session (and now also on
 // any backend error, same reasoning as the rest of this file).
@@ -263,6 +277,15 @@ export async function getModerationQueue(): Promise<ModerationFlag[]> {
     return [];
   }
   return moderationFlagSchema.array().parse(await res.json());
+}
+
+export async function getActiveBoosts(): Promise<ActiveBoost[]> {
+  const res = await fetchAuthed("/admin/boosts");
+  if (!res.ok) {
+    console.error(`Failed to load active boosts (${res.status})`);
+    return [];
+  }
+  return activeBoostSchema.array().parse(await res.json());
 }
 
 export async function getReports(): Promise<Report[]> {

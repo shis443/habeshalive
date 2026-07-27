@@ -3,6 +3,7 @@ import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { env } from "../common/env.js";
 import { AppError } from "../common/errors.js";
 import {
+  boostStream,
   endStream,
   getCreatorStats,
   getLiveStreamByUsername,
@@ -25,6 +26,13 @@ function assertWebhookSecret(req: FastifyRequest): void {
   if (provided !== env.VIDEO_WEBHOOK_SECRET) {
     throw new AppError(401, "Invalid webhook secret");
   }
+}
+
+// Same per-user keying as wallet/routes.ts's keyByUser (each route file
+// defines its own — not shared — see that file's comment for why the
+// preHandler hook matters here too).
+function keyByUser(req: FastifyRequest): string {
+  return req.user?.sub ? `user:${req.user.sub}` : req.ip;
 }
 
 export const streamRoutes: FastifyPluginAsync = async (app) => {
@@ -57,6 +65,15 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     await endStream(req.user.sub);
     reply.send({ ok: true });
   });
+
+  app.post(
+    "/boost",
+    {
+      preHandler: [app.authenticate, app.rejectIfBanned],
+      config: { rateLimit: { max: 5, timeWindow: "1 hour", hook: "preHandler", keyGenerator: keyByUser } },
+    },
+    async (req) => boostStream(req.user.sub)
+  );
 
   // SRS's own callback protocol (distinct from our usual {ok: true}
   // convention): the response body must be a JSON object with a "code"

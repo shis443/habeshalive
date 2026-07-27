@@ -1,5 +1,7 @@
+import { formatSantimAsBirr } from "@habeshalive/shared";
 import { redirect } from "next/navigation";
 import { AppealsQueue } from "@/components/admin/AppealsQueue";
+import { BoostsQueue } from "@/components/admin/BoostsQueue";
 import { ModerationQueue } from "@/components/admin/ModerationQueue";
 import { PayoutsQueue } from "@/components/admin/PayoutsQueue";
 import { ReportsQueue } from "@/components/admin/ReportsQueue";
@@ -7,6 +9,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { StatCard } from "@/components/StatCard";
 import { TopNav } from "@/components/TopNav";
 import {
+  getActiveBoosts,
   getAdminSummary,
   getAppeals,
   getCurrentUser,
@@ -22,12 +25,13 @@ export default async function AdminPage() {
   if (!user) redirect("/login?redirect=/admin");
   if (user.role !== "admin") redirect("/");
 
-  const [summary, payouts, moderationFlags, reports, appeals] = await Promise.all([
+  const [summary, payouts, moderationFlags, reports, appeals, boosts] = await Promise.all([
     getAdminSummary(),
     getPendingPayouts(),
     getModerationQueue(),
     getReports(),
     getAppeals(),
+    getActiveBoosts(),
   ]);
 
   return (
@@ -44,6 +48,11 @@ export default async function AdminPage() {
             <StatCard label="Pending appeals" value={String(summary.pendingAppeals)} />
             <StatCard label="Live streams" value={String(summary.liveStreams)} />
             <StatCard label="Total users" value={String(summary.totalUsers)} />
+            <StatCard label="Creators" value={String(summary.totalCreators)} />
+            <StatCard label="Gift volume" value={formatSantimAsBirr(summary.giftVolumeSantim)} />
+            <StatCard label="Active subscriptions" value={String(summary.activeSubscriptions)} />
+            <StatCard label="MRR" value={formatSantimAsBirr(summary.mrrSantim)} />
+            <StatCard label="Boost revenue" value={formatSantimAsBirr(summary.boostRevenueSantim)} />
           </div>
         )}
 
@@ -54,6 +63,11 @@ export default async function AdminPage() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Payouts awaiting review</h2>
           <PayoutsQueue items={payouts} />
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Active boosts</h2>
+          <BoostsQueue items={boosts} />
         </section>
 
         <section className={styles.section}>

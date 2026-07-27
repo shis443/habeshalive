@@ -128,6 +128,7 @@ export const ledgerTransactionTypeSchema = z.enum([
   "refund",
   "adjustment",
   "subscription",
+  "boost",
 ]);
 
 export const transactionSchema = z.object({

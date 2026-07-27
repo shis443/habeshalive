@@ -1,0 +1,103 @@
+.section {
+  margin-bottom: var(--space-4);
+}
+
+.heading {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-2);
+}
+
+.empty {
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.title {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--on-background);
+  margin: 0;
+}
+
+.meta {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  margin: 2px 0 0;
+}
+
+.actionWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.statusPill {
+  font-family: var(--font-label);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.statusActive {
+  background: rgba(76, 215, 246, 0.14);
+  color: var(--secondary);
+}
+
+.statusWarning {
+  background: var(--surface-container-high);
+  color: var(--tertiary);
+}
+
+.statusEnded {
+  background: rgba(255, 180, 171, 0.14);
+  color: var(--error);
+}
+
+.cancelButton {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: transparent;
+}
+
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--error);
+  font-size: 13px;
+  margin: var(--space-2) 0 0;
+}
