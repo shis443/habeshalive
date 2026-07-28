@@ -38,6 +38,15 @@ const srsWhipOrigin = new URL(
   process.env.NEXT_PUBLIC_SRS_WHIP_URL ?? "http://localhost:8443/rtc/v1/whip/"
 ).origin;
 
+// VOD playback (Section 4 — see apps/api's VOD_S3_PUBLIC_URL): empty until
+// a real R2 bucket exists, so this contributes nothing to media-src yet.
+// Found the hard way via a *different* bug (a stale API_PUBLIC_URL secret
+// pointing stream thumbnails at localhost) that media-src silently blocks
+// any origin not listed here — set NEXT_PUBLIC_VOD_PUBLIC_URL on Vercel
+// the same day VOD_S3_PUBLIC_URL is set on Fly, or playback breaks with
+// no visible error beyond the browser console.
+const vodOrigin = process.env.NEXT_PUBLIC_VOD_PUBLIC_URL ? new URL(process.env.NEXT_PUBLIC_VOD_PUBLIC_URL).origin : "";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {
@@ -71,7 +80,7 @@ const nextConfig = {
               // through a blob: URL — default-src alone doesn't cover
               // blob:, so without this the <video> element's own playback
               // (not just the segment fetches above) is blocked too.
-              "media-src 'self' blob:",
+              `media-src 'self' blob:${vodOrigin ? ` ${vodOrigin}` : ""}`,
               "font-src 'self' data:",
               "frame-ancestors 'none'",
               // object-src/base-uri/form-action don't fall back to
