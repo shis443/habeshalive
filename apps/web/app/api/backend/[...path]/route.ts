@@ -13,7 +13,12 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const targetUrl = `${API_INTERNAL_URL}/${path.join("/")}`;
+  // req.nextUrl.search carries the leading "?" (empty string when there's
+  // no query at all) — appending it directly is correct either way.
+  // Missing this dropped every query param a client-side GET sent through
+  // here (e.g. the ledger lookup's ?q=...), confirmed live: the backend
+  // received a bare path and silently matched nothing.
+  const targetUrl = `${API_INTERNAL_URL}/${path.join("/")}${req.nextUrl.search}`;
   const canHaveBody = req.method !== "GET" && req.method !== "HEAD";
   const body = canHaveBody ? await req.text() : undefined;
 
