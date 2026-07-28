@@ -71,6 +71,68 @@ export const moderationActionRecordSchema = z.object({
 });
 export type ModerationActionRecord = z.infer<typeof moderationActionRecordSchema>;
 
+export const forceEndStreamSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type ForceEndStreamInput = z.infer<typeof forceEndStreamSchema>;
+
+export const streamArchiveItemSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  category: z.string().nullable(),
+  creatorUsername: z.string(),
+  peakViewers: z.number().int().nonnegative(),
+  startedAt: z.string().nullable(),
+  endedAt: z.string().nullable(),
+  vodId: z.string().uuid().nullable(),
+});
+export type StreamArchiveItem = z.infer<typeof streamArchiveItemSchema>;
+
+export const ledgerReconciliationSchema = z.object({
+  totalCreditsSantim: z.number().int(),
+  totalDebitsSantim: z.number().int(),
+  balanced: z.boolean(),
+});
+export type LedgerReconciliation = z.infer<typeof ledgerReconciliationSchema>;
+
+export const platformWalletDaySchema = z.object({
+  day: z.string(),
+  netSantim: z.number().int(),
+});
+
+export const platformWalletSummarySchema = z.object({
+  currentBalanceSantim: z.number().int(),
+  last30Days: z.array(platformWalletDaySchema),
+});
+export type PlatformWalletSummary = z.infer<typeof platformWalletSummarySchema>;
+
+export const ledgerEntryLookupSchema = z.object({
+  id: z.string().uuid(),
+  walletOwnerType: z.enum(["user", "platform"]),
+  walletOwnerUsername: z.string().nullable(),
+  direction: z.enum(["debit", "credit"]),
+  amountSantim: z.number().int(),
+});
+
+export const ledgerTransactionLookupSchema = z.object({
+  id: z.string().uuid(),
+  type: z.string(),
+  status: z.string(),
+  reference: z.string().nullable(),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+  entries: z.array(ledgerEntryLookupSchema),
+});
+export type LedgerTransactionLookup = z.infer<typeof ledgerTransactionLookupSchema>;
+
+export const manualAdjustmentSchema = z.object({
+  targetUsername: z.string().min(1),
+  amountSantim: z.number().int().positive(),
+  direction: z.enum(["credit_user", "debit_user"]),
+  reason: z.string().min(1).max(500),
+});
+export type ManualAdjustmentInput = z.infer<typeof manualAdjustmentSchema>;
+
 export const adminAuditActionSchema = z.object({
   id: z.string().uuid(),
   actorUsername: z.string(),

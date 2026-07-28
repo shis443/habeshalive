@@ -12,15 +12,19 @@ import {
   earningsThisMonthSchema,
   followStatusSchema,
   giftTypeSchema,
+  ledgerReconciliationSchema,
+  ledgerTransactionLookupSchema,
   liveStreamSchema,
   moderationActionRecordSchema,
   moderationFlagSchema,
   mySubscriptionSchema,
   payoutHistoryItemSchema,
   payoutQueueItemSchema,
+  platformWalletSummarySchema,
   reportSchema,
   searchResultsSchema,
   streamActivitySchema,
+  streamArchiveItemSchema,
   streamDefaultsSchema,
   streamDetailSchema,
   streamKeySchema,
@@ -41,15 +45,19 @@ import {
   type EarningsThisMonth,
   type FollowStatus,
   type GiftType,
+  type LedgerReconciliation,
+  type LedgerTransactionLookup,
   type LiveStream,
   type ModerationActionRecord,
   type ModerationFlag,
   type MySubscription,
   type PayoutHistoryItem,
   type PayoutQueueItem,
+  type PlatformWalletSummary,
   type Report,
   type SearchResults,
   type StreamActivity,
+  type StreamArchiveItem,
   type StreamDefaults,
   type StreamDetail,
   type StreamKeyResponse,
@@ -344,6 +352,53 @@ export async function getAdminAuditLog(): Promise<AdminAuditAction[]> {
     return [];
   }
   return adminAuditActionSchema.array().parse(await res.json());
+}
+
+export async function getAdminLiveStreams(): Promise<LiveStream[]> {
+  const res = await fetchAuthed("/admin/streams/live");
+  if (!res.ok) {
+    console.error(`Failed to load admin live streams (${res.status})`);
+    return [];
+  }
+  return liveStreamSchema.array().parse(await res.json());
+}
+
+export async function getStreamArchive(creator?: string): Promise<StreamArchiveItem[]> {
+  const qs = creator ? `?creator=${encodeURIComponent(creator)}` : "";
+  const res = await fetchAuthed(`/admin/streams/archive${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load stream archive (${res.status})`);
+    return [];
+  }
+  return streamArchiveItemSchema.array().parse(await res.json());
+}
+
+export async function getLedgerReconciliation(): Promise<LedgerReconciliation | null> {
+  const res = await fetchAuthed("/admin/ledger/reconciliation");
+  if (!res.ok) {
+    console.error(`Failed to load ledger reconciliation (${res.status})`);
+    return null;
+  }
+  return ledgerReconciliationSchema.parse(await res.json());
+}
+
+export async function getPlatformWalletSummary(): Promise<PlatformWalletSummary | null> {
+  const res = await fetchAuthed("/admin/ledger/platform-wallet");
+  if (!res.ok) {
+    console.error(`Failed to load platform wallet summary (${res.status})`);
+    return null;
+  }
+  return platformWalletSummarySchema.parse(await res.json());
+}
+
+export async function searchLedgerTransactions(query: string): Promise<LedgerTransactionLookup[]> {
+  if (!query.trim()) return [];
+  const res = await fetchAuthed(`/admin/ledger/lookup?q=${encodeURIComponent(query)}`);
+  if (!res.ok) {
+    console.error(`Failed to search ledger transactions (${res.status})`);
+    return [];
+  }
+  return ledgerTransactionLookupSchema.array().parse(await res.json());
 }
 
 export async function getModerationQueue(): Promise<ModerationFlag[]> {

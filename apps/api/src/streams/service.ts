@@ -6,10 +6,12 @@ import {
   type CreateStreamInput,
   type CreatorStats,
   type StreamActivity,
+  type StreamArchiveItem,
   type StreamDefaults,
   type StreamDetail,
   type StreamKeyResponse,
 } from "@habeshalive/shared";
+import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { AppError } from "../common/errors.js";
@@ -163,6 +165,21 @@ export async function listLiveStreams(category?: string, viewerId?: string): Pro
        ))
      ORDER BY is_boosted DESC, s.peak_viewers DESC NULLS LAST, s.started_at DESC`,
     [category ?? null, viewerId ?? null]
+  );
+  return rows.map(toStreamDetail);
+}
+
+// Admin operational view — every live stream regardless of category or
+// is_sensitive, unlike listLiveStreams() above which is what viewers
+// browse and is gated by their own content preference. Internal ops needs
+// to see everything.
+export async function listAllLiveStreamsForAdmin(): Promise<StreamDetail[]> {
+  const { rows } = await pool.query<StreamRow>(
+    `SELECT ${STREAM_SELECT_COLUMNS}
+     FROM streams s
+     JOIN users u ON u.id = s.creator_id
+     WHERE s.status = 'live'
+     ORDER BY s.started_at DESC`
   );
   return rows.map(toStreamDetail);
 }
@@ -321,6 +338,68 @@ export async function endStream(userId: string): Promise<void> {
   );
   if (!rows[0]) throw new AppError(404, "No live stream to end");
   await logStreamEvent(rows[0].id, "ended");
+}
+
+// The heavier, rarer emergency shutdown — unlike endStream() above (a
+// creator ending their own stream) or the reaper (a dead-connection
+// cleanup), this is an admin cutting off a stream that's still actually
+// broadcasting, for something that can't wait for the moderation queue.
+// Logged to admin_actions with a required reason, same as every other
+// admin mutation.
+export async function forceEndStream(streamId: string, adminId: string, reason: string): Promise<void> {
+  const { rows } = await pool.query<{ id: string; creator_id: string; title: string }>(
+    `UPDATE streams SET status = 'ended', ended_at = now()
+     WHERE id = $1 AND status = 'live'
+     RETURNING id, creator_id, title`,
+    [streamId]
+  );
+  const stream = rows[0];
+  if (!stream) throw new AppError(404, "Stream not found or already ended");
+  await logStreamEvent(stream.id, "ended");
+  await logAdminAction(adminId, "stream.force_end", "stream", stream.id, {
+    reason,
+    metadata: { creatorId: stream.creator_id, title: stream.title },
+  });
+}
+
+interface StreamArchiveRow {
+  id: string;
+  title: string;
+  category: string | null;
+  creator_username: string;
+  peak_viewers: number;
+  started_at: string | null;
+  ended_at: string | null;
+  vod_id: string | null;
+}
+
+// Past streams for support/dispute lookups — not paginated beyond a hard
+// limit since this is an internal tool, not a public-scale listing.
+export async function listStreamArchive(filters: { creatorUsername?: string; limit?: number }): Promise<
+  StreamArchiveItem[]
+> {
+  const { rows } = await pool.query<StreamArchiveRow>(
+    `SELECT s.id, s.title, s.category, u.username AS creator_username, s.peak_viewers,
+            s.started_at, s.ended_at, v.id AS vod_id
+     FROM streams s
+     JOIN users u ON u.id = s.creator_id
+     LEFT JOIN stream_vods v ON v.stream_id = s.id
+     WHERE s.status = 'ended'
+       AND ($1::text IS NULL OR u.username ILIKE '%' || $1 || '%')
+     ORDER BY s.ended_at DESC NULLS LAST
+     LIMIT $2`,
+    [filters.creatorUsername ?? null, filters.limit ?? 100]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    creatorUsername: row.creator_username,
+    peakViewers: row.peak_viewers,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    vodId: row.vod_id,
+  }));
 }
 
 // 100% to platform, no creator/platform split — unlike gifts/subs, the

@@ -53,3 +53,22 @@
   color: var(--on-surface-variant);
   margin: 0 0 var(--space-3);
 }
+
+.filterForm {
+  margin-bottom: var(--space-3);
+}
+
+.statLink {
+  display: block;
+}
+
+.filterInput {
+  width: 100%;
+  max-width: 280px;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: 6px;
+  padding: 8px var(--space-2);
+  color: var(--on-background);
+  font-size: 13px;
+}

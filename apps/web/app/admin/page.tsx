@@ -1,4 +1,5 @@
 import { formatSantimAsBirr } from "@habeshalive/shared";
+import Link from "next/link";
 import { ActionCard } from "@/components/admin/ActionCard";
 import { StatCard } from "@/components/StatCard";
 import { getAdminSummary } from "@/lib/api";
@@ -23,7 +24,9 @@ export default async function AdminOverviewPage() {
 
           <h2 className={styles.sectionTitle}>Platform</h2>
           <div className={styles.summaryGrid}>
-            <StatCard label="Live streams" value={String(summary.liveStreams)} />
+            <Link href="/admin/live-streams" className={styles.statLink}>
+              <StatCard label="Live streams" value={String(summary.liveStreams)} />
+            </Link>
             <StatCard label="Total users" value={String(summary.totalUsers)} />
             <StatCard label="Creators" value={String(summary.totalCreators)} />
             <StatCard label="Today's signups" value={String(summary.todaySignups)} />

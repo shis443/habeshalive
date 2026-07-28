@@ -5,11 +5,10 @@ import { usePathname } from "next/navigation";
 import styles from "./AdminSidebar.module.css";
 
 // Only sections that are actually built get a link — the rest of the
-// architecture doc's nav tree (Live Streams, Ledger & Finance, Creators,
-// Users, Boosts, Subscriptions, Anchor Creator Program, Settings, Audit
-// Log) lands in later phases. A dead link that says "coming soon" is
-// exactly the anti-pattern this build has been fixing elsewhere — don't
-// reintroduce it here.
+// architecture doc's nav tree (Creators, Users, Boosts, Subscriptions,
+// Anchor Creator Program, Settings, Audit Log frontend) lands in later
+// phases. A dead link that says "coming soon" is exactly the anti-pattern
+// this build has been fixing elsewhere — don't reintroduce it here.
 // "Flagged content" (the automated blocklist-match queue, already built
 // pre-dating this doc) isn't one of the four named subsections below — it
 // lives at the parent /admin/moderation URL instead, since it needs a
@@ -50,6 +49,15 @@ export function AdminSidebar() {
           ))}
         </div>
       )}
+      <Link
+        href="/admin/live-streams"
+        className={pathname.startsWith("/admin/live-streams") ? styles.linkActive : styles.link}
+      >
+        Live Streams
+      </Link>
+      <Link href="/admin/ledger" className={pathname.startsWith("/admin/ledger") ? styles.linkActive : styles.link}>
+        Ledger &amp; Finance
+      </Link>
     </nav>
   );
 }
