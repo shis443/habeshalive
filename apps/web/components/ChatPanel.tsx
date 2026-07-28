@@ -63,19 +63,36 @@ export function ChatPanel({
       getToken: fetchChatToken,
     });
 
-    fetch(`${API_BASE_URL}/chat/${streamId}/messages`)
-      .then((res) => res.json())
-      .then((history: ChatMessage[]) => {
-        if (cancelled) return;
-        setMessages((prev) => [
-          ...prev,
-          ...history.map((m) => ({ id: m.id, kind: "message" as const, username: m.displayName, text: m.body })),
-        ]);
-      })
-      .catch(() => {
-        // A history load failure shouldn't block live updates from still
-        // working — the WS subscription below is independent of this.
-      });
+    // Dedup-merge rather than blind-append: this runs on the initial mount
+    // AND again every time the subscription resubscribes after a dropped
+    // connection (mobile network blip, tab backgrounded and resumed) — see
+    // the "subscribed" handler below. Anything published while the socket
+    // was down never arrives as a "publication" event (that only fires for
+    // messages published while actively connected), so without this
+    // catch-up fetch on reconnect, a gap in the WS connection means a
+    // permanent gap in that viewer's chat until they manually reload.
+    function syncHistory() {
+      fetch(`${API_BASE_URL}/chat/${streamId}/messages`)
+        .then((res) => res.json())
+        .then((history: ChatMessage[]) => {
+          if (cancelled) return;
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((entry) => entry.id));
+            const missing = history.filter((m) => !existingIds.has(m.id));
+            if (missing.length === 0) return prev;
+            return [
+              ...prev,
+              ...missing.map((m) => ({ id: m.id, kind: "message" as const, username: m.displayName, text: m.body })),
+            ];
+          });
+        })
+        .catch(() => {
+          // A history load failure shouldn't block live updates from still
+          // working — the WS subscription below is independent of this.
+        });
+    }
+
+    syncHistory();
 
     const sub = centrifuge.newSubscription(`stream-chat:${streamId}`);
     sub.on("publication", (ctx) => {
@@ -90,6 +107,10 @@ export function ChatPanel({
         return [...prev, { id: m.id, kind: "message", username: m.displayName, text: m.body }];
       });
     });
+    // Fires on the first successful subscribe AND again on every
+    // resubscribe after a reconnect — re-syncing here (not just on mount)
+    // is what actually closes the "missed messages during a drop" gap.
+    sub.on("subscribed", syncHistory);
     sub.subscribe();
     centrifuge.connect();
 

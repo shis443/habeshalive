@@ -577,10 +577,37 @@ export async function markLiveByProviderStreamId(providerStreamId: string): Prom
     return;
   }
 
-  // No pending row means this creator's encoder connected without ever
-  // visiting the dashboard's go-live setup screen — same fallback title
-  // this always used, but now also seeded from their last-used
-  // category/language (if any) instead of leaving both null.
+  // A brief RTMP disconnect/reconnect (mobile network blip, encoder app
+  // backgrounded and resumed) runs markEndedByProviderStreamId before this
+  // fires again, so the row above is 'ended' by the time we get here —
+  // without reviving it, every such blip forks a brand-new stream id.
+  // That silently strands anyone already on the old one (a viewer tab, or
+  // the streamer's own chat): their messages keep "working" locally
+  // (nothing here validates the stream is still live), but nobody on the
+  // new id ever sees them, and vice versa — confirmed live via clusters of
+  // 3-4 new stream rows within a couple minutes of each other during a
+  // single real mobile-broadcast session. Reviving within a short grace
+  // window makes a quick reconnect invisible to anyone already watching,
+  // same provider_stream_id (the creator's stable stream key) required so
+  // this can't revive a different creator's session.
+  const recentlyEnded = await pool.query<{ id: string }>(
+    `SELECT id FROM streams WHERE provider_stream_id = $1 AND status = 'ended' AND ended_at > now() - interval '2 minutes'
+     ORDER BY created_at DESC LIMIT 1`,
+    [providerStreamId]
+  );
+  if (recentlyEnded.rows[0]) {
+    await pool.query(`UPDATE streams SET status = 'live', playback_url = $1, ended_at = NULL WHERE id = $2`, [
+      playbackUrl,
+      recentlyEnded.rows[0].id,
+    ]);
+    await logStreamEvent(recentlyEnded.rows[0].id, "started");
+    return;
+  }
+
+  // No pending or recently-ended row means this creator's encoder connected
+  // without ever visiting the dashboard's go-live setup screen — same
+  // fallback title this always used, but now also seeded from their
+  // last-used category/language (if any) instead of leaving both null.
   const defaults = await getStreamDefaults(creatorId);
   const thumbnailUrl = defaults.category ? thumbnailPlaceholderUrl(defaults.category) : null;
   const { rows } = await pool.query<{ id: string }>(
