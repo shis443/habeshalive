@@ -1,6 +1,4 @@
 import {
-  BOOST_DURATION_MS,
-  BOOST_PRICE_SANTIM,
   renderThumbnailPlaceholderSvg,
   type BoostStreamResponse,
   type CreateStreamInput,
@@ -12,6 +10,7 @@ import {
   type StreamKeyResponse,
 } from "@habeshalive/shared";
 import { logAdminAction } from "../admin/audit.js";
+import { getBoostPricing } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { AppError } from "../common/errors.js";
@@ -295,6 +294,12 @@ export async function getStreamDefaults(userId: string): Promise<StreamDefaults>
 }
 
 export async function goLive(userId: string, input: CreateStreamInput): Promise<StreamDetail> {
+  const { rows: userRows } = await pool.query<{ is_suspended: boolean }>(
+    `SELECT is_suspended FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (userRows[0]?.is_suspended) throw new AppError(403, "Your streaming privileges are currently suspended");
+
   const profile = await ensureCreatorProfile(userId);
 
   await pool.query(
@@ -412,6 +417,11 @@ export async function boostStream(creatorId: string): Promise<BoostStreamRespons
   ]);
   if (!liveRows[0]) throw new AppError(400, "You must be live to boost your stream");
 
+  // Read once per purchase, not cached — an admin changing the price via
+  // Settings should take effect on the very next boost, not after a
+  // restart or a TTL expiry.
+  const { priceSantim, durationMs } = await getBoostPricing();
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -424,7 +434,7 @@ export async function boostStream(creatorId: string): Promise<BoostStreamRespons
       [creatorWalletId]
     );
     const balance = balanceResult.rows[0]?.balance_santim ?? 0;
-    if (balance < BOOST_PRICE_SANTIM) throw new AppError(400, "Insufficient balance");
+    if (balance < priceSantim) throw new AppError(400, "Insufficient balance");
 
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO ledger_transactions (type, status, completed_at)
@@ -432,16 +442,16 @@ export async function boostStream(creatorId: string): Promise<BoostStreamRespons
     );
     const ledgerTransactionId = rows[0]!.id;
 
-    await insertEntry(client, ledgerTransactionId, creatorWalletId, "debit", BOOST_PRICE_SANTIM);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", BOOST_PRICE_SANTIM);
-    await applyBalanceDelta(client, creatorWalletId, -BOOST_PRICE_SANTIM);
-    await applyBalanceDelta(client, platformWalletId, BOOST_PRICE_SANTIM);
+    await insertEntry(client, ledgerTransactionId, creatorWalletId, "debit", priceSantim);
+    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", priceSantim);
+    await applyBalanceDelta(client, creatorWalletId, -priceSantim);
+    await applyBalanceDelta(client, platformWalletId, priceSantim);
 
     const boostResult = await client.query<{ id: string; ends_at: string }>(
       `INSERT INTO stream_boosts (creator_id, ledger_transaction_id, ends_at, price_santim)
        VALUES ($1, $2, now() + interval '1 millisecond' * $3, $4)
        RETURNING id, ends_at`,
-      [creatorId, ledgerTransactionId, BOOST_DURATION_MS, BOOST_PRICE_SANTIM]
+      [creatorId, ledgerTransactionId, durationMs, priceSantim]
     );
 
     await client.query("COMMIT");

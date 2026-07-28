@@ -1,10 +1,22 @@
-import { forceEndStreamSchema, manualAdjustmentSchema } from "@habeshalive/shared";
-import type { FastifyPluginAsync } from "fastify";
 import {
-  forceEndStream,
-  listAllLiveStreamsForAdmin,
-  listStreamArchive,
-} from "../streams/service.js";
+  extendGracePeriodSchema,
+  forceEndStreamSchema,
+  manualAdjustmentSchema,
+  suspendCreatorSchema,
+  updateCreatorSchema,
+  updatePlatformConfigSchema,
+  updateUserRoleSchema,
+} from "@habeshalive/shared";
+import type { FastifyPluginAsync } from "fastify";
+import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
+import {
+  extendGracePeriod,
+  forceCancelSubscription,
+  listSubscriptionsForAdmin,
+} from "../subscriptions/service.js";
+import { cancelBoost, listBoostRevenueByCreator } from "./boosts-service.js";
+import { getPlatformConfig, updatePlatformConfig } from "./config-service.js";
+import { listCreators, suspendCreator, unsuspendCreator, updateCreator } from "./creators-service.js";
 import {
   getLedgerReconciliation,
   getPlatformWalletSummary,
@@ -12,6 +24,7 @@ import {
   searchLedgerTransaction,
 } from "./ledger-service.js";
 import { getAdminSummary, listActiveBoosts, listAdminActions } from "./service.js";
+import { listUsers, updateUserRole } from "./users-service.js";
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get("/summary", { preHandler: app.requireAdmin }, async () => getAdminSummary());
@@ -46,4 +59,82 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const input = manualAdjustmentSchema.parse(req.body);
     return performManualAdjustment(req.user.sub, input);
   });
+
+  // --- Creators ---
+
+  app.get<{ Querystring: { q?: string } }>(
+    "/creators",
+    { preHandler: app.requireAdmin },
+    async (req) => listCreators(req.query.q)
+  );
+
+  app.patch<{ Params: { id: string } }>("/creators/:id", { preHandler: app.requireAdmin }, async (req) => {
+    const input = updateCreatorSchema.parse(req.body);
+    return updateCreator(req.user.sub, req.params.id, input);
+  });
+
+  app.post<{ Params: { id: string } }>("/creators/:id/suspend", { preHandler: app.requireAdmin }, async (req) => {
+    const input = suspendCreatorSchema.parse(req.body);
+    await suspendCreator(req.user.sub, req.params.id, input);
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/creators/:id/unsuspend", { preHandler: app.requireAdmin }, async (req) => {
+    await unsuspendCreator(req.user.sub, req.params.id);
+    return { ok: true };
+  });
+
+  // --- Users ---
+
+  app.get<{ Querystring: { q?: string } }>("/users", { preHandler: app.requireAdmin }, async (req) =>
+    listUsers(req.query.q)
+  );
+
+  app.patch<{ Params: { id: string } }>("/users/:id/role", { preHandler: app.requireAdmin }, async (req) => {
+    const input = updateUserRoleSchema.parse(req.body);
+    return updateUserRole(req.user.sub, req.params.id, input);
+  });
+
+  // --- Boosts ---
+
+  app.get("/boosts/revenue", { preHandler: app.requireAdmin }, async () => listBoostRevenueByCreator());
+
+  app.post<{ Params: { id: string } }>("/boosts/:id/cancel", { preHandler: app.requireAdmin }, async (req) => {
+    await cancelBoost(req.user.sub, req.params.id);
+    return { ok: true };
+  });
+
+  app.get("/config", { preHandler: app.requireAdmin }, async () => getPlatformConfig());
+
+  app.patch("/config", { preHandler: app.requireAdmin }, async (req) => {
+    const input = updatePlatformConfigSchema.parse(req.body);
+    return updatePlatformConfig(req.user.sub, input);
+  });
+
+  // --- Subscriptions ---
+
+  app.get<{ Querystring: { atRisk?: string } }>(
+    "/subscriptions",
+    { preHandler: app.requireAdmin },
+    async (req) => listSubscriptionsForAdmin({ atRisk: req.query.atRisk === "true" })
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/subscriptions/:id/extend-grace",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      const input = extendGracePeriodSchema.parse(req.body);
+      await extendGracePeriod(req.user.sub, req.params.id, input.days);
+      return { ok: true };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/subscriptions/:id/force-cancel",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      await forceCancelSubscription(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
 };

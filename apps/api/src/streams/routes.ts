@@ -1,5 +1,6 @@
 import { createStreamSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@habeshalive/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import { getBoostPricing } from "../admin/config-service.js";
 import { env } from "../common/env.js";
 import { AppError } from "../common/errors.js";
 import { createVodFromRecording } from "../vods/service.js";
@@ -47,6 +48,12 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get("/defaults", { preHandler: app.authenticate }, async (req) => getStreamDefaults(req.user.sub));
+
+  // Public read of just the price/duration — the actual admin-editable
+  // config lives behind /admin/config, this is only what the go-live
+  // panel needs to show before a creator clicks Boost, so the displayed
+  // price can never drift from what actually gets charged.
+  app.get("/boost-price", async () => getBoostPricing());
 
   // Public, unauthenticated — this is an <img src>, same as any other
   // stream thumbnail. No caching headers: category placeholders are cheap

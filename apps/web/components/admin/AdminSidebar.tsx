@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import styles from "./AdminSidebar.module.css";
 
 // Only sections that are actually built get a link — the rest of the
-// architecture doc's nav tree (Creators, Users, Boosts, Subscriptions,
-// Anchor Creator Program, Settings, Audit Log frontend) lands in later
-// phases. A dead link that says "coming soon" is exactly the anti-pattern
-// this build has been fixing elsewhere — don't reintroduce it here.
+// architecture doc's nav tree (Anchor Creator Program, Settings, Audit Log
+// frontend) lands in Phase 4. A dead link that says "coming soon" is
+// exactly the anti-pattern this build has been fixing elsewhere — don't
+// reintroduce it here.
 // "Flagged content" (the automated blocklist-match queue, already built
 // pre-dating this doc) isn't one of the four named subsections below — it
 // lives at the parent /admin/moderation URL instead, since it needs a
@@ -57,6 +57,21 @@ export function AdminSidebar() {
       </Link>
       <Link href="/admin/ledger" className={pathname.startsWith("/admin/ledger") ? styles.linkActive : styles.link}>
         Ledger &amp; Finance
+      </Link>
+      <Link href="/admin/creators" className={pathname.startsWith("/admin/creators") ? styles.linkActive : styles.link}>
+        Creators
+      </Link>
+      <Link href="/admin/users" className={pathname.startsWith("/admin/users") ? styles.linkActive : styles.link}>
+        Users
+      </Link>
+      <Link href="/admin/boosts" className={pathname.startsWith("/admin/boosts") ? styles.linkActive : styles.link}>
+        Boosts
+      </Link>
+      <Link
+        href="/admin/subscriptions"
+        className={pathname.startsWith("/admin/subscriptions") ? styles.linkActive : styles.link}
+      >
+        Subscriptions
       </Link>
     </nav>
   );

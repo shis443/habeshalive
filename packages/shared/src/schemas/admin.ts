@@ -143,3 +143,92 @@ export const adminAuditActionSchema = z.object({
   createdAt: z.string(),
 });
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
+
+// --- Creators ---
+
+export const creatorListItemSchema = z.object({
+  id: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  revenueShareBps: z.number().int(),
+  isAnchorCreator: z.boolean(),
+  isSuspended: z.boolean(),
+  totalPayoutsSantim: z.number().int(),
+  streamCount: z.number().int(),
+  followerCount: z.number().int(),
+});
+export type CreatorListItem = z.infer<typeof creatorListItemSchema>;
+
+export const updateCreatorSchema = z.object({
+  revenueShareBps: z.number().int().min(0).max(10000).optional(),
+  isAnchorCreator: z.boolean().optional(),
+});
+export type UpdateCreatorInput = z.infer<typeof updateCreatorSchema>;
+
+export const suspendCreatorSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type SuspendCreatorInput = z.infer<typeof suspendCreatorSchema>;
+
+// --- Users ---
+
+export const userListItemSchema = z.object({
+  id: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  phoneNumber: z.string().nullable(),
+  email: z.string().nullable(),
+  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  isBanned: z.boolean(),
+  createdAt: z.string(),
+  walletBalanceSantim: z.number().int(),
+  giftsSentCount: z.number().int(),
+  giftsSentSantim: z.number().int(),
+});
+export type UserListItem = z.infer<typeof userListItemSchema>;
+
+export const updateUserRoleSchema = z.object({
+  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+});
+export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
+
+// --- Boosts ---
+
+export const boostRevenueByCreatorSchema = z.object({
+  creatorUsername: z.string(),
+  boostCount: z.number().int(),
+  totalSantim: z.number().int(),
+});
+export type BoostRevenueByCreator = z.infer<typeof boostRevenueByCreatorSchema>;
+
+export const platformConfigSchema = z.object({
+  boostPriceSantim: z.number().int(),
+  boostDurationMs: z.number().int(),
+  updatedAt: z.string(),
+  updatedByUsername: z.string().nullable(),
+});
+export type PlatformConfig = z.infer<typeof platformConfigSchema>;
+
+export const updatePlatformConfigSchema = z.object({
+  boostPriceSantim: z.number().int().positive(),
+  boostDurationMs: z.number().int().positive(),
+});
+export type UpdatePlatformConfigInput = z.infer<typeof updatePlatformConfigSchema>;
+
+// --- Subscriptions ---
+
+export const subscriptionAdminItemSchema = z.object({
+  id: z.string().uuid(),
+  subscriberUsername: z.string(),
+  creatorUsername: z.string(),
+  tierName: z.string(),
+  priceSantim: z.number().int(),
+  status: z.enum(["active", "cancelled", "expired", "payment_failed"]),
+  expiresAt: z.string(),
+});
+export type SubscriptionAdminItem = z.infer<typeof subscriptionAdminItemSchema>;
+
+export const extendGracePeriodSchema = z.object({
+  days: z.number().int().min(1).max(30),
+});
+export type ExtendGracePeriodInput = z.infer<typeof extendGracePeriodSchema>;

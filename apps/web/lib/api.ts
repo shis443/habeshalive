@@ -7,6 +7,8 @@ import {
   avatarManifestSchema,
   avatarSelectionSchema,
   blocklistTermSchema,
+  boostRevenueByCreatorSchema,
+  creatorListItemSchema,
   creatorSearchResultSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
@@ -20,6 +22,7 @@ import {
   mySubscriptionSchema,
   payoutHistoryItemSchema,
   payoutQueueItemSchema,
+  platformConfigSchema,
   platformWalletSummarySchema,
   reportSchema,
   searchResultsSchema,
@@ -28,8 +31,10 @@ import {
   streamDefaultsSchema,
   streamDetailSchema,
   streamKeySchema,
+  subscriptionAdminItemSchema,
   subscriptionTierSchema,
   transactionSchema,
+  userListItemSchema,
   vodSchema,
   walletBalanceSchema,
   type ActiveBoost,
@@ -40,6 +45,8 @@ import {
   type AvatarManifest,
   type AvatarSelection,
   type BlocklistTerm,
+  type BoostRevenueByCreator,
+  type CreatorListItem,
   type CreatorSearchResult,
   type CreatorStats,
   type EarningsThisMonth,
@@ -53,6 +60,7 @@ import {
   type MySubscription,
   type PayoutHistoryItem,
   type PayoutQueueItem,
+  type PlatformConfig,
   type PlatformWalletSummary,
   type Report,
   type SearchResults,
@@ -61,8 +69,10 @@ import {
   type StreamDefaults,
   type StreamDetail,
   type StreamKeyResponse,
+  type SubscriptionAdminItem,
   type SubscriptionTier,
   type Transaction,
+  type UserListItem,
   type Vod,
   type WalletBalance,
 } from "@habeshalive/shared";
@@ -399,6 +409,53 @@ export async function searchLedgerTransactions(query: string): Promise<LedgerTra
     return [];
   }
   return ledgerTransactionLookupSchema.array().parse(await res.json());
+}
+
+export async function getCreators(search?: string): Promise<CreatorListItem[]> {
+  const qs = search ? `?q=${encodeURIComponent(search)}` : "";
+  const res = await fetchAuthed(`/admin/creators${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load creators (${res.status})`);
+    return [];
+  }
+  return creatorListItemSchema.array().parse(await res.json());
+}
+
+export async function getAdminUsers(search?: string): Promise<UserListItem[]> {
+  const qs = search ? `?q=${encodeURIComponent(search)}` : "";
+  const res = await fetchAuthed(`/admin/users${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load users (${res.status})`);
+    return [];
+  }
+  return userListItemSchema.array().parse(await res.json());
+}
+
+export async function getBoostRevenue(): Promise<BoostRevenueByCreator[]> {
+  const res = await fetchAuthed("/admin/boosts/revenue");
+  if (!res.ok) {
+    console.error(`Failed to load boost revenue (${res.status})`);
+    return [];
+  }
+  return boostRevenueByCreatorSchema.array().parse(await res.json());
+}
+
+export async function getPlatformConfigData(): Promise<PlatformConfig | null> {
+  const res = await fetchAuthed("/admin/config");
+  if (!res.ok) {
+    console.error(`Failed to load platform config (${res.status})`);
+    return null;
+  }
+  return platformConfigSchema.parse(await res.json());
+}
+
+export async function getAdminSubscriptions(atRisk: boolean): Promise<SubscriptionAdminItem[]> {
+  const res = await fetchAuthed(`/admin/subscriptions?atRisk=${atRisk}`);
+  if (!res.ok) {
+    console.error(`Failed to load subscriptions (${res.status})`);
+    return [];
+  }
+  return subscriptionAdminItemSchema.array().parse(await res.json());
 }
 
 export async function getModerationQueue(): Promise<ModerationFlag[]> {

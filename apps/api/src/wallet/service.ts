@@ -360,10 +360,11 @@ export async function requestPayout(
   creatorId: string,
   input: RequestPayoutInput
 ): Promise<PayoutResponse> {
-  const { rows: userRows } = await pool.query<{ display_name: string }>(
-    `SELECT display_name FROM users WHERE id = $1`,
+  const { rows: userRows } = await pool.query<{ display_name: string; is_suspended: boolean }>(
+    `SELECT display_name, is_suspended FROM users WHERE id = $1`,
     [creatorId]
   );
+  if (userRows[0]?.is_suspended) throw new AppError(403, "Your payout privileges are currently suspended");
   const displayName = userRows[0]?.display_name ?? "Birq Creator";
 
   const bankCode =

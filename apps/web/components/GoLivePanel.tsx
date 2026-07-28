@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BOOST_PRICE_SANTIM,
   STREAM_CATEGORIES,
   STREAM_LANGUAGES,
   boostStreamResponseSchema,
@@ -98,6 +97,23 @@ export function GoLivePanel({
   const [boosting, setBoosting] = useState(false);
   const [boostError, setBoostError] = useState<string | null>(null);
   const [boostedUntil, setBoostedUntil] = useState<string | null>(null);
+  // Fetched, not the shared constant — admins can change the real price
+  // via Settings, and a stale hardcoded number here would show a price
+  // that's no longer what actually gets charged.
+  const [boostPriceSantim, setBoostPriceSantim] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/backend/streams/boost-price")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setBoostPriceSantim(data.priceSantim);
+      })
+      .catch(() => {
+        // Boost button just shows a generic label without a price if this
+        // fails — not fatal, the price actually charged is still correct
+        // either way since that's resolved server-side at purchase time.
+      });
+  }, []);
 
   // Setup must happen before the stream key does anything (OBS connecting,
   // WHIP publishing) — isLive already true on mount (e.g. a page refresh
@@ -518,7 +534,9 @@ export function GoLivePanel({
           ) : (
             <>
               <button type="button" className={styles.boostButton} onClick={handleBoost} disabled={boosting}>
-                {boosting ? "Boosting…" : `Boost my stream — ${formatSantimAsBirr(BOOST_PRICE_SANTIM)}/hr`}
+                {boosting
+                  ? "Boosting…"
+                  : `Boost my stream${boostPriceSantim !== null ? ` — ${formatSantimAsBirr(boostPriceSantim)}/hr` : ""}`}
               </button>
               {boostError && <p className={styles.error}>{boostError}</p>}
             </>

@@ -1,5 +1,12 @@
-import type { MySubscription, SubscribeInput, SubscribeResponse, SubscriptionTier } from "@habeshalive/shared";
+import type {
+  MySubscription,
+  SubscribeInput,
+  SubscribeResponse,
+  SubscriptionAdminItem,
+  SubscriptionTier,
+} from "@habeshalive/shared";
 import type { PoolClient } from "pg";
+import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
@@ -210,4 +217,73 @@ export async function renewSubscriptions(): Promise<void> {
       client.release();
     }
   }
+}
+
+interface SubscriptionAdminRow {
+  id: string;
+  subscriber_username: string;
+  creator_username: string;
+  tier_name: string;
+  price_santim: number;
+  status: SubscriptionAdminItem["status"];
+  expires_at: string;
+}
+
+function mapAdminRow(row: SubscriptionAdminRow): SubscriptionAdminItem {
+  return {
+    id: row.id,
+    subscriberUsername: row.subscriber_username,
+    creatorUsername: row.creator_username,
+    tierName: row.tier_name,
+    priceSantim: row.price_santim,
+    status: row.status,
+    expiresAt: row.expires_at,
+  };
+}
+
+// filters.atRisk narrows to the payment_failed grace-period rows — the
+// ones about to lapse if the next renewal attempt also fails, so support
+// can proactively reach out if that's ever a priority (per the doc).
+export async function listSubscriptionsForAdmin(filters: { atRisk?: boolean }): Promise<SubscriptionAdminItem[]> {
+  const { rows } = await pool.query<SubscriptionAdminRow>(
+    `SELECT s.id, su.username AS subscriber_username, cu.username AS creator_username,
+            t.name AS tier_name, t.price_santim, s.status, s.expires_at
+     FROM subscriptions s
+     JOIN users su ON su.id = s.subscriber_id
+     JOIN users cu ON cu.id = s.creator_id
+     JOIN subscription_tiers t ON t.id = s.tier_id
+     WHERE ($1::boolean IS NOT TRUE AND s.status = 'active') OR ($1::boolean IS TRUE AND s.status = 'payment_failed')
+     ORDER BY s.expires_at ASC
+     LIMIT 200`,
+    [filters.atRisk ?? false]
+  );
+  return rows.map(mapAdminRow);
+}
+
+// Support/dispute case: gives a subscriber more time before the grace
+// period's second-failure cancellation would otherwise trigger — pushes
+// expires_at out without charging anything, distinct from a real renewal.
+export async function extendGracePeriod(adminId: string, subscriptionId: string, days: number): Promise<void> {
+  const { rows } = await pool.query<{ status: string }>(`SELECT status FROM subscriptions WHERE id = $1`, [
+    subscriptionId,
+  ]);
+  if (!rows[0]) throw new AppError(404, "Subscription not found");
+  if (rows[0].status !== "payment_failed") throw new AppError(400, "Only a payment_failed subscription has a grace period to extend");
+
+  await pool.query(`UPDATE subscriptions SET expires_at = now() + interval '1 day' * $1 WHERE id = $2`, [
+    days,
+    subscriptionId,
+  ]);
+  await logAdminAction(adminId, "subscription.extend_grace", "subscription", subscriptionId, {
+    metadata: { days },
+  });
+}
+
+export async function forceCancelSubscription(adminId: string, subscriptionId: string): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE subscriptions SET status = 'cancelled' WHERE id = $1 AND status IN ('active', 'payment_failed')`,
+    [subscriptionId]
+  );
+  if (!rowCount) throw new AppError(404, "Subscription not found or already cancelled");
+  await logAdminAction(adminId, "subscription.force_cancel", "subscription", subscriptionId);
 }
