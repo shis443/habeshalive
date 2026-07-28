@@ -89,7 +89,11 @@ export async function listActiveBoosts(): Promise<ActiveBoost[]> {
 
 // The unified cross-cutting audit trail — see admin/audit.ts's
 // logAdminAction, called from every admin mutation across the codebase.
-export async function listAdminActions(limit = 100): Promise<AdminAuditAction[]> {
+// `action` filters by prefix (actions follow a "domain.verb" convention,
+// e.g. "subscription.%", "creator.%") since there's no dedicated
+// domain/category column to filter on instead.
+export async function listAdminActions(filters: { limit?: number; action?: string } = {}): Promise<AdminAuditAction[]> {
+  const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
   const { rows } = await pool.query<{
     id: string;
     actor_username: string;
@@ -97,14 +101,16 @@ export async function listAdminActions(limit = 100): Promise<AdminAuditAction[]>
     target_type: string;
     target_id: string | null;
     reason: string | null;
+    metadata: Record<string, unknown> | null;
     created_at: string;
   }>(
-    `SELECT aa.id, u.username AS actor_username, aa.action, aa.target_type, aa.target_id, aa.reason, aa.created_at
+    `SELECT aa.id, u.username AS actor_username, aa.action, aa.target_type, aa.target_id, aa.reason, aa.metadata, aa.created_at
      FROM admin_actions aa
      JOIN users u ON u.id = aa.actor_id
+     WHERE ($2::text IS NULL OR aa.action LIKE $2 || '%')
      ORDER BY aa.created_at DESC
      LIMIT $1`,
-    [limit]
+    [limit, filters.action ?? null]
   );
   return rows.map((row) => ({
     id: row.id,
@@ -113,6 +119,7 @@ export async function listAdminActions(limit = 100): Promise<AdminAuditAction[]>
     targetType: row.target_type,
     targetId: row.target_id,
     reason: row.reason,
+    metadata: row.metadata,
     createdAt: row.created_at,
   }));
 }

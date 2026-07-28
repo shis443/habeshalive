@@ -11,6 +11,12 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   const router = useRouter();
   const [priceBirr, setPriceBirr] = useState(config ? String(santimToBirr(config.boostPriceSantim)) : "");
   const [durationHours, setDurationHours] = useState(config ? String(config.boostDurationMs / 3_600_000) : "");
+  const [revenueSharePct, setRevenueSharePct] = useState(config ? String(config.defaultRevenueShareBps / 100) : "");
+  const [reviewThresholdBirr, setReviewThresholdBirr] = useState(
+    config ? String(santimToBirr(config.payoutManualReviewThresholdSantim)) : ""
+  );
+  const [vodDefaultDays, setVodDefaultDays] = useState(config ? String(config.vodRetentionDaysDefault) : "");
+  const [vodAnchorDays, setVodAnchorDays] = useState(config ? String(config.vodRetentionDaysAnchor) : "");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -24,11 +30,15 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
         body: JSON.stringify({
           boostPriceSantim: birrToSantim(parseFloat(priceBirr || "0")),
           boostDurationMs: Math.round(parseFloat(durationHours || "0") * 3_600_000),
+          defaultRevenueShareBps: Math.round(parseFloat(revenueSharePct || "0") * 100),
+          payoutManualReviewThresholdSantim: birrToSantim(parseFloat(reviewThresholdBirr || "0")),
+          vodRetentionDaysDefault: Math.round(parseFloat(vodDefaultDays || "0")),
+          vodRetentionDaysAnchor: Math.round(parseFloat(vodAnchorDays || "0")),
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to update pricing");
-      setMessage({ text: "Boost pricing updated — takes effect on the next purchase immediately.", isError: false });
+      if (!res.ok) throw new Error(data.error ?? "Failed to update settings");
+      setMessage({ text: "Settings updated — takes effect immediately, no deploy needed.", isError: false });
       router.refresh();
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : "Something went wrong", isError: true });
@@ -37,14 +47,16 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
     }
   }
 
-  if (!config) return <p className={styles.error}>Couldn&apos;t load pricing config.</p>;
+  if (!config) return <p className={styles.error}>Couldn&apos;t load platform config.</p>;
 
   return (
     <div className={formStyles.form}>
       <p className={formStyles.warning}>
-        Changes here take effect on the very next boost purchase — no deploy needed. Last changed by{" "}
-        {config.updatedByUsername ? `@${config.updatedByUsername}` : "the system default"}.
+        Every field here is read live by the code that uses it — changes take effect on the next relevant action, no
+        deploy needed. Last changed by {config.updatedByUsername ? `@${config.updatedByUsername}` : "the system default"}.
       </p>
+
+      <label className={formStyles.fieldLabel}>Boost pricing</label>
       <div className={formStyles.row}>
         <input
           type="number"
@@ -63,8 +75,49 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           onChange={(e) => setDurationHours(e.target.value)}
         />
       </div>
+
+      <label className={formStyles.fieldLabel}>Default revenue share for new creators (%)</label>
+      <input
+        type="number"
+        step="0.5"
+        min="0"
+        max="100"
+        className={filterStyles.input}
+        value={revenueSharePct}
+        onChange={(e) => setRevenueSharePct(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>Payout manual-review threshold (ETB)</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={reviewThresholdBirr}
+        onChange={(e) => setReviewThresholdBirr(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>VOD retention (days)</label>
+      <div className={formStyles.row}>
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Default"
+          value={vodDefaultDays}
+          onChange={(e) => setVodDefaultDays(e.target.value)}
+        />
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Anchor creators"
+          value={vodAnchorDays}
+          onChange={(e) => setVodAnchorDays(e.target.value)}
+        />
+      </div>
+
       <button type="button" className={styles.approveButton} disabled={submitting} onClick={submit}>
-        {submitting ? "Saving..." : "Save pricing"}
+        {submitting ? "Saving..." : "Save settings"}
       </button>
       {message && <p className={message.isError ? styles.error : formStyles.success}>{message.text}</p>}
     </div>

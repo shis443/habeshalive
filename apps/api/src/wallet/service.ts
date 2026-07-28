@@ -16,6 +16,7 @@ import type {
 } from "@habeshalive/shared";
 import { randomUUID } from "node:crypto";
 import { logAdminAction } from "../admin/audit.js";
+import { getPayoutManualReviewThreshold } from "../admin/config-service.js";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
@@ -50,8 +51,6 @@ async function publishGiftAlert(alert: GiftAlert): Promise<void> {
     console.error(`[wallet] Centrifugo gift-alert publish failed: ${res.status} ${await res.text().catch(() => "")}`);
   }
 }
-
-const PAYOUT_MANUAL_REVIEW_THRESHOLD_SANTIM = 500_000; // 5,000 ETB
 
 export async function listGiftTypes(): Promise<GiftType[]> {
   const { rows } = await pool.query<{
@@ -374,7 +373,8 @@ export async function requestPayout(
 
   let payoutId!: string;
   let status!: "pending_review" | "processing";
-  const requiresManualApproval = input.amountSantim >= PAYOUT_MANUAL_REVIEW_THRESHOLD_SANTIM;
+  const reviewThreshold = await getPayoutManualReviewThreshold();
+  const requiresManualApproval = input.amountSantim >= reviewThreshold;
 
   const client = await pool.connect();
   try {

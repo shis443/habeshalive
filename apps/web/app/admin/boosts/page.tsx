@@ -1,15 +1,11 @@
 import { BoostRevenueList } from "@/components/admin/BoostRevenueList";
 import { BoostsQueue } from "@/components/admin/BoostsQueue";
-import { PlatformConfigForm } from "@/components/admin/PlatformConfigForm";
-import { getActiveBoosts, getBoostRevenue, getPlatformConfigData } from "@/lib/api";
+import { getActiveBoosts, getBoostRevenue } from "@/lib/api";
+import Link from "next/link";
 import styles from "../page.module.css";
 
 export default async function AdminBoostsPage() {
-  const [active, revenue, config] = await Promise.all([
-    getActiveBoosts(),
-    getBoostRevenue(),
-    getPlatformConfigData(),
-  ]);
+  const [active, revenue] = await Promise.all([getActiveBoosts(), getBoostRevenue()]);
 
   return (
     <>
@@ -21,8 +17,9 @@ export default async function AdminBoostsPage() {
       <h2 className={`${styles.sectionTitle} ${styles.sectionTitleSpaced}`}>Revenue by creator</h2>
       <BoostRevenueList items={revenue} />
 
-      <h2 className={`${styles.sectionTitle} ${styles.sectionTitleSpaced}`}>Pricing</h2>
-      <PlatformConfigForm config={config} />
+      <p className={styles.subtext}>
+        Boost pricing moved to <Link href="/admin/settings">Settings</Link>.
+      </p>
     </>
   );
 }

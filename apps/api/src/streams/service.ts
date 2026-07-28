@@ -10,7 +10,7 @@ import {
   type StreamKeyResponse,
 } from "@habeshalive/shared";
 import { logAdminAction } from "../admin/audit.js";
-import { getBoostPricing } from "../admin/config-service.js";
+import { getBoostPricing, getDefaultRevenueShareBps } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { AppError } from "../common/errors.js";
@@ -107,14 +107,15 @@ async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> 
   if (existing.rows[0]) return existing.rows[0];
 
   const { streamKey } = await videoProvider.createLiveInput();
+  const defaultRevenueShareBps = await getDefaultRevenueShareBps();
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const inserted = await client.query<CreatorProfileRow>(
-      `INSERT INTO creator_profiles (user_id, stream_key) VALUES ($1, $2)
+      `INSERT INTO creator_profiles (user_id, stream_key, revenue_share_bps) VALUES ($1, $2, $3)
        RETURNING user_id, stream_key`,
-      [userId, streamKey]
+      [userId, streamKey, defaultRevenueShareBps]
     );
     await client.query(`UPDATE users SET role = 'creator' WHERE id = $1 AND role = 'viewer'`, [
       userId,

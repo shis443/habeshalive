@@ -140,6 +140,7 @@ export const adminAuditActionSchema = z.object({
   targetType: z.string(),
   targetId: z.string().nullable(),
   reason: z.string().nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
   createdAt: z.string(),
 });
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
@@ -204,6 +205,10 @@ export type BoostRevenueByCreator = z.infer<typeof boostRevenueByCreatorSchema>;
 export const platformConfigSchema = z.object({
   boostPriceSantim: z.number().int(),
   boostDurationMs: z.number().int(),
+  defaultRevenueShareBps: z.number().int(),
+  payoutManualReviewThresholdSantim: z.number().int(),
+  vodRetentionDaysDefault: z.number().int(),
+  vodRetentionDaysAnchor: z.number().int(),
   updatedAt: z.string(),
   updatedByUsername: z.string().nullable(),
 });
@@ -212,6 +217,10 @@ export type PlatformConfig = z.infer<typeof platformConfigSchema>;
 export const updatePlatformConfigSchema = z.object({
   boostPriceSantim: z.number().int().positive(),
   boostDurationMs: z.number().int().positive(),
+  defaultRevenueShareBps: z.number().int().min(0).max(10000),
+  payoutManualReviewThresholdSantim: z.number().int().positive(),
+  vodRetentionDaysDefault: z.number().int().positive(),
+  vodRetentionDaysAnchor: z.number().int().positive(),
 });
 export type UpdatePlatformConfigInput = z.infer<typeof updatePlatformConfigSchema>;
 
@@ -232,3 +241,21 @@ export const extendGracePeriodSchema = z.object({
   days: z.number().int().min(1).max(30),
 });
 export type ExtendGracePeriodInput = z.infer<typeof extendGracePeriodSchema>;
+
+// --- Anchor Creator Program ---
+// No application/pipeline subsystem exists (there's no self-serve apply
+// flow — creators reach out by email and the team follows up manually).
+// This is a ranked view onto data that already exists elsewhere
+// (lifetime earnings, tenure, stream activity) so an admin can see who's
+// worth reaching out to; the actual promotion still happens through the
+// existing isAnchorCreator toggle on the Creators page.
+export const anchorCandidateSchema = z.object({
+  id: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  lifetimeEarningsSantim: z.number().int(),
+  streamCount: z.number().int(),
+  followerCount: z.number().int(),
+  accountCreatedAt: z.string(),
+});
+export type AnchorCandidate = z.infer<typeof anchorCandidateSchema>;

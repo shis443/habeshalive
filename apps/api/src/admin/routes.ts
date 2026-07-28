@@ -9,6 +9,7 @@ import {
 } from "@habeshalive/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
+import { listAnchorCandidates, listAnchorCreators } from "./anchor-service.js";
 import {
   extendGracePeriod,
   forceCancelSubscription,
@@ -29,7 +30,19 @@ import { listUsers, updateUserRole } from "./users-service.js";
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get("/summary", { preHandler: app.requireAdmin }, async () => getAdminSummary());
   app.get("/boosts", { preHandler: app.requireAdmin }, async () => listActiveBoosts());
-  app.get("/audit-log", { preHandler: app.requireAdmin }, async () => listAdminActions());
+
+  app.get<{ Querystring: { limit?: string; action?: string } }>(
+    "/audit-log",
+    { preHandler: app.requireAdmin },
+    async (req) =>
+      listAdminActions({
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        action: req.query.action,
+      })
+  );
+
+  app.get("/anchor-program/creators", { preHandler: app.requireAdmin }, async () => listAnchorCreators());
+  app.get("/anchor-program/candidates", { preHandler: app.requireAdmin }, async () => listAnchorCandidates());
 
   app.get("/streams/live", { preHandler: app.requireAdmin }, async () => listAllLiveStreamsForAdmin());
 

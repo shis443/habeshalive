@@ -28,3 +28,11 @@
   font-size: 13px;
   color: var(--secondary);
 }
+
+.fieldLabel {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  margin-top: var(--space-2);
+}

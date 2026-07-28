@@ -1,4 +1,5 @@
-import { VOD_RETENTION_DAYS_ANCHOR, VOD_RETENTION_DAYS_DEFAULT, type Vod } from "@habeshalive/shared";
+import type { Vod } from "@habeshalive/shared";
+import { getVodRetentionDays } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { deleteObject, objectKeyFromPublicUrl, uploadObject } from "../common/object-storage.js";
 
@@ -55,7 +56,8 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
   const key = `${streamId}/${Date.now()}.mp4`;
   const playbackUrl = await uploadObject(key, body, "video/mp4");
 
-  const retentionDays = stream.is_anchor_creator ? VOD_RETENTION_DAYS_ANCHOR : VOD_RETENTION_DAYS_DEFAULT;
+  const retention = await getVodRetentionDays();
+  const retentionDays = stream.is_anchor_creator ? retention.anchor : retention.default;
 
   const { rows } = await pool.query<{ id: string; created_at: string }>(
     `INSERT INTO stream_vods (stream_id, playback_url, expires_at)

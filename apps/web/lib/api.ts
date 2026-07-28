@@ -2,6 +2,7 @@ import {
   activeBoostSchema,
   adminAuditActionSchema,
   adminSummarySchema,
+  anchorCandidateSchema,
   appealSchema,
   authUserSchema,
   avatarManifestSchema,
@@ -40,6 +41,7 @@ import {
   type ActiveBoost,
   type AdminAuditAction,
   type AdminSummary,
+  type AnchorCandidate,
   type Appeal,
   type AuthUser,
   type AvatarManifest,
@@ -355,13 +357,35 @@ export async function getBlocklistTerms(): Promise<BlocklistTerm[]> {
   return blocklistTermSchema.array().parse(await res.json());
 }
 
-export async function getAdminAuditLog(): Promise<AdminAuditAction[]> {
-  const res = await fetchAuthed("/admin/audit-log");
+export async function getAdminAuditLog(filters: { limit?: number; action?: string } = {}): Promise<AdminAuditAction[]> {
+  const params = new URLSearchParams();
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.action) params.set("action", filters.action);
+  const qs = params.toString();
+  const res = await fetchAuthed(`/admin/audit-log${qs ? `?${qs}` : ""}`);
   if (!res.ok) {
     console.error(`Failed to load audit log (${res.status})`);
     return [];
   }
   return adminAuditActionSchema.array().parse(await res.json());
+}
+
+export async function getAnchorCreators(): Promise<CreatorListItem[]> {
+  const res = await fetchAuthed("/admin/anchor-program/creators");
+  if (!res.ok) {
+    console.error(`Failed to load anchor creators (${res.status})`);
+    return [];
+  }
+  return creatorListItemSchema.array().parse(await res.json());
+}
+
+export async function getAnchorCandidates(): Promise<AnchorCandidate[]> {
+  const res = await fetchAuthed("/admin/anchor-program/candidates");
+  if (!res.ok) {
+    console.error(`Failed to load anchor candidates (${res.status})`);
+    return [];
+  }
+  return anchorCandidateSchema.array().parse(await res.json());
 }
 
 export async function getAdminLiveStreams(): Promise<LiveStream[]> {
