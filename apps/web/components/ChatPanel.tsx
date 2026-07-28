@@ -80,7 +80,13 @@ export function ChatPanel({
     const sub = centrifuge.newSubscription(`stream-chat:${streamId}`);
     sub.on("publication", (ctx) => {
       const m = ctx.data as ChatMessage;
-      setMessages((prev) => [...prev, { id: m.id, kind: "message", username: m.displayName, text: m.body }]);
+      setMessages((prev) => {
+        // Own messages are already appended optimistically in handleSend as
+        // soon as the POST resolves — the WS echo confirming storage arrives
+        // after, so skip it here rather than showing the message twice.
+        if (prev.some((entry) => entry.id === m.id)) return prev;
+        return [...prev, { id: m.id, kind: "message", username: m.displayName, text: m.body }];
+      });
     });
     sub.subscribe();
     centrifuge.connect();
@@ -117,10 +123,16 @@ export function ChatPanel({
         body: JSON.stringify({ body }),
       });
       if (!res.ok) throw new Error("Failed to send");
-      // Not appended optimistically here — the Centrifugo subscription
-      // above delivers it back to everyone, including this client, once
-      // the server has actually stored it. Avoids a duplicate-message bug
-      // from adding it twice.
+      // Append immediately from the POST response rather than waiting on
+      // the Centrifugo round-trip: a viewer who sends right after the page
+      // loads can easily do so before the WS subscription (an async
+      // getToken fetch, then connect+subscribe) finishes establishing,
+      // which silently drops the echo for that message — the sender would
+      // never see their own message without a manual reload. The
+      // subscription's dedup-by-id above guards against seeing it twice
+      // when the echo does arrive.
+      const sent: ChatMessage = await res.json();
+      setMessages((prev) => [...prev, { id: sent.id, kind: "message", username: sent.displayName, text: sent.body }]);
     } catch {
       setMessages((prev) => [
         ...prev,
