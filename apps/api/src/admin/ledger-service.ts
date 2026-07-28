@@ -56,8 +56,14 @@ export async function getPlatformWalletSummary(): Promise<PlatformWalletSummary>
 export async function searchLedgerTransaction(query: string): Promise<LedgerTransactionLookup[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
 
+  // id::text = $1 (not id = $1::uuid) deliberately — casting the id column
+  // instead of the input avoids reusing $1 across two different implicit
+  // types in the same statement (text for the reference comparison, uuid
+  // for an id comparison), which real-world testing against the deployed
+  // API — not just a local query tool — showed silently matching nothing
+  // instead of erroring. This form works whether or not the input even
+  // looks like a UUID, no separate isUuid branch needed.
   const { rows: txRows } = await pool.query<{
     id: string;
     type: string;
@@ -68,10 +74,10 @@ export async function searchLedgerTransaction(query: string): Promise<LedgerTran
   }>(
     `SELECT id, type, status, reference, created_at, completed_at
      FROM ledger_transactions
-     WHERE reference = $1 OR ($2::boolean AND id = $1::uuid)
+     WHERE reference = $1 OR id::text = $1
      ORDER BY created_at DESC
      LIMIT 20`,
-    [trimmed, isUuid]
+    [trimmed]
   );
   if (txRows.length === 0) return [];
 
