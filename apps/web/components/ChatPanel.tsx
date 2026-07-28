@@ -81,9 +81,11 @@ export function ChatPanel({
     sub.on("publication", (ctx) => {
       const m = ctx.data as ChatMessage;
       setMessages((prev) => {
-        // Own messages are already appended optimistically in handleSend as
-        // soon as the POST resolves — the WS echo confirming storage arrives
-        // after, so skip it here rather than showing the message twice.
+        // Own messages are also appended in handleSend once its POST
+        // resolves, and the two can arrive in either order (the server
+        // publishes to Centrifugo before responding to the POST, so this
+        // WS echo often wins the race) — dedup by id regardless of which
+        // side runs first.
         if (prev.some((entry) => entry.id === m.id)) return prev;
         return [...prev, { id: m.id, kind: "message", username: m.displayName, text: m.body }];
       });
@@ -128,11 +130,17 @@ export function ChatPanel({
       // loads can easily do so before the WS subscription (an async
       // getToken fetch, then connect+subscribe) finishes establishing,
       // which silently drops the echo for that message — the sender would
-      // never see their own message without a manual reload. The
-      // subscription's dedup-by-id above guards against seeing it twice
-      // when the echo does arrive.
+      // never see their own message without a manual reload. Dedup by id
+      // here too, not just in the subscription handler below: the server
+      // publishes to Centrifugo before responding to this POST, so the WS
+      // echo can (and often does) reach the client before this fetch's
+      // response does — without this check, both paths append the same
+      // message and it shows up twice.
       const sent: ChatMessage = await res.json();
-      setMessages((prev) => [...prev, { id: sent.id, kind: "message", username: sent.displayName, text: sent.body }]);
+      setMessages((prev) => {
+        if (prev.some((entry) => entry.id === sent.id)) return prev;
+        return [...prev, { id: sent.id, kind: "message", username: sent.displayName, text: sent.body }];
+      });
     } catch {
       setMessages((prev) => [
         ...prev,
