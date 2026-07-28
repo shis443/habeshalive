@@ -40,8 +40,10 @@ function keyByUser(req: FastifyRequest): string {
 }
 
 export const streamRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { category?: string } }>("/live", async (req) =>
-    listLiveStreams(req.query.category)
+  app.get<{ Querystring: { category?: string } }>(
+    "/live",
+    { preHandler: app.tryAuthenticate },
+    async (req) => listLiveStreams(req.query.category, req.user?.sub)
   );
 
   app.get("/defaults", { preHandler: app.authenticate }, async (req) => getStreamDefaults(req.user.sub));
@@ -55,8 +57,10 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     reply.header("Content-Type", "image/svg+xml").send(thumbnailPlaceholderSvg(decodeURIComponent(category)));
   });
 
-  app.get<{ Params: { username: string } }>("/username/:username", async (req) =>
-    getLiveStreamByUsername(req.params.username)
+  app.get<{ Params: { username: string } }>(
+    "/username/:username",
+    { preHandler: app.tryAuthenticate },
+    async (req) => getLiveStreamByUsername(req.params.username, req.user?.sub)
   );
 
   app.get("/creator-stats", { preHandler: app.authenticate }, async (req) =>

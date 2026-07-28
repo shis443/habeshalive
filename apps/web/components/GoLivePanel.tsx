@@ -110,6 +110,7 @@ export function GoLivePanel({
   const [setupThumbnail, setSetupThumbnail] = useState<string | null>(null);
   const [thumbnailProcessing, setThumbnailProcessing] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+  const [setupIsSensitive, setSetupIsSensitive] = useState(false);
 
   useEffect(() => {
     if (initialIsLive) return;
@@ -197,6 +198,7 @@ export function GoLivePanel({
           category: setupCategory,
           language: setupLanguage,
           thumbnailUrl: setupThumbnail ?? undefined,
+          isSensitive: setupIsSensitive,
         }),
       });
       const data = await res.json();
@@ -244,6 +246,7 @@ export function GoLivePanel({
           category: setupCategory,
           language: setupLanguage,
           thumbnailUrl: setupThumbnail ?? undefined,
+          isSensitive: setupIsSensitive,
         }),
       });
       const goLiveData = await goLiveRes.json();
@@ -436,6 +439,20 @@ export function GoLivePanel({
             {thumbnailProcessing && <p className={styles.subtext}>Processing image…</p>}
             {thumbnailError && <p className={styles.error}>{thumbnailError}</p>}
           </div>
+          <label className={styles.checkboxField}>
+            <input
+              type="checkbox"
+              checked={setupIsSensitive}
+              onChange={(e) => setSetupIsSensitive(e.target.checked)}
+            />
+            Mark as sensitive/mature content
+          </label>
+          {setupIsSensitive && (
+            <p className={styles.subtext}>
+              Only viewers who&apos;ve turned on &quot;Show sensitive/mature content&quot; in
+              Settings will see this stream in browse/search.
+            </p>
+          )}
           <button
             type="button"
             className={styles.primaryButton}

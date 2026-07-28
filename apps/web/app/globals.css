@@ -32,6 +32,29 @@
   --shell-bottom-height: 64px;
 }
 
+/* Light theme — same hue identity as the dark palette above (purple
+   primary, cyan secondary, amber tertiary), re-tuned for MD3-style
+   contrast on light surfaces rather than a literal color inversion. */
+:root[data-theme="light"] {
+  --background: #fdfaff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f7f2fa;
+  --surface-container: #f1ecf4;
+  --surface-container-high: #ebe6ee;
+  --surface-container-highest: #e5e1e9;
+  --on-background: #1b1b23;
+  --on-surface-variant: #46464f;
+  --outline-variant: #c7c5d0;
+  --primary: #6750a4;
+  --on-primary: #ffffff;
+  --primary-container: #eaddff;
+  --secondary: #00677d;
+  --on-secondary: #ffffff;
+  --tertiary: #8a5000;
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+}
+
 *,
 *::before,
 *::after {

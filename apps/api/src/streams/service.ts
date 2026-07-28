@@ -63,6 +63,7 @@ interface StreamRow {
   bio: string | null;
   peak_viewers: number;
   is_boosted: boolean;
+  is_sensitive: boolean;
 }
 
 function toStreamDetail(row: StreamRow): StreamDetail {
@@ -77,6 +78,7 @@ function toStreamDetail(row: StreamRow): StreamDetail {
     status: row.status as StreamDetail["status"],
     viewerCount: row.peak_viewers,
     isBoosted: row.is_boosted,
+    isSensitive: row.is_sensitive,
     creator: {
       id: row.creator_id,
       username: row.username,
@@ -89,7 +91,7 @@ function toStreamDetail(row: StreamRow): StreamDetail {
 
 const STREAM_SELECT_COLUMNS = `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
-  s.started_at, s.status, s.peak_viewers,
+  s.started_at, s.status, s.peak_viewers, s.is_sensitive,
   u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio,
   EXISTS (
     SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
@@ -145,14 +147,22 @@ export async function rotateStreamKey(userId: string): Promise<StreamKeyResponse
 // client-side filter used to document: stream.category is free-form text
 // (VARCHAR(50), no enum/CHECK constraint), so an exact-case match would
 // silently miss real streams over a casing difference alone.
-export async function listLiveStreams(category?: string): Promise<StreamDetail[]> {
+// viewerId gates labeled (is_sensitive) streams to viewers whose own
+// account preference opts in — see db/migrations/0012. NULL (anonymous or
+// not opted in) never matches the EXISTS, so those streams are simply
+// absent from the list rather than shown-but-blurred.
+export async function listLiveStreams(category?: string, viewerId?: string): Promise<StreamDetail[]> {
   const { rows } = await pool.query<StreamRow>(
     `SELECT ${STREAM_SELECT_COLUMNS}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
-     WHERE s.status = 'live' AND ($1::text IS NULL OR lower(s.category) = lower($1))
+     WHERE s.status = 'live'
+       AND ($1::text IS NULL OR lower(s.category) = lower($1))
+       AND (s.is_sensitive = FALSE OR EXISTS (
+         SELECT 1 FROM users v WHERE v.id = $2 AND v.show_sensitive_content = TRUE
+       ))
      ORDER BY is_boosted DESC, s.peak_viewers DESC NULLS LAST, s.started_at DESC`,
-    [category ?? null]
+    [category ?? null, viewerId ?? null]
   );
   return rows.map(toStreamDetail);
 }
@@ -170,16 +180,23 @@ export async function getStreamById(streamId: string): Promise<StreamDetail> {
   return toStreamDetail(row);
 }
 
-export async function getLiveStreamByUsername(username: string): Promise<StreamDetail> {
+export async function getLiveStreamByUsername(username: string, viewerId?: string): Promise<StreamDetail> {
   const { rows } = await pool.query<StreamRow>(
     `SELECT ${STREAM_SELECT_COLUMNS}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE u.username = $1 AND s.status = 'live'
+       AND (s.is_sensitive = FALSE OR EXISTS (
+         SELECT 1 FROM users v WHERE v.id = $2 AND v.show_sensitive_content = TRUE
+       ))
      ORDER BY s.started_at DESC LIMIT 1`,
-    [username]
+    [username, viewerId ?? null]
   );
   const row = rows[0];
+  // Same 404 whether the creator is genuinely offline or is live but
+  // streaming labeled content this viewer hasn't opted into — not
+  // revealing "there's something here, you just can't see it" is the
+  // safer behavior for a content-sensitivity gate.
   if (!row) throw new AppError(404, "This creator is not live right now");
   return toStreamDetail(row);
 }
@@ -282,10 +299,10 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   const thumbnailUrl = input.thumbnailUrl ?? thumbnailPlaceholderUrl(input.category);
 
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now())
+    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8)
      RETURNING id`,
-    [userId, input.title, input.category, input.language, thumbnailUrl, playbackUrl, profile.stream_key]
+    [userId, input.title, input.category, input.language, thumbnailUrl, playbackUrl, profile.stream_key, input.isSensitive ?? false]
   );
   const streamId = rows[0]!.id;
 

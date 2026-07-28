@@ -15,6 +15,7 @@ interface UserRow {
   display_name: string;
   avatar_url: string | null;
   role: string;
+  show_sensitive_content: boolean;
 }
 
 function toAuthUser(row: UserRow): AuthUser {
@@ -24,13 +25,25 @@ function toAuthUser(row: UserRow): AuthUser {
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
     role: row.role as AuthUser["role"],
+    showSensitiveContent: row.show_sensitive_content,
   };
 }
 
 export async function getUserById(userId: string): Promise<AuthUser> {
   const { rows } = await pool.query<UserRow>(
-    `SELECT id, username, display_name, avatar_url, role FROM users WHERE id = $1`,
+    `SELECT id, username, display_name, avatar_url, role, show_sensitive_content FROM users WHERE id = $1`,
     [userId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "User not found");
+  return toAuthUser(row);
+}
+
+export async function updatePreferences(userId: string, showSensitiveContent: boolean): Promise<AuthUser> {
+  const { rows } = await pool.query<UserRow>(
+    `UPDATE users SET show_sensitive_content = $1 WHERE id = $2
+     RETURNING id, username, display_name, avatar_url, role, show_sensitive_content`,
+    [showSensitiveContent, userId]
   );
   const row = rows[0];
   if (!row) throw new AppError(404, "User not found");
@@ -78,11 +91,11 @@ async function findOrCreateUser(
     const existing =
       "phoneNumber" in identity
         ? await client.query<UserRow>(
-            `SELECT id, username, display_name, avatar_url, role FROM users WHERE phone_number = $1`,
+            `SELECT id, username, display_name, avatar_url, role, show_sensitive_content FROM users WHERE phone_number = $1`,
             [identity.phoneNumber]
           )
         : await client.query<UserRow>(
-            `SELECT id, username, display_name, avatar_url, role FROM users WHERE email = $1`,
+            `SELECT id, username, display_name, avatar_url, role, show_sensitive_content FROM users WHERE email = $1`,
             [identity.email]
           );
 
@@ -106,13 +119,13 @@ async function findOrCreateUser(
             ? await client.query<UserRow>(
                 `INSERT INTO users (phone_number, username, display_name, password_hash, is_verified)
                  VALUES ($1, $2, $3, $4, TRUE)
-                 RETURNING id, username, display_name, avatar_url, role`,
+                 RETURNING id, username, display_name, avatar_url, role, show_sensitive_content`,
                 [identity.phoneNumber, username, displayName, passwordHash]
               )
             : await client.query<UserRow>(
                 `INSERT INTO users (email, username, display_name, password_hash, is_verified)
                  VALUES ($1, $2, $3, $4, TRUE)
-                 RETURNING id, username, display_name, avatar_url, role`,
+                 RETURNING id, username, display_name, avatar_url, role, show_sensitive_content`,
                 [identity.email, username, displayName, passwordHash]
               );
       } catch (err) {
@@ -227,11 +240,11 @@ export async function login(identifier: string, password: string): Promise<{ use
   const { rows } =
     "phoneNumber" in identity
       ? await pool.query<UserRow & { password_hash: string | null }>(
-          `SELECT id, username, display_name, avatar_url, role, password_hash FROM users WHERE phone_number = $1`,
+          `SELECT id, username, display_name, avatar_url, role, show_sensitive_content, password_hash FROM users WHERE phone_number = $1`,
           [identity.phoneNumber]
         )
       : await pool.query<UserRow & { password_hash: string | null }>(
-          `SELECT id, username, display_name, avatar_url, role, password_hash FROM users WHERE email = $1`,
+          `SELECT id, username, display_name, avatar_url, role, show_sensitive_content, password_hash FROM users WHERE email = $1`,
           [identity.email]
         );
 

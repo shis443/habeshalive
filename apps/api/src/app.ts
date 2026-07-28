@@ -73,6 +73,17 @@ export function buildApp() {
     }
   });
 
+  // For public routes that personalize when a valid session is present
+  // (e.g. filtering labeled content by the viewer's own preference) but
+  // must keep working for anonymous visitors too.
+  app.decorate("tryAuthenticate", async (req) => {
+    try {
+      await req.jwtVerify();
+    } catch {
+      // No token, or an invalid one — proceed unauthenticated.
+    }
+  });
+
   // A separate preHandler, not folded into `authenticate` above: a banned
   // user still needs to authenticate successfully to reach
   // POST /moderation/appeals (the one thing they should still be able to

@@ -50,3 +50,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 export async function DELETE(req: NextRequest, ctx: RouteContext) {
   return proxy(req, (await ctx.params).path);
 }
+
+export async function PATCH(req: NextRequest, ctx: RouteContext) {
+  return proxy(req, (await ctx.params).path);
+}

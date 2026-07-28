@@ -16,6 +16,7 @@ export function StreamCard({ stream }: { stream: LiveStream }) {
         )}
         <span className={styles.liveBadge}>Live</span>
         {stream.isBoosted && <span className={styles.boostedBadge}>Boosted</span>}
+        {stream.isSensitive && <span className={styles.sensitiveBadge}>Sensitive</span>}
         <span className={styles.viewerCount}>
           <PersonIcon />
           {formatViewerCount(stream.viewerCount)}

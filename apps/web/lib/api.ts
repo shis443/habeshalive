@@ -56,11 +56,14 @@ import {
 import { API_INTERNAL_URL } from "./config";
 import { fetchAuthed } from "./session";
 
+// Uses fetchAuthed (not a plain fetch) even though this route never
+// requires auth — an Authorization header, when a visitor happens to be
+// logged in, is how the API resolves their "show sensitive content"
+// preference (see db/migrations/0012). Anonymous visitors still work
+// fine: fetchAuthed just omits the header when there's no session.
 export async function getLiveStreams(category?: string): Promise<LiveStream[]> {
-  const url = category
-    ? `${API_INTERNAL_URL}/streams/live?category=${encodeURIComponent(category)}`
-    : `${API_INTERNAL_URL}/streams/live`;
-  const res = await fetch(url, { cache: "no-store" });
+  const path = category ? `/streams/live?category=${encodeURIComponent(category)}` : `/streams/live`;
+  const res = await fetchAuthed(path);
   if (!res.ok) {
     // The homepage's primary data fetch — a k6 load test caught this
     // throwing on any non-200 (including a transient 429 from the API's
@@ -77,10 +80,9 @@ export async function getLiveStreams(category?: string): Promise<LiveStream[]> {
   return liveStreamSchema.array().parse(data);
 }
 
+// Same fetchAuthed reasoning as getLiveStreams above.
 export async function getLiveStreamByUsername(username: string): Promise<StreamDetail | null> {
-  const res = await fetch(`${API_INTERNAL_URL}/streams/username/${encodeURIComponent(username)}`, {
-    cache: "no-store",
-  });
+  const res = await fetchAuthed(`/streams/username/${encodeURIComponent(username)}`);
   if (res.status === 404) return null;
   if (!res.ok) {
     // Same degrade-not-crash reasoning as getLiveStreams — the watch page
@@ -102,9 +104,10 @@ export async function getStreamActivity(streamId: string): Promise<StreamActivit
   return streamActivitySchema.parse(await res.json());
 }
 
+// Same fetchAuthed reasoning as getLiveStreams above.
 export async function search(query: string): Promise<SearchResults> {
   if (!query.trim()) return { streams: [], creators: [] };
-  const res = await fetch(`${API_INTERNAL_URL}/search?q=${encodeURIComponent(query)}`, { cache: "no-store" });
+  const res = await fetchAuthed(`/search?q=${encodeURIComponent(query)}`);
   if (!res.ok) {
     // Same reasoning as getLiveStreams above — degrade to "no results"
     // rather than crash the /search page on a transient backend error.

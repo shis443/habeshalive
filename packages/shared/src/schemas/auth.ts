@@ -79,8 +79,14 @@ export const authUserSchema = z.object({
   displayName: z.string(),
   avatarUrl: z.string().nullable(),
   role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  showSensitiveContent: z.boolean(),
 });
 export type AuthUser = z.infer<typeof authUserSchema>;
+
+export const updatePreferencesSchema = z.object({
+  showSensitiveContent: z.boolean(),
+});
+export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 
 export const authResponseSchema = z.object({
   token: z.string(),

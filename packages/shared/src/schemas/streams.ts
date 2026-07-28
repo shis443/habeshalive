@@ -12,6 +12,7 @@ export const liveStreamSchema = z.object({
   startedAt: z.string().nullable(),
   viewerCount: z.number().int().nonnegative(),
   isBoosted: z.boolean(),
+  isSensitive: z.boolean(),
   creator: z.object({
     id: z.string().uuid(),
     username: z.string(),
@@ -35,6 +36,7 @@ export const createStreamSchema = z.object({
   // or a client-compressed data: URI — 500_000 chars is comfortably above a
   // 640x360 JPEG at quality 0.7 (typically 20-60KB / ~30-80k base64 chars).
   thumbnailUrl: z.string().min(1).max(500_000).optional(),
+  isSensitive: z.boolean().optional(),
 });
 export type CreateStreamInput = z.infer<typeof createStreamSchema>;
 

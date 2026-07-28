@@ -3,10 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useDropdown } from "@/lib/useDropdown";
+import { UI_LANGUAGES, useLanguage } from "@/lib/useLanguage";
+import { useTheme } from "@/lib/useTheme";
 import {
+  BackIcon,
   BellIcon,
+  CheckIcon,
   ChevronRightIcon,
   GearIcon,
   MoreIcon,
@@ -14,6 +18,8 @@ import {
   SearchIcon,
 } from "./icons";
 import styles from "./TopNav.module.css";
+
+type SettingsView = "main" | "language" | "labeled-content";
 
 // Advertisers and Gift Card were removed, not just left as placeholders —
 // this platform runs on birr gifting, not ads, and platform gift cards
@@ -44,8 +50,53 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
   const notifications = useDropdown<HTMLDivElement>();
   const settings = useDropdown<HTMLDivElement>();
   const account = useDropdown<HTMLDivElement>();
-  const [darkTheme, setDarkTheme] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const { language, setLanguage } = useLanguage();
+  const [settingsView, setSettingsView] = useState<SettingsView>("main");
+  const [sensitivePref, setSensitivePref] = useState<boolean | null>(null);
+  const [sensitiveSaving, setSensitiveSaving] = useState(false);
+
+  // Reset to the top-level list every time the dropdown is reopened, so it
+  // never reopens on a stale sub-panel from last time.
+  useEffect(() => {
+    if (!settings.open) setSettingsView("main");
+  }, [settings.open]);
+
+  useEffect(() => {
+    if (settingsView !== "labeled-content" || !isAuthed || sensitivePref !== null) return;
+    fetch("/api/backend/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setSensitivePref(Boolean(data.showSensitiveContent));
+      })
+      .catch(() => {
+        // Leave sensitivePref null — the panel just shows "Loading…"
+        // indefinitely rather than a broken toggle with an unknown state.
+      });
+  }, [settingsView, isAuthed, sensitivePref]);
+
+  async function handleToggleSensitive() {
+    if (sensitivePref === null) return;
+    const next = !sensitivePref;
+    setSensitiveSaving(true);
+    try {
+      const res = await fetch("/api/backend/auth/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showSensitiveContent: next }),
+      });
+      if (res.ok) {
+        setSensitivePref(next);
+        // Any stream list already rendered on this page was filtered
+        // server-side by the old preference — refresh so it reflects the
+        // new one immediately instead of only on the next navigation.
+        router.refresh();
+      }
+    } finally {
+      setSensitiveSaving(false);
+    }
+  }
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
@@ -153,27 +204,92 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           </button>
           {settings.open && (
             <div className={`${styles.dropdown} ${styles.dropdownWide}`}>
-              <span className={styles.rowItem} title="Coming soon">
-                <span className={styles.rowLabel}>Language</span>
-                <ChevronRightIcon />
-              </span>
-              <button
-                type="button"
-                className={styles.rowItem}
-                onClick={() => setDarkTheme((d) => !d)}
-              >
-                <span className={styles.rowLabel}>Dark theme</span>
-                <span className={`${styles.toggle} ${darkTheme ? styles.toggleOn : ""}`}>
-                  <span className={`${styles.toggleKnob} ${darkTheme ? styles.toggleKnobOn : ""}`} />
-                </span>
-              </button>
-              <span className={styles.menuItem} title="Coming soon">
-                Cookies &amp; Ads Choices
-              </span>
-              <span className={styles.rowItem} title="Coming soon">
-                <span className={styles.rowLabel}>Labeled Content</span>
-                <ChevronRightIcon />
-              </span>
+              {settingsView === "main" && (
+                <>
+                  <button type="button" className={styles.rowItem} onClick={() => setSettingsView("language")}>
+                    <span className={styles.rowLabel}>Language</span>
+                    <ChevronRightIcon />
+                  </button>
+                  <button type="button" className={styles.rowItem} onClick={toggleTheme}>
+                    <span className={styles.rowLabel}>Dark theme</span>
+                    <span className={`${styles.toggle} ${theme === "dark" ? styles.toggleOn : ""}`}>
+                      <span className={`${styles.toggleKnob} ${theme === "dark" ? styles.toggleKnobOn : ""}`} />
+                    </span>
+                  </button>
+                  <Link href="/cookie-preferences" className={styles.menuItem}>
+                    Cookies &amp; Ads Choices
+                  </Link>
+                  <button
+                    type="button"
+                    className={styles.rowItem}
+                    onClick={() => setSettingsView("labeled-content")}
+                  >
+                    <span className={styles.rowLabel}>Labeled Content</span>
+                    <ChevronRightIcon />
+                  </button>
+                </>
+              )}
+
+              {settingsView === "language" && (
+                <>
+                  <button type="button" className={styles.backRow} onClick={() => setSettingsView("main")}>
+                    <BackIcon className={styles.backIcon} />
+                    Language
+                  </button>
+                  {UI_LANGUAGES.map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      className={styles.rowItem}
+                      onClick={() => setLanguage(lang)}
+                    >
+                      <span className={styles.rowLabel}>{lang}</span>
+                      {language === lang && <CheckIcon className={styles.checkMark} />}
+                    </button>
+                  ))}
+                  {language !== "English" && (
+                    <p className={styles.settingsNote}>
+                      {language} saved. The interface itself is still English-only — full
+                      translation is coming later.
+                    </p>
+                  )}
+                </>
+              )}
+
+              {settingsView === "labeled-content" && (
+                <>
+                  <button type="button" className={styles.backRow} onClick={() => setSettingsView("main")}>
+                    <BackIcon className={styles.backIcon} />
+                    Labeled Content
+                  </button>
+                  {!isAuthed ? (
+                    <p className={styles.settingsNote}>
+                      Log in to choose whether streams a creator marks sensitive/mature are shown
+                      to you.
+                    </p>
+                  ) : sensitivePref === null ? (
+                    <p className={styles.settingsNote}>Loading…</p>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.rowItem}
+                        onClick={handleToggleSensitive}
+                        disabled={sensitiveSaving}
+                      >
+                        <span className={styles.rowLabel}>Show sensitive/mature content</span>
+                        <span className={`${styles.toggle} ${sensitivePref ? styles.toggleOn : ""}`}>
+                          <span className={`${styles.toggleKnob} ${sensitivePref ? styles.toggleKnobOn : ""}`} />
+                        </span>
+                      </button>
+                      <p className={styles.settingsNote}>
+                        Off by default. Streams marked sensitive/mature are left out of your
+                        browse and search results entirely until you turn this on.
+                      </p>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>

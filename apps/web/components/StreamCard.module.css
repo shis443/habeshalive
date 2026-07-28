@@ -53,6 +53,21 @@
   border-radius: 6px;
 }
 
+.sensitiveBadge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  background: var(--error);
+  color: var(--on-error);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
 .viewerCount {
   position: absolute;
   bottom: var(--space-2);

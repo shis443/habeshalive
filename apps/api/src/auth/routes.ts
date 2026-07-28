@@ -4,6 +4,7 @@ import {
   requestEmailOtpSchema,
   requestOtpSchema,
   resetPasswordSchema,
+  updatePreferencesSchema,
   verifyEmailOtpSchema,
   verifyOtpSchema,
 } from "@habeshalive/shared";
@@ -15,6 +16,7 @@ import {
   requestOtp,
   requestPasswordReset,
   resetPassword,
+  updatePreferences,
   verifyEmailOtp,
   verifyOtp,
 } from "./service.js";
@@ -196,4 +198,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get("/me", { preHandler: app.authenticate }, async (req) => getUserById(req.user.sub));
+
+  app.patch("/preferences", { preHandler: app.authenticate }, async (req) => {
+    const input = updatePreferencesSchema.parse(req.body);
+    return updatePreferences(req.user.sub, input.showSensitiveContent);
+  });
 };
