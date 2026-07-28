@@ -1,18 +1,22 @@
 import {
   activeBoostSchema,
+  adminAuditActionSchema,
   adminSummarySchema,
   appealSchema,
   authUserSchema,
   avatarManifestSchema,
   avatarSelectionSchema,
+  blocklistTermSchema,
   creatorSearchResultSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
   followStatusSchema,
   giftTypeSchema,
   liveStreamSchema,
+  moderationActionRecordSchema,
   moderationFlagSchema,
   mySubscriptionSchema,
+  payoutHistoryItemSchema,
   payoutQueueItemSchema,
   reportSchema,
   searchResultsSchema,
@@ -25,19 +29,23 @@ import {
   vodSchema,
   walletBalanceSchema,
   type ActiveBoost,
+  type AdminAuditAction,
   type AdminSummary,
   type Appeal,
   type AuthUser,
   type AvatarManifest,
   type AvatarSelection,
+  type BlocklistTerm,
   type CreatorSearchResult,
   type CreatorStats,
   type EarningsThisMonth,
   type FollowStatus,
   type GiftType,
   type LiveStream,
+  type ModerationActionRecord,
   type ModerationFlag,
   type MySubscription,
+  type PayoutHistoryItem,
   type PayoutQueueItem,
   type Report,
   type SearchResults,
@@ -296,6 +304,46 @@ export async function getPendingPayouts(): Promise<PayoutQueueItem[]> {
     return [];
   }
   return payoutQueueItemSchema.array().parse(await res.json());
+}
+
+export async function getPayoutHistory(filters: { status?: string; creator?: string }): Promise<PayoutHistoryItem[]> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.creator) params.set("creator", filters.creator);
+  const qs = params.toString();
+  const res = await fetchAuthed(`/wallet/payouts/history${qs ? `?${qs}` : ""}`);
+  if (!res.ok) {
+    console.error(`Failed to load payout history (${res.status})`);
+    return [];
+  }
+  return payoutHistoryItemSchema.array().parse(await res.json());
+}
+
+export async function getModerationActions(): Promise<ModerationActionRecord[]> {
+  const res = await fetchAuthed("/moderation/actions");
+  if (!res.ok) {
+    console.error(`Failed to load moderation action history (${res.status})`);
+    return [];
+  }
+  return moderationActionRecordSchema.array().parse(await res.json());
+}
+
+export async function getBlocklistTerms(): Promise<BlocklistTerm[]> {
+  const res = await fetchAuthed("/moderation/blocklist");
+  if (!res.ok) {
+    console.error(`Failed to load blocklist (${res.status})`);
+    return [];
+  }
+  return blocklistTermSchema.array().parse(await res.json());
+}
+
+export async function getAdminAuditLog(): Promise<AdminAuditAction[]> {
+  const res = await fetchAuthed("/admin/audit-log");
+  if (!res.ok) {
+    console.error(`Failed to load audit log (${res.status})`);
+    return [];
+  }
+  return adminAuditActionSchema.array().parse(await res.json());
 }
 
 export async function getModerationQueue(): Promise<ModerationFlag[]> {

@@ -1,0 +1,77 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 220px;
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-2);
+}
+
+.link,
+.linkActive {
+  display: block;
+  padding: 10px var(--space-2);
+  border-radius: 6px;
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.link:hover {
+  background: color-mix(in srgb, var(--on-background) 6%, transparent);
+  color: var(--on-background);
+}
+
+.linkActive {
+  background: var(--primary-container);
+  color: var(--primary);
+}
+
+.subNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 var(--space-2) var(--space-3);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--outline-variant);
+}
+
+.subLink,
+.subLinkActive {
+  display: block;
+  padding: 8px var(--space-2);
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.subLink:hover {
+  background: color-mix(in srgb, var(--on-background) 6%, transparent);
+  color: var(--on-background);
+}
+
+.subLinkActive {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-1);
+  }
+
+  .subNav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin: 0 0 var(--space-1) 0;
+    padding-left: 0;
+    border-left: none;
+    width: 100%;
+  }
+}

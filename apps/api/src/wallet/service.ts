@@ -1,9 +1,11 @@
 import type {
   ChapaTransferWebhook,
   ChapaWebhook,
+  CreatorPayoutContext,
   EarningsThisMonth,
   GiftAlert,
   GiftType,
+  PayoutHistoryItem,
   PayoutQueueItem,
   PayoutResponse,
   RequestPayoutInput,
@@ -13,6 +15,7 @@ import type {
   WalletBalance,
 } from "@habeshalive/shared";
 import { randomUUID } from "node:crypto";
+import { logAdminAction } from "../admin/audit.js";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
@@ -493,6 +496,80 @@ export async function listPendingPayouts(limit = 50): Promise<PayoutQueueItem[]>
   }));
 }
 
+interface PayoutHistoryRow {
+  id: string;
+  creator_id: string;
+  creator_username: string;
+  amount_santim: number;
+  method: PayoutQueueItem["method"];
+  destination: string;
+  status: PayoutHistoryItem["status"];
+  failure_reason: string | null;
+  approved_by_username: string | null;
+  rejected_by_username: string | null;
+  created_at: string;
+  paid_at: string | null;
+}
+
+// For support/dispute lookups — every payout regardless of status, not
+// just the live pending_review queue listPendingPayouts serves.
+export async function listAllPayouts(filters: {
+  status?: PayoutHistoryItem["status"];
+  creatorUsername?: string;
+  limit?: number;
+}): Promise<PayoutHistoryItem[]> {
+  const { rows } = await pool.query<PayoutHistoryRow>(
+    `SELECT p.id, p.creator_id, u.username AS creator_username, p.amount_santim, p.method, p.destination,
+            p.status, p.failure_reason, au.username AS approved_by_username, ru.username AS rejected_by_username,
+            p.created_at, p.paid_at
+     FROM payouts p
+     JOIN users u ON u.id = p.creator_id
+     LEFT JOIN users au ON au.id = p.approved_by
+     LEFT JOIN users ru ON ru.id = p.rejected_by
+     WHERE ($1::text IS NULL OR p.status = $1)
+       AND ($2::text IS NULL OR u.username ILIKE '%' || $2 || '%')
+     ORDER BY p.created_at DESC
+     LIMIT $3`,
+    [filters.status ?? null, filters.creatorUsername ?? null, filters.limit ?? 100]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    creatorId: row.creator_id,
+    creatorUsername: row.creator_username,
+    amountSantim: row.amount_santim,
+    method: row.method,
+    destination: row.destination,
+    status: row.status,
+    failureReason: row.failure_reason,
+    approvedByUsername: row.approved_by_username,
+    rejectedByUsername: row.rejected_by_username,
+    createdAt: row.created_at,
+    paidAt: row.paid_at,
+  }));
+}
+
+// The context an admin should see before approving/rejecting a payout
+// blind — lifetime payout total, how old the account is, any moderation
+// flags against them.
+export async function getCreatorPayoutContext(creatorId: string): Promise<CreatorPayoutContext> {
+  const [totals, account, flags] = await Promise.all([
+    pool.query<{ total: string | null }>(
+      `SELECT sum(amount_santim)::text AS total FROM payouts WHERE creator_id = $1 AND status = 'paid'`,
+      [creatorId]
+    ),
+    pool.query<{ created_at: string }>(`SELECT created_at FROM users WHERE id = $1`, [creatorId]),
+    pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM moderation_flags WHERE author_id = $1 AND status = 'pending'`,
+      [creatorId]
+    ),
+  ]);
+  return {
+    totalLifetimePayoutsSantim: Number(totals.rows[0]?.total ?? 0),
+    accountCreatedAt: account.rows[0]?.created_at ?? new Date().toISOString(),
+    pendingModerationFlags: Number(flags.rows[0]?.count ?? 0),
+  };
+}
+
 export async function approvePayout(payoutId: string, adminUserId: string): Promise<void> {
   const client = await pool.connect();
   let creatorId!: string;
@@ -547,6 +624,9 @@ export async function approvePayout(payoutId: string, adminUserId: string): Prom
       chapaReference,
       payoutId,
     ]);
+    await logAdminAction(adminUserId, "payout.approve", "payout", payoutId, {
+      metadata: { creatorId, amountSantim },
+    });
   } catch (err) {
     const reverseClient = await pool.connect();
     try {
@@ -564,6 +644,43 @@ export async function approvePayout(payoutId: string, adminUserId: string): Prom
       reverseClient.release();
     }
     throw new AppError(502, "Payout transfer could not be started — the creator's balance was refunded");
+  }
+}
+
+// Reverses the reservation requestPayout() made at request time (the
+// creator's balance was already debited then, regardless of manual-review
+// status) — a rejection must refund it, not just flip a status flag. The
+// reason is stored in the same failure_reason column completePayoutFromWebhook
+// already uses for an automatic failure, since both answer the same
+// question ("why didn't this get paid") for whoever's looking at the row.
+export async function rejectPayout(payoutId: string, adminUserId: string, reason: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query<{ creator_id: string; amount_santim: number; status: string }>(
+      `SELECT creator_id, amount_santim, status FROM payouts WHERE id = $1 FOR UPDATE`,
+      [payoutId]
+    );
+    const payout = rows[0];
+    if (!payout) throw new AppError(404, "Payout not found");
+    if (payout.status !== "pending_review") throw new AppError(400, "Payout is not awaiting review");
+
+    await reversePayoutLedger(client, payout.creator_id, payout.amount_santim);
+    await client.query(
+      `UPDATE payouts SET status = 'failed', failure_reason = $1, rejected_by = $2 WHERE id = $3`,
+      [reason, adminUserId, payoutId]
+    );
+    await logAdminAction(adminUserId, "payout.reject", "payout", payoutId, {
+      reason,
+      metadata: { creatorId: payout.creator_id, amountSantim: payout.amount_santim },
+      client,
+    });
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
   }
 }
 

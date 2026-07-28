@@ -1,4 +1,5 @@
 import type { Report, ResolveReportInput, SubmitReportInput } from "@habeshalive/shared";
+import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
@@ -58,4 +59,5 @@ export async function resolveReport(reportId: string, reviewerId: string, input:
     [input.status, reviewerId, reportId]
   );
   if (rowCount === 0) throw new AppError(404, "Report not found or already reviewed");
+  await logAdminAction(reviewerId, `report.${input.status}`, "report", reportId);
 }

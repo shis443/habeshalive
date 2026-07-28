@@ -1,3 +1,5 @@
+import type { ModerationActionRecord } from "@habeshalive/shared";
+import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
@@ -17,6 +19,7 @@ export async function banUser(actorId: string, targetUserId: string, reason?: st
       `INSERT INTO moderation_actions (actor_id, target_user_id, action, reason) VALUES ($1, $2, 'ban', $3)`,
       [actorId, targetUserId, reason ?? null]
     );
+    await logAdminAction(actorId, "user.ban", "user", targetUserId, { reason, client });
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -42,6 +45,7 @@ export async function unbanUser(actorId: string, targetUserId: string, reason?: 
       `INSERT INTO moderation_actions (actor_id, target_user_id, action, reason) VALUES ($1, $2, 'unban', $3)`,
       [actorId, targetUserId, reason ?? null]
     );
+    await logAdminAction(actorId, "user.unban", "user", targetUserId, { reason, client });
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -49,4 +53,37 @@ export async function unbanUser(actorId: string, targetUserId: string, reason?: 
   } finally {
     client.release();
   }
+}
+
+// moderation_actions has been written to since the ban/unban endpoints
+// shipped but nothing ever read it back for a human — this is that
+// missing read side.
+export async function listModerationActions(limit = 100): Promise<ModerationActionRecord[]> {
+  const { rows } = await pool.query<{
+    id: string;
+    actor_username: string;
+    target_username: string;
+    action: ModerationActionRecord["action"];
+    reason: string | null;
+    duration_seconds: number | null;
+    created_at: string;
+  }>(
+    `SELECT ma.id, actor.username AS actor_username, target.username AS target_username,
+            ma.action, ma.reason, ma.duration_seconds, ma.created_at
+     FROM moderation_actions ma
+     JOIN users actor ON actor.id = ma.actor_id
+     JOIN users target ON target.id = ma.target_user_id
+     ORDER BY ma.created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    actorUsername: row.actor_username,
+    targetUsername: row.target_username,
+    action: row.action,
+    reason: row.reason,
+    durationSeconds: row.duration_seconds,
+    createdAt: row.created_at,
+  }));
 }

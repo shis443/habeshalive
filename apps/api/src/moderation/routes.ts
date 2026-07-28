@@ -1,4 +1,5 @@
 import {
+  addBlocklistTermSchema,
   banUserSchema,
   resolveAppealSchema,
   resolveModerationFlagSchema,
@@ -8,8 +9,9 @@ import {
   unbanUserSchema,
 } from "@habeshalive/shared";
 import type { FastifyPluginAsync } from "fastify";
-import { banUser, unbanUser } from "./actions-service.js";
+import { banUser, listModerationActions, unbanUser } from "./actions-service.js";
 import { listAppeals, resolveAppeal, submitAppeal } from "./appeals-service.js";
+import { addBlocklistTerm, listBlocklistTerms, removeBlocklistTerm } from "./blocklist-service.js";
 import { listReports, resolveReport, submitReport } from "./reports-service.js";
 import { listModerationQueue, resolveModerationFlag } from "./service.js";
 
@@ -60,6 +62,20 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
     const { id } = req.params as { id: string };
     const input = resolveAppealSchema.parse(req.body);
     await resolveAppeal(id, req.user.sub, input.action);
+    return { ok: true };
+  });
+
+  app.get("/actions", { preHandler: app.requireAdmin }, async () => listModerationActions());
+
+  app.get("/blocklist", { preHandler: app.requireAdmin }, async () => listBlocklistTerms());
+
+  app.post("/blocklist", { preHandler: app.requireAdmin }, async (req) => {
+    const input = addBlocklistTermSchema.parse(req.body);
+    return addBlocklistTerm(req.user.sub, input);
+  });
+
+  app.delete<{ Params: { id: string } }>("/blocklist/:id", { preHandler: app.requireAdmin }, async (req) => {
+    await removeBlocklistTerm(req.user.sub, req.params.id);
     return { ok: true };
   });
 };

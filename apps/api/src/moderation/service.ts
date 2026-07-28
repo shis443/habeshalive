@@ -1,20 +1,30 @@
+import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
-import { AM_BLOCKLIST, EN_BLOCKLIST } from "./wordlists.js";
-
-const ALL_TERMS = [...EN_BLOCKLIST, ...AM_BLOCKLIST];
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Reads the live blocklist from the DB (see db/migrations/0013 and the
+// admin-facing CRUD in blocklist-service.ts) rather than a static file —
+// an admin can add/remove terms without a code deploy. No caching: this
+// runs on every stream-title/gift-message submission, which is real but
+// still low-enough traffic that a single indexed SELECT is cheap, same
+// "no caching layer" reasoning already used elsewhere in admin/service.ts.
+async function getBlocklistTerms(): Promise<string[]> {
+  const { rows } = await pool.query<{ term: string }>(`SELECT term FROM blocklist_terms`);
+  return rows.map((row) => row.term);
 }
 
 // Single-word terms match on word boundaries (so "assassin" doesn't trip
 // on "ass"); multi-word phrases ("kill yourself") match as a plain
 // substring since \b boundaries around a phrase with internal spaces work
 // the same way in practice — kept as one code path either way.
-export function scanText(text: string): string[] {
+export async function scanText(text: string): Promise<string[]> {
+  const terms = await getBlocklistTerms();
   const matched: string[] = [];
-  for (const term of ALL_TERMS) {
+  for (const term of terms) {
     const pattern = new RegExp(`\\b${escapeRegExp(term)}\\b`, "iu");
     if (pattern.test(text)) matched.push(term);
   }
@@ -33,7 +43,7 @@ export async function flagIfMatched(
   authorId: string,
   text: string
 ): Promise<void> {
-  const matches = scanText(text);
+  const matches = await scanText(text);
   if (matches.length === 0) return;
 
   await pool.query(
@@ -103,4 +113,5 @@ export async function resolveModerationFlag(
     [status, reviewerId, flagId]
   );
   if (rowCount === 0) throw new AppError(404, "Flag not found or already reviewed");
+  await logAdminAction(reviewerId, `moderation_flag.${action}`, "moderation_flag", flagId);
 }

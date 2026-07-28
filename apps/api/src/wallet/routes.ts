@@ -2,6 +2,7 @@ import {
   chapaTransferWebhookSchema,
   chapaWebhookSchema,
   initiateTopupSchema,
+  rejectPayoutSchema,
   requestPayoutSchema,
   sendGiftSchema,
 } from "@habeshalive/shared";
@@ -14,11 +15,14 @@ import {
   completePayoutFromWebhook,
   completeTopupFromWebhook,
   getBalance,
+  getCreatorPayoutContext,
   getEarningsThisMonth,
   initiateTopup,
+  listAllPayouts,
   listGiftTypes,
   listPendingPayouts,
   listTransactions,
+  rejectPayout,
   requestPayout,
   sendGift,
 } from "./service.js";
@@ -139,9 +143,32 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/payouts/pending", { preHandler: app.requireAdmin }, async () => listPendingPayouts());
 
+  app.get<{ Querystring: { status?: string; creator?: string } }>(
+    "/payouts/history",
+    { preHandler: app.requireAdmin },
+    async (req) =>
+      listAllPayouts({
+        status: req.query.status as never,
+        creatorUsername: req.query.creator,
+      })
+  );
+
+  app.get<{ Params: { creatorId: string } }>(
+    "/payouts/creator-context/:creatorId",
+    { preHandler: app.requireAdmin },
+    async (req) => getCreatorPayoutContext(req.params.creatorId)
+  );
+
   app.post("/payouts/:id/approve", { preHandler: app.requireAdmin }, async (req) => {
     const { id } = req.params as { id: string };
     await approvePayout(id, req.user.sub);
+    return { ok: true };
+  });
+
+  app.post("/payouts/:id/reject", { preHandler: app.requireAdmin }, async (req) => {
+    const { id } = req.params as { id: string };
+    const input = rejectPayoutSchema.parse(req.body);
+    await rejectPayout(id, req.user.sub, input.reason);
     return { ok: true };
   });
 

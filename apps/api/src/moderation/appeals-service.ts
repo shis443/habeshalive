@@ -1,4 +1,5 @@
 import type { Appeal } from "@habeshalive/shared";
+import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { unbanUser } from "./actions-service.js";
@@ -69,6 +70,7 @@ export async function resolveAppeal(appealId: string, reviewerId: string, action
     [status, reviewerId, appealId]
   );
   if (rowCount === 0) throw new AppError(404, "Appeal not found or already reviewed");
+  await logAdminAction(reviewerId, `appeal.${action}`, "appeal", appealId);
 
   if (action === "approve") {
     await unbanUser(reviewerId, appeal.user_id, "Appeal approved");
