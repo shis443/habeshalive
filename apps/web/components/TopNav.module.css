@@ -39,11 +39,19 @@
 }
 
 .wordmark {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-headline);
   font-weight: 700;
   font-size: 18px;
   color: var(--on-background);
   white-space: nowrap;
+}
+
+.mark {
+  height: 30px;
+  width: auto;
 }
 
 .searchForm {

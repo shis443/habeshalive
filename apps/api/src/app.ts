@@ -17,6 +17,7 @@ import { moderationRoutes } from "./moderation/routes.js";
 import { searchRoutes } from "./search/routes.js";
 import { streamRoutes } from "./streams/routes.js";
 import { subscriptionRoutes } from "./subscriptions/routes.js";
+import { vodRoutes } from "./vods/routes.js";
 import { walletRoutes } from "./wallet/routes.js";
 
 export function buildApp() {
@@ -156,6 +157,7 @@ export function buildApp() {
   app.register(searchRoutes, { prefix: "/search" });
   app.register(adminRoutes, { prefix: "/admin" });
   app.register(subscriptionRoutes, { prefix: "/subscriptions" });
+  app.register(vodRoutes, { prefix: "/vods" });
 
   return app;
 }

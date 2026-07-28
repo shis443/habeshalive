@@ -29,10 +29,24 @@ export type StreamDetail = z.infer<typeof streamDetailSchema>;
 
 export const createStreamSchema = z.object({
   title: z.string().min(1).max(140),
-  category: z.string().max(50).optional(),
-  language: z.string().max(30).optional(),
+  category: z.string().min(1).max(50),
+  language: z.string().min(1).max(30),
+  // Accepts either a real URL (once object storage is wired, see Section 4)
+  // or a client-compressed data: URI — 500_000 chars is comfortably above a
+  // 640x360 JPEG at quality 0.7 (typically 20-60KB / ~30-80k base64 chars).
+  thumbnailUrl: z.string().min(1).max(500_000).optional(),
 });
 export type CreateStreamInput = z.infer<typeof createStreamSchema>;
+
+// What the go-live setup form pre-fills from — a creator's last-used
+// category/language (persisted on creator_profiles, since those rarely
+// change stream to stream), not title/thumbnail (which usually do, so
+// those start blank each time rather than carrying over stale content).
+export const streamDefaultsSchema = z.object({
+  category: z.string().nullable(),
+  language: z.string().nullable(),
+});
+export type StreamDefaults = z.infer<typeof streamDefaultsSchema>;
 
 export const streamKeySchema = z.object({
   rtmpUrl: z.string(),
@@ -62,6 +76,16 @@ export const creatorStatsSchema = z.object({
 });
 export type CreatorStats = z.infer<typeof creatorStatsSchema>;
 
+export const vodSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  thumbnailUrl: z.string().nullable(),
+  playbackUrl: z.string(),
+  durationSeconds: z.number().int().nullable(),
+  createdAt: z.string(),
+});
+export type Vod = z.infer<typeof vodSchema>;
+
 // SRS's on_publish/on_unpublish HTTP callback body — both hooks send the
 // same shape. `stream` is the RTMP stream name, i.e. our stream_key, since
 // creators publish to rtmp://host/live/{stream_key}. SRS sends several other
@@ -71,3 +95,14 @@ export const srsCallbackSchema = z.object({
   stream: z.string().min(1),
 });
 export type SrsCallback = z.infer<typeof srsCallbackSchema>;
+
+// SRS's on_dvr callback — fires when a recorded segment finishes writing.
+// Not wired up on the SRS side yet (no dvr{} block/on_dvr hook in
+// infra/srs/conf/srs.conf.template), so this route exists but has never
+// received a real callback — see streams/routes.ts's comment on the route
+// that uses this schema.
+export const srsDvrCallbackSchema = z.object({
+  stream: z.string().min(1),
+  file: z.string().min(1),
+});
+export type SrsDvrCallback = z.infer<typeof srsDvrCallbackSchema>;

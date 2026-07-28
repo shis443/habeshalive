@@ -1,20 +1,24 @@
-import { createStreamSchema, srsCallbackSchema } from "@habeshalive/shared";
+import { createStreamSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@habeshalive/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { env } from "../common/env.js";
 import { AppError } from "../common/errors.js";
+import { createVodFromRecording } from "../vods/service.js";
 import {
   boostStream,
   endStream,
   getCreatorStats,
   getLiveStreamByUsername,
+  getMostRecentStreamIdByProviderStreamId,
   getStreamActivity,
   getStreamById,
+  getStreamDefaults,
   getStreamKey,
   goLive,
   listLiveStreams,
   markEndedByProviderStreamId,
   markLiveByProviderStreamId,
   rotateStreamKey,
+  thumbnailPlaceholderSvg,
 } from "./service.js";
 
 // SRS's http_hooks can't send custom headers — only a fully-specified URL —
@@ -36,7 +40,20 @@ function keyByUser(req: FastifyRequest): string {
 }
 
 export const streamRoutes: FastifyPluginAsync = async (app) => {
-  app.get("/live", async () => listLiveStreams());
+  app.get<{ Querystring: { category?: string } }>("/live", async (req) =>
+    listLiveStreams(req.query.category)
+  );
+
+  app.get("/defaults", { preHandler: app.authenticate }, async (req) => getStreamDefaults(req.user.sub));
+
+  // Public, unauthenticated — this is an <img src>, same as any other
+  // stream thumbnail. No caching headers: category placeholders are cheap
+  // to regenerate and correctness (a fresh category rendering immediately)
+  // matters more than shaving a near-instant SVG render.
+  app.get<{ Params: { category: string } }>("/thumbnail-placeholder/:category", async (req, reply) => {
+    const category = req.params.category.replace(/\.svg$/, "");
+    reply.header("Content-Type", "image/svg+xml").send(thumbnailPlaceholderSvg(decodeURIComponent(category)));
+  });
 
   app.get<{ Params: { username: string } }>("/username/:username", async (req) =>
     getLiveStreamByUsername(req.params.username)
@@ -90,6 +107,31 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     assertWebhookSecret(req);
     const input = srsCallbackSchema.parse(req.body);
     await markEndedByProviderStreamId(input.stream);
+    reply.send({ code: 0 });
+  });
+
+  // NOT YET REACHABLE IN PRODUCTION: SRS has no dvr{} block or on_dvr hook
+  // configured (see infra/srs/conf/srs.conf.template) — recording isn't
+  // enabled, so this callback never fires today. createVodFromRecording()
+  // itself is real and works against any reachable file URL; what's
+  // missing is (a) enabling SRS's dvr{} recording, (b) adding
+  // `on_dvr __API_WEBHOOK_BASE__/streams/webhooks/vod-ready?secret=...` to
+  // http_hooks, and (c) real VOD_S3_* credentials (see common/env.ts) —
+  // none of which this pass touches, since it means redeploying the live
+  // SRS ingest service with no credentials on hand to verify against.
+  app.post("/webhooks/vod-ready", async (req, reply) => {
+    assertWebhookSecret(req);
+    const input = srsDvrCallbackSchema.parse(req.body);
+    const streamId = await getMostRecentStreamIdByProviderStreamId(input.stream);
+    if (!streamId) throw new AppError(404, "Unknown provider stream id");
+    // SRS's on_dvr sends a local filesystem path (`file`); this assumes
+    // dvr_path is placed under http_server's served directory root
+    // (./objs/nginx/html), same as HLS segments, so stripping that prefix
+    // yields the URL path SRS already serves the file at.
+    const urlPath = input.file.split("objs/nginx/html/")[1];
+    if (!urlPath) throw new AppError(400, "Unexpected dvr file path shape");
+    const fileUrl = `${env.SRS_HTTP_SCHEME}://${env.SRS_HTTP_HOST}/${urlPath}`;
+    await createVodFromRecording(streamId, fileUrl);
     reply.send({ code: 0 });
   });
 };

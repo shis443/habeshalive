@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -105,6 +106,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           )}
         </div>
         <Link href="/" className={styles.wordmark}>
+          <Image src="/icons/ibex-mark.png" alt="" width={29} height={30} className={styles.mark} priority />
           Birq
         </Link>
       </div>

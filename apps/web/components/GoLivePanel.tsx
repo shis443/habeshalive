@@ -1,6 +1,14 @@
 "use client";
 
-import { BOOST_PRICE_SANTIM, boostStreamResponseSchema, formatSantimAsBirr, streamDetailSchema } from "@habeshalive/shared";
+import {
+  BOOST_PRICE_SANTIM,
+  STREAM_CATEGORIES,
+  STREAM_LANGUAGES,
+  boostStreamResponseSchema,
+  formatSantimAsBirr,
+  streamDefaultsSchema,
+  streamDetailSchema,
+} from "@habeshalive/shared";
 import { useEffect, useRef, useState } from "react";
 import { SRS_WHIP_URL } from "@/lib/config";
 import { StreamKeyRow } from "./StreamKeyRow";
@@ -8,6 +16,38 @@ import styles from "./GoLivePanel.module.css";
 
 type Method = "obs" | "browser";
 type BrowserPhase = "idle" | "previewing" | "starting" | "live" | "error";
+
+const MAX_THUMBNAIL_DIMENSION = 640;
+
+// Resizes/compresses in the browser and returns a data: URI — see
+// createStreamSchema's comment for why this is fine to send as
+// thumbnailUrl directly: no object storage is wired up yet (Section 4),
+// and a compressed JPEG this size is small enough to just store inline.
+function fileToCompressedDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = document.createElement("img");
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const scale = Math.min(1, MAX_THUMBNAIL_DIMENSION / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Couldn't process that image"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Couldn't read that image file"));
+    };
+    img.src = objectUrl;
+  });
+}
 
 function buildWhipUrl(streamKey: string): string {
   const url = new URL(SRS_WHIP_URL);
@@ -59,6 +99,49 @@ export function GoLivePanel({
   const [boostError, setBoostError] = useState<string | null>(null);
   const [boostedUntil, setBoostedUntil] = useState<string | null>(null);
 
+  // Setup must happen before the stream key does anything (OBS connecting,
+  // WHIP publishing) — isLive already true on mount (e.g. a page refresh
+  // mid-stream) skips straight past it, since there's nothing left to set
+  // up for a stream that's already running.
+  const [setupDone, setSetupDone] = useState(initialIsLive);
+  const [setupTitle, setSetupTitle] = useState(`${displayName} is live`);
+  const [setupCategory, setSetupCategory] = useState("");
+  const [setupLanguage, setSetupLanguage] = useState("");
+  const [setupThumbnail, setSetupThumbnail] = useState<string | null>(null);
+  const [thumbnailProcessing, setThumbnailProcessing] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialIsLive) return;
+    fetch("/api/backend/streams/defaults")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const defaults = streamDefaultsSchema.parse(data);
+        if (defaults.category) setSetupCategory(defaults.category);
+        if (defaults.language) setSetupLanguage(defaults.language);
+      })
+      .catch(() => {
+        // Prefill is a convenience, not a requirement — the form still
+        // works with blank category/language if this fails.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleThumbnailChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setThumbnailError(null);
+    setThumbnailProcessing(true);
+    try {
+      setSetupThumbnail(await fileToCompressedDataUrl(file));
+    } catch (err) {
+      setThumbnailError(err instanceof Error ? err.message : "Couldn't process that image");
+    } finally {
+      setThumbnailProcessing(false);
+    }
+  }
+
   const [obsLoading, setObsLoading] = useState(false);
   const [obsError, setObsError] = useState<string | null>(null);
 
@@ -109,7 +192,12 @@ export function GoLivePanel({
       const res = await fetch("/api/backend/streams/go-live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: `${displayName} is live` }),
+        body: JSON.stringify({
+          title: setupTitle,
+          category: setupCategory,
+          language: setupLanguage,
+          thumbnailUrl: setupThumbnail ?? undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to go live");
@@ -151,7 +239,12 @@ export function GoLivePanel({
       const goLiveRes = await fetch("/api/backend/streams/go-live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: `${displayName} is live` }),
+        body: JSON.stringify({
+          title: setupTitle,
+          category: setupCategory,
+          language: setupLanguage,
+          thumbnailUrl: setupThumbnail ?? undefined,
+        }),
       });
       const goLiveData = await goLiveRes.json();
       if (!goLiveRes.ok) throw new Error(goLiveData.error ?? "Failed to start the stream");
@@ -264,9 +357,112 @@ export function GoLivePanel({
   // button embedded alongside the camera preview — don't duplicate it here.
   const showTopBanner = isLive && !(method === "browser" && browserPhase === "live");
 
+  // Setup happens before the stream key does anything — OBS/browser tabs,
+  // the RTMP key, all of it stay hidden until title/category/language are
+  // actually filled in.
+  if (!setupDone) {
+    const canContinue = setupTitle.trim().length > 0 && setupCategory.length > 0 && setupLanguage.length > 0;
+    return (
+      <section className={styles.panel}>
+        <h2 className={styles.heading}>Go live</h2>
+        <div className={styles.tabContent}>
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="setup-title">
+              Title
+            </label>
+            <input
+              id="setup-title"
+              type="text"
+              className={styles.textInput}
+              value={setupTitle}
+              onChange={(e) => setSetupTitle(e.target.value)}
+              maxLength={140}
+              required
+            />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="setup-category">
+              Category
+            </label>
+            <select
+              id="setup-category"
+              className={styles.select}
+              value={setupCategory}
+              onChange={(e) => setSetupCategory(e.target.value)}
+              required
+            >
+              <option value="" disabled>
+                Select a category
+              </option>
+              {STREAM_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="setup-language">
+              Language
+            </label>
+            <select
+              id="setup-language"
+              className={styles.select}
+              value={setupLanguage}
+              onChange={(e) => setSetupLanguage(e.target.value)}
+              required
+            >
+              <option value="" disabled>
+                Select a language
+              </option>
+              {STREAM_LANGUAGES.map((language) => (
+                <option key={language} value={language}>
+                  {language}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>Thumbnail (optional)</span>
+            {setupThumbnail ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={setupThumbnail} alt="" className={styles.thumbnailPreview} />
+            ) : (
+              <p className={styles.subtext}>
+                Skip this and a placeholder is generated from your category once you go live.
+              </p>
+            )}
+            <input type="file" accept="image/*" onChange={handleThumbnailChange} disabled={thumbnailProcessing} />
+            {thumbnailProcessing && <p className={styles.subtext}>Processing image…</p>}
+            {thumbnailError && <p className={styles.error}>{thumbnailError}</p>}
+          </div>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => setSetupDone(true)}
+            disabled={!canContinue}
+          >
+            Continue
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className={styles.panel}>
       <h2 className={styles.heading}>Go live</h2>
+
+      {!isLive && (
+        <div className={styles.setupSummary}>
+          <span>
+            {setupTitle} · {setupCategory} · {setupLanguage}
+          </span>
+          <button type="button" className={styles.editLink} onClick={() => setSetupDone(false)}>
+            Edit details
+          </button>
+        </div>
+      )}
 
       <div className={styles.tabs}>
         <button

@@ -1,36 +1,30 @@
-"use client";
-
+import { STREAM_CATEGORIES } from "@habeshalive/shared";
+import Link from "next/link";
 import styles from "./CategoryPills.module.css";
 
-const CATEGORIES = ["All", "Music", "Gaming", "Traditional", "Just Chatting"];
+const CATEGORIES = ["All", ...STREAM_CATEGORIES];
 
-// "All" maps to the "all" sentinel value ExploreGrid uses to mean
-// "no filter" — every other pill's value is its own label. stream.category
-// is free-form text (VARCHAR(50), no enum/CHECK constraint — see
-// db/migrations/0001_init.sql), so ExploreGrid compares case-insensitively
-// rather than assuming creators enter this exact casing.
-export function CategoryPills({
-  selected,
-  onSelect,
-}: {
-  selected: string;
-  onSelect: (category: string) => void;
-}) {
+// Real navigation, not a visual-only active state: each pill links to
+// ?category=<value>, which app/page.tsx reads server-side and asks the API
+// to actually filter by (see streams/service.ts's listLiveStreams) — a
+// shareable/bookmarkable URL, and no over-fetching every live stream just
+// to filter client-side as the list grows.
+export function CategoryPills({ selected }: { selected: string }) {
   return (
     <div className={styles.scroll}>
       {CATEGORIES.map((category) => {
         const value = category === "All" ? "all" : category;
         const isActive = value.toLowerCase() === selected.toLowerCase();
+        const href = value === "all" ? "/" : `/?category=${encodeURIComponent(value)}`;
         return (
-          <button
+          <Link
             key={category}
-            type="button"
+            href={href}
             className={isActive ? styles.pillActive : styles.pill}
             aria-pressed={isActive}
-            onClick={() => onSelect(value)}
           >
             {category}
-          </button>
+          </Link>
         );
       })}
     </div>

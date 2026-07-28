@@ -3,6 +3,7 @@ import { AboutCreator } from "@/components/AboutCreator";
 import { BottomNav } from "@/components/BottomNav";
 import { ChatPanel } from "@/components/ChatPanel";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
+import { PastBroadcasts } from "@/components/PastBroadcasts";
 import { StreamMeta } from "@/components/StreamMeta";
 import { TopNav } from "@/components/TopNav";
 import { VideoPlayer } from "@/components/VideoPlayer";
@@ -14,6 +15,7 @@ import {
   getLiveStreams,
   getStreamActivity,
   getSubscriptionTiers,
+  getVods,
 } from "@/lib/api";
 import styles from "./page.module.css";
 
@@ -26,6 +28,7 @@ export default async function WatchPage({ params }: { params: Promise<{ username
   ]);
 
   if (!stream) {
+    const vods = await getVods(username);
     return (
       <>
         <TopNav isAuthed={!!user} />
@@ -33,6 +36,7 @@ export default async function WatchPage({ params }: { params: Promise<{ username
           <h1 className={styles.offlineTitle}>@{username} is not live right now</h1>
           <p className={styles.offlineText}>Check back later or explore other creators.</p>
         </div>
+        <PastBroadcasts vods={vods} />
         <BottomNav />
       </>
     );

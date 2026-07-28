@@ -1,18 +1,46 @@
 import {
   BOOST_DURATION_MS,
   BOOST_PRICE_SANTIM,
+  renderThumbnailPlaceholderSvg,
   type BoostStreamResponse,
   type CreateStreamInput,
   type CreatorStats,
   type StreamActivity,
+  type StreamDefaults,
   type StreamDetail,
   type StreamKeyResponse,
 } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { AppError } from "../common/errors.js";
+import { env } from "../common/env.js";
 import { flagIfMatched } from "../moderation/service.js";
 import { videoProvider } from "./video-provider.js";
+
+export function thumbnailPlaceholderSvg(category: string): string {
+  return renderThumbnailPlaceholderSvg(category);
+}
+
+function thumbnailPlaceholderUrl(category: string): string {
+  return `${env.API_PUBLIC_URL}/streams/thumbnail-placeholder/${encodeURIComponent(category)}.svg`;
+}
+
+// Fire-and-forget-ish, but still awaited: a stream_events write failing
+// shouldn't be possible to notice from the caller's perspective (this is
+// pure groundwork logging, see db/migrations/0011 — no feature reads it
+// yet), so errors are swallowed here rather than propagated into goLive()/
+// endStream()'s own error handling.
+async function logStreamEvent(streamId: string, type: "started" | "ended"): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO stream_events (stream_id, type, category, peak_viewers)
+       SELECT id, $2, category, peak_viewers FROM streams WHERE id = $1`,
+      [streamId, type]
+    );
+  } catch (err) {
+    console.error(`[stream_events] failed logging ${type} for ${streamId}:`, err);
+  }
+}
 
 interface CreatorProfileRow {
   user_id: string;
@@ -113,13 +141,18 @@ export async function rotateStreamKey(userId: string): Promise<StreamKeyResponse
   return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey };
 }
 
-export async function listLiveStreams(): Promise<StreamDetail[]> {
+// category is matched case-insensitively — same reasoning CategoryPills'
+// client-side filter used to document: stream.category is free-form text
+// (VARCHAR(50), no enum/CHECK constraint), so an exact-case match would
+// silently miss real streams over a casing difference alone.
+export async function listLiveStreams(category?: string): Promise<StreamDetail[]> {
   const { rows } = await pool.query<StreamRow>(
     `SELECT ${STREAM_SELECT_COLUMNS}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
-     WHERE s.status = 'live'
-     ORDER BY is_boosted DESC, s.peak_viewers DESC NULLS LAST, s.started_at DESC`
+     WHERE s.status = 'live' AND ($1::text IS NULL OR lower(s.category) = lower($1))
+     ORDER BY is_boosted DESC, s.peak_viewers DESC NULLS LAST, s.started_at DESC`,
+    [category ?? null]
   );
   return rows.map(toStreamDetail);
 }
@@ -219,6 +252,14 @@ export async function getCreatorStats(userId: string): Promise<CreatorStats> {
   };
 }
 
+export async function getStreamDefaults(userId: string): Promise<StreamDefaults> {
+  const { rows } = await pool.query<{ category: string | null; language: string | null }>(
+    `SELECT category, language FROM creator_profiles WHERE user_id = $1`,
+    [userId]
+  );
+  return { category: rows[0]?.category ?? null, language: rows[0]?.language ?? null };
+}
+
 export async function goLive(userId: string, input: CreateStreamInput): Promise<StreamDetail> {
   const profile = await ensureCreatorProfile(userId);
 
@@ -228,28 +269,41 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
     [userId]
   );
 
+  // Category/language rarely change stream to stream (unlike title/
+  // thumbnail) — persisting them here is what lets the next go-live setup
+  // form pre-fill instead of starting blank every time.
+  await pool.query(`UPDATE creator_profiles SET category = $1, language = $2, updated_at = now() WHERE user_id = $3`, [
+    input.category,
+    input.language,
+    userId,
+  ]);
+
   const playbackUrl = videoProvider.getPlaybackUrl(profile.stream_key);
+  const thumbnailUrl = input.thumbnailUrl ?? thumbnailPlaceholderUrl(input.category);
 
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO streams (creator_id, title, category, language, playback_url, provider_stream_id, status, started_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'live', now())
+    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now())
      RETURNING id`,
-    [userId, input.title, input.category ?? null, input.language ?? null, playbackUrl, profile.stream_key]
+    [userId, input.title, input.category, input.language, thumbnailUrl, playbackUrl, profile.stream_key]
   );
   const streamId = rows[0]!.id;
 
   await flagIfMatched("stream_title", streamId, userId, input.title);
+  await logStreamEvent(streamId, "started");
 
   return getStreamById(streamId);
 }
 
 export async function endStream(userId: string): Promise<void> {
-  const { rowCount } = await pool.query(
+  const { rows } = await pool.query<{ id: string }>(
     `UPDATE streams SET status = 'ended', ended_at = now()
-     WHERE creator_id = $1 AND status = 'live'`,
+     WHERE creator_id = $1 AND status = 'live'
+     RETURNING id`,
     [userId]
   );
-  if (!rowCount) throw new AppError(404, "No live stream to end");
+  if (!rows[0]) throw new AppError(404, "No live stream to end");
+  await logStreamEvent(rows[0].id, "ended");
 }
 
 // 100% to platform, no creator/platform split — unlike gifts/subs, the
@@ -309,6 +363,7 @@ export async function boostStream(creatorId: string): Promise<BoostStreamRespons
 // the reaper isn't acting on behalf of any particular caller.
 async function endStreamById(streamId: string): Promise<void> {
   await pool.query(`UPDATE streams SET status = 'ended', ended_at = now() WHERE id = $1`, [streamId]);
+  await logStreamEvent(streamId, "ended");
 }
 
 const STALE_STREAM_MAX_DURATION_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -411,14 +466,34 @@ export async function markLiveByProviderStreamId(providerStreamId: string): Prom
       `UPDATE streams SET status = 'live', playback_url = $1, started_at = now() WHERE id = $2`,
       [playbackUrl, pending.rows[0].id]
     );
+    await logStreamEvent(pending.rows[0].id, "started");
     return;
   }
 
-  await pool.query(
-    `INSERT INTO streams (creator_id, title, playback_url, provider_stream_id, status, started_at)
-     VALUES ($1, 'Live Stream', $2, $3, 'live', now())`,
-    [creatorId, playbackUrl, providerStreamId]
+  // No pending row means this creator's encoder connected without ever
+  // visiting the dashboard's go-live setup screen — same fallback title
+  // this always used, but now also seeded from their last-used
+  // category/language (if any) instead of leaving both null.
+  const defaults = await getStreamDefaults(creatorId);
+  const thumbnailUrl = defaults.category ? thumbnailPlaceholderUrl(defaults.category) : null;
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at)
+     VALUES ($1, 'Live Stream', $2, $3, $4, $5, $6, 'live', now())
+     RETURNING id`,
+    [creatorId, defaults.category, defaults.language, thumbnailUrl, playbackUrl, providerStreamId]
   );
+  await logStreamEvent(rows[0]!.id, "started");
+}
+
+export async function getMostRecentStreamIdByProviderStreamId(providerStreamId: string): Promise<string | null> {
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT s.id FROM streams s
+     JOIN creator_profiles cp ON cp.user_id = s.creator_id
+     WHERE cp.stream_key = $1
+     ORDER BY s.created_at DESC LIMIT 1`,
+    [providerStreamId]
+  );
+  return rows[0]?.id ?? null;
 }
 
 export async function markEndedByProviderStreamId(providerStreamId: string): Promise<void> {
@@ -429,10 +504,12 @@ export async function markEndedByProviderStreamId(providerStreamId: string): Pro
   const creatorId = profile.rows[0]?.user_id;
   if (!creatorId) throw new AppError(404, "Unknown provider stream id");
 
-  await pool.query(
+  const { rows } = await pool.query<{ id: string }>(
     `UPDATE streams SET status = 'ended', ended_at = now()
-     WHERE creator_id = $1 AND status = 'live'`,
+     WHERE creator_id = $1 AND status = 'live'
+     RETURNING id`,
     [creatorId]
   );
+  if (rows[0]) await logStreamEvent(rows[0].id, "ended");
 }
 

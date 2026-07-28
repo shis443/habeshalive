@@ -43,6 +43,20 @@ const envSchema = z.object({
   CENTRIFUGO_URL: z.string().min(1).default("http://localhost:8000"),
   CENTRIFUGO_API_KEY: z.string().min(1).default("dev-only-change-me"),
   CENTRIFUGO_TOKEN_HMAC_SECRET: z.string().min(1).default("dev-only-change-me"),
+  // VOD storage (Cloudflare R2, S3-compatible) — same account/pattern as
+  // infra/backup's BACKUP_S3_* (see .env.example), just a different
+  // bucket/prefix. Empty by default on purpose: no real bucket exists yet,
+  // and common/object-storage.ts falls back to a stub that no-ops rather
+  // than throwing, same switch pattern wallet/chapa-client.ts uses for
+  // CHAPA_SECRET_KEY.
+  VOD_S3_ENDPOINT: z.string().default(""),
+  VOD_S3_ACCESS_KEY_ID: z.string().default(""),
+  VOD_S3_SECRET_ACCESS_KEY: z.string().default(""),
+  VOD_S3_BUCKET: z.string().default("habeshalive-vods"),
+  // Public base URL for objects in that bucket once uploaded — R2 buckets
+  // need "Public Access" enabled (or a custom domain) to have one; there
+  // isn't one configured yet, hence the empty default.
+  VOD_S3_PUBLIC_URL: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

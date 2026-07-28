@@ -17,10 +17,12 @@ import {
   reportSchema,
   searchResultsSchema,
   streamActivitySchema,
+  streamDefaultsSchema,
   streamDetailSchema,
   streamKeySchema,
   subscriptionTierSchema,
   transactionSchema,
+  vodSchema,
   walletBalanceSchema,
   type ActiveBoost,
   type AdminSummary,
@@ -40,10 +42,12 @@ import {
   type Report,
   type SearchResults,
   type StreamActivity,
+  type StreamDefaults,
   type StreamDetail,
   type StreamKeyResponse,
   type SubscriptionTier,
   type Transaction,
+  type Vod,
   type WalletBalance,
 } from "@habeshalive/shared";
 // Every function in this file runs server-side only (Server Components), so
@@ -52,8 +56,11 @@ import {
 import { API_INTERNAL_URL } from "./config";
 import { fetchAuthed } from "./session";
 
-export async function getLiveStreams(): Promise<LiveStream[]> {
-  const res = await fetch(`${API_INTERNAL_URL}/streams/live`, { cache: "no-store" });
+export async function getLiveStreams(category?: string): Promise<LiveStream[]> {
+  const url = category
+    ? `${API_INTERNAL_URL}/streams/live?category=${encodeURIComponent(category)}`
+    : `${API_INTERNAL_URL}/streams/live`;
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     // The homepage's primary data fetch — a k6 load test caught this
     // throwing on any non-200 (including a transient 429 from the API's
@@ -162,6 +169,24 @@ export async function getStreamKey(): Promise<StreamKeyResponse | null> {
     return null;
   }
   return streamKeySchema.parse(await res.json());
+}
+
+export async function getVods(username: string): Promise<Vod[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/vods/${encodeURIComponent(username)}`, { cache: "no-store" });
+  if (!res.ok) {
+    console.error(`Failed to load VODs for ${username} (${res.status})`);
+    return [];
+  }
+  return vodSchema.array().parse(await res.json());
+}
+
+export async function getStreamDefaults(): Promise<StreamDefaults | null> {
+  const res = await fetchAuthed("/streams/defaults");
+  if (!res.ok) {
+    console.error(`Failed to load stream defaults (${res.status})`);
+    return null;
+  }
+  return streamDefaultsSchema.parse(await res.json());
 }
 
 export async function getWalletBalance(): Promise<WalletBalance | null> {
