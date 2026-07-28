@@ -8,10 +8,10 @@
   align-items: center;
   gap: var(--space-3);
   padding: 0 var(--space-3);
-  background: rgba(23, 31, 51, 0.6);
+  background: color-mix(in srgb, var(--surface-container) 60%, transparent);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--outline-variant);
   z-index: 50;
 }
 
@@ -34,7 +34,7 @@
 }
 
 .iconButton:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--on-background) 6%, transparent);
   color: var(--on-background);
 }
 
@@ -159,10 +159,10 @@
   top: calc(100% + var(--space-1));
   right: 0;
   min-width: 220px;
-  background: rgba(23, 31, 51, 0.85);
+  background: var(--surface-container-high);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--outline-variant);
   border-radius: 8px;
   padding: var(--space-2) 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -204,12 +204,12 @@
 }
 
 .menuItem:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--on-background) 6%, transparent);
 }
 
 .divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--outline-variant);
   margin: var(--space-1) 0;
 }
 
@@ -225,7 +225,7 @@
 }
 
 .rowItem:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--on-background) 6%, transparent);
 }
 
 .rowLabel {
@@ -282,7 +282,7 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--on-background);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--outline-variant);
   margin-bottom: var(--space-1);
 }
 

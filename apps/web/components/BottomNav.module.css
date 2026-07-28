@@ -8,10 +8,10 @@
   align-items: center;
   justify-content: space-around;
   padding-bottom: env(safe-area-inset-bottom);
-  background: rgba(23, 31, 51, 0.6);
+  background: color-mix(in srgb, var(--surface-container) 60%, transparent);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--outline-variant);
   z-index: 50;
 }
 
