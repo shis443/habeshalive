@@ -47,11 +47,15 @@ export async function listAnchorCreators(): Promise<CreatorListItem[]> {
 
 // No application/pipeline subsystem exists for Anchor Creator Program (see
 // packages/shared/src/schemas/admin.ts's anchorCandidateSchema comment) —
-// this ranks existing creators by real revenue generated (gifts + boosts +
+// this ranks existing creators by real revenue generated (gifts +
 // subscriptions credited to their wallet) so an admin has something
 // concrete to act on instead of guessing who to reach out to. The
 // isAnchorCreator toggle on the Creators page is still what actually
-// promotes someone.
+// promotes someone. Boosts are deliberately excluded: a boost is a
+// creator paying to promote their own stream (streams/service.ts's
+// boostStream debits the creator, credits the platform), so it's a
+// creator expense, not earnings — including it would rank spenders
+// above earners.
 export async function listAnchorCandidates(limit = 25): Promise<AnchorCandidate[]> {
   const { rows } = await pool.query<{
     id: string;
@@ -69,7 +73,7 @@ export async function listAnchorCandidates(limit = 25): Promise<AnchorCandidate[
              FROM ledger_entries le
              JOIN ledger_transactions lt ON lt.id = le.ledger_transaction_id
              JOIN wallets w ON w.id = le.wallet_id
-             WHERE w.owner_id = u.id AND le.direction = 'credit' AND lt.type IN ('gift', 'boost', 'subscription')
+             WHERE w.owner_id = u.id AND le.direction = 'credit' AND lt.type IN ('gift', 'subscription')
             ) AS lifetime_earnings_santim
      FROM users u
      JOIN creator_profiles cp ON cp.user_id = u.id
