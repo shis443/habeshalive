@@ -28,11 +28,13 @@ export default function AnchorCreatorProgramPage() {
       </p>
       <h2>How to apply</h2>
       <p>
-        Create a Birq account, stream at least a few times so we can see your setup and
-        content, then reach out at{" "}
-        <a href="mailto:creators@birq.com">creators@birq.com</a> with links to your
-        existing channel(s) and your streaming schedule. We follow up directly — there&apos;s no
-        automated approval flow for this yet.
+        Birq is launching with a limited first batch of approved creators — you need an approved{" "}
+        <a href="/apply-to-stream">creator application</a> before you can go live at all, regardless
+        of anchor status. Once you&apos;re streaming, anchor status itself is still a direct
+        conversation: stream a few times so we can see your setup and content, then reach out at{" "}
+        <a href="mailto:creators@birq.com">creators@birq.com</a> with links to your existing
+        channel(s) and your streaming schedule. We follow up directly — there&apos;s no automated
+        approval flow for anchor status specifically.
       </p>
       <p>
         <em>

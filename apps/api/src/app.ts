@@ -9,6 +9,7 @@ import { avatarRoutes } from "./avatars/routes.js";
 import { chatRoutes } from "./chat/routes.js";
 import { env } from "./common/env.js";
 import { AppError } from "./common/errors.js";
+import { creatorApplicationRoutes } from "./creator-applications/routes.js";
 import { followRoutes } from "./follows/routes.js";
 import { httpRequestDuration, httpRequestsTotal, registry } from "./common/metrics.js";
 import { pool } from "./common/db.js";
@@ -162,6 +163,7 @@ export function buildApp() {
   app.register(avatarRoutes, { prefix: "/avatars" });
   app.register(chatRoutes, { prefix: "/chat" });
   app.register(followRoutes, { prefix: "/follows" });
+  app.register(creatorApplicationRoutes, { prefix: "/creator-applications" });
   app.register(streamRoutes, { prefix: "/streams" });
   app.register(walletRoutes, { prefix: "/wallet" });
   app.register(moderationRoutes, { prefix: "/moderation" });

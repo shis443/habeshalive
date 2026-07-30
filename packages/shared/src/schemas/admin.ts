@@ -209,6 +209,7 @@ export const platformConfigSchema = z.object({
   payoutManualReviewThresholdSantim: z.number().int(),
   vodRetentionDaysDefault: z.number().int(),
   vodRetentionDaysAnchor: z.number().int(),
+  approvedCreatorCap: z.number().int(),
   updatedAt: z.string(),
   updatedByUsername: z.string().nullable(),
 });
@@ -221,6 +222,7 @@ export const updatePlatformConfigSchema = z.object({
   payoutManualReviewThresholdSantim: z.number().int().positive(),
   vodRetentionDaysDefault: z.number().int().positive(),
   vodRetentionDaysAnchor: z.number().int().positive(),
+  approvedCreatorCap: z.number().int().positive(),
 });
 export type UpdatePlatformConfigInput = z.infer<typeof updatePlatformConfigSchema>;
 

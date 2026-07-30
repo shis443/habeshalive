@@ -32,6 +32,12 @@ export function AdminSidebar() {
       <Link href="/admin/payouts" className={pathname.startsWith("/admin/payouts") ? styles.linkActive : styles.link}>
         Payouts
       </Link>
+      <Link
+        href="/admin/creator-applications"
+        className={pathname.startsWith("/admin/creator-applications") ? styles.linkActive : styles.link}
+      >
+        Creator Applications
+      </Link>
       <Link href="/admin/moderation" className={inModeration ? styles.linkActive : styles.link}>
         Moderation
       </Link>

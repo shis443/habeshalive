@@ -16,6 +16,7 @@ import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } 
 import { AppError } from "../common/errors.js";
 import { env } from "../common/env.js";
 import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
+import { isApprovedCreator } from "../creator-applications/service.js";
 import { videoProvider } from "./video-provider.js";
 
 export function thumbnailPlaceholderSvg(category: string): string {
@@ -105,6 +106,15 @@ async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> 
     [userId]
   );
   if (existing.rows[0]) return existing.rows[0];
+
+  // A.4 launch gate: streaming access is capped to an approved batch of
+  // creators while the platform is new. Only checked here, on the path
+  // that creates a NEW creator profile — anyone who already has one
+  // (existing creators, grandfathered by db/migrations/0018) never hits
+  // this at all, so this can't lock out someone who already had access.
+  if (!(await isApprovedCreator(userId))) {
+    throw new AppError(403, "Streaming on Birq currently requires an approved creator application.");
+  }
 
   const { streamKey } = await videoProvider.createLiveInput();
   const defaultRevenueShareBps = await getDefaultRevenueShareBps();

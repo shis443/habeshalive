@@ -9,6 +9,7 @@ interface ConfigRow {
   payout_manual_review_threshold_santim: number;
   vod_retention_days_default: number;
   vod_retention_days_anchor: number;
+  approved_creator_cap: number;
   updated_at: string;
   updated_by_username: string | null;
 }
@@ -17,7 +18,7 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
   const { rows } = await pool.query<ConfigRow>(
     `SELECT pc.boost_price_santim, pc.boost_duration_ms, pc.default_revenue_share_bps,
             pc.payout_manual_review_threshold_santim, pc.vod_retention_days_default, pc.vod_retention_days_anchor,
-            pc.updated_at, u.username AS updated_by_username
+            pc.approved_creator_cap, pc.updated_at, u.username AS updated_by_username
      FROM platform_config pc
      LEFT JOIN users u ON u.id = pc.updated_by
      WHERE pc.id = TRUE`
@@ -30,6 +31,7 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
     payoutManualReviewThresholdSantim: row.payout_manual_review_threshold_santim,
     vodRetentionDaysDefault: row.vod_retention_days_default,
     vodRetentionDaysAnchor: row.vod_retention_days_anchor,
+    approvedCreatorCap: row.approved_creator_cap,
     updatedAt: row.updated_at,
     updatedByUsername: row.updated_by_username,
   };
@@ -79,7 +81,8 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
        payout_manual_review_threshold_santim = $4,
        vod_retention_days_default = $5,
        vod_retention_days_anchor = $6,
-       updated_at = now(), updated_by = $7
+       approved_creator_cap = $7,
+       updated_at = now(), updated_by = $8
      WHERE id = TRUE`,
     [
       input.boostPriceSantim,
@@ -88,6 +91,7 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
       input.payoutManualReviewThresholdSantim,
       input.vodRetentionDaysDefault,
       input.vodRetentionDaysAnchor,
+      input.approvedCreatorCap,
       adminId,
     ]
   );

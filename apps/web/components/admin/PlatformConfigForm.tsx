@@ -17,6 +17,7 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   );
   const [vodDefaultDays, setVodDefaultDays] = useState(config ? String(config.vodRetentionDaysDefault) : "");
   const [vodAnchorDays, setVodAnchorDays] = useState(config ? String(config.vodRetentionDaysAnchor) : "");
+  const [approvedCreatorCap, setApprovedCreatorCap] = useState(config ? String(config.approvedCreatorCap) : "");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -34,6 +35,7 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           payoutManualReviewThresholdSantim: birrToSantim(parseFloat(reviewThresholdBirr || "0")),
           vodRetentionDaysDefault: Math.round(parseFloat(vodDefaultDays || "0")),
           vodRetentionDaysAnchor: Math.round(parseFloat(vodAnchorDays || "0")),
+          approvedCreatorCap: Math.round(parseFloat(approvedCreatorCap || "0")),
         }),
       });
       const data = await res.json();
@@ -115,6 +117,15 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           onChange={(e) => setVodAnchorDays(e.target.value)}
         />
       </div>
+
+      <label className={formStyles.fieldLabel}>Approved creator cap (A.4 launch gate)</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={approvedCreatorCap}
+        onChange={(e) => setApprovedCreatorCap(e.target.value)}
+      />
 
       <button type="button" className={styles.approveButton} disabled={submitting} onClick={submit}>
         {submitting ? "Saving..." : "Save settings"}

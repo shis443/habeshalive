@@ -2,6 +2,7 @@ import {
   extendGracePeriodSchema,
   forceEndStreamSchema,
   manualAdjustmentSchema,
+  rejectCreatorApplicationSchema,
   suspendCreatorSchema,
   updateCreatorSchema,
   updatePlatformConfigSchema,
@@ -10,6 +11,11 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
 import { listAnchorCandidates, listAnchorCreators } from "./anchor-service.js";
+import {
+  approveApplication,
+  listApplications,
+  rejectApplication,
+} from "../creator-applications/service.js";
 import {
   extendGracePeriod,
   forceCancelSubscription,
@@ -147,6 +153,33 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: app.requireAdmin },
     async (req) => {
       await forceCancelSubscription(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
+
+  // --- Creator applications (A.4 launch gate) ---
+
+  app.get<{ Querystring: { status?: "pending" | "approved" | "rejected" } }>(
+    "/creator-applications",
+    { preHandler: app.requireAdmin },
+    async (req) => listApplications(req.query.status)
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/creator-applications/:id/approve",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      await approveApplication(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/creator-applications/:id/reject",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      const input = rejectCreatorApplicationSchema.parse(req.body);
+      await rejectApplication(req.user.sub, req.params.id, input.reason);
       return { ok: true };
     }
   );

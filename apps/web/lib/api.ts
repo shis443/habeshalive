@@ -9,6 +9,8 @@ import {
   avatarSelectionSchema,
   blocklistTermSchema,
   boostRevenueByCreatorSchema,
+  creatorApplicationAdminItemSchema,
+  creatorApplicationCapStatusSchema,
   creatorListItemSchema,
   creatorSearchResultSchema,
   creatorStatsSchema,
@@ -20,6 +22,7 @@ import {
   liveStreamSchema,
   moderationActionRecordSchema,
   moderationFlagSchema,
+  myCreatorApplicationSchema,
   mySubscriptionSchema,
   payoutHistoryItemSchema,
   payoutQueueItemSchema,
@@ -48,6 +51,8 @@ import {
   type AvatarSelection,
   type BlocklistTerm,
   type BoostRevenueByCreator,
+  type CreatorApplicationAdminItem,
+  type CreatorApplicationCapStatus,
   type CreatorListItem,
   type CreatorSearchResult,
   type CreatorStats,
@@ -59,6 +64,7 @@ import {
   type LiveStream,
   type ModerationActionRecord,
   type ModerationFlag,
+  type MyCreatorApplication,
   type MySubscription,
   type PayoutHistoryItem,
   type PayoutQueueItem,
@@ -516,4 +522,36 @@ export async function getAppeals(): Promise<Appeal[]> {
     return [];
   }
   return appealSchema.array().parse(await res.json());
+}
+
+export async function getMyCreatorApplication(): Promise<MyCreatorApplication | null> {
+  const res = await fetchAuthed("/creator-applications/mine");
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    console.error(`Failed to load creator application (${res.status})`);
+    return null;
+  }
+  const body = await res.json();
+  return body ? myCreatorApplicationSchema.parse(body) : null;
+}
+
+export async function getCreatorApplicationCapStatus(): Promise<CreatorApplicationCapStatus | null> {
+  const res = await fetch(`${API_INTERNAL_URL}/creator-applications/cap-status`);
+  if (!res.ok) {
+    console.error(`Failed to load creator application cap status (${res.status})`);
+    return null;
+  }
+  return creatorApplicationCapStatusSchema.parse(await res.json());
+}
+
+export async function getCreatorApplications(
+  status?: "pending" | "approved" | "rejected"
+): Promise<CreatorApplicationAdminItem[]> {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetchAuthed(`/admin/creator-applications${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load creator applications (${res.status})`);
+    return [];
+  }
+  return creatorApplicationAdminItemSchema.array().parse(await res.json());
 }
