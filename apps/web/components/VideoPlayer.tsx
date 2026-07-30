@@ -130,7 +130,13 @@ export function VideoPlayer({ src }: { src: string | null }) {
 
   return (
     <div className={styles.wrap}>
-      <video ref={videoRef} className={styles.video} controls playsInline />
+      {/* autoPlay+muted is the one autoplay pattern every major browser's
+          autoplay policy actually permits without a user gesture first —
+          unmuted autoplay is blocked outright in Chrome/Firefox/Safari, so
+          this isn't a preference, it's the only combination that starts
+          playback without requiring a click. `controls` still gives an
+          explicit, always-visible way to unmute/pause/play manually. */}
+      <video ref={videoRef} className={styles.video} controls playsInline autoPlay muted />
       {state !== "playing" && (
         <div className={styles.statusOverlay}>
           <span>
