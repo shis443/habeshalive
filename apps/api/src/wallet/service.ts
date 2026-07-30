@@ -4,16 +4,20 @@ import type {
   CreatorPayoutContext,
   EarningsThisMonth,
   GiftAlert,
+  GifterBadge,
+  GifterBadgeTier,
   GiftType,
   PayoutHistoryItem,
   PayoutQueueItem,
   PayoutResponse,
   RequestPayoutInput,
   SendGiftInput,
+  SendGiftResponse,
   Transaction,
   TopupResponse,
   WalletBalance,
 } from "@habeshalive/shared";
+import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { logAdminAction } from "../admin/audit.js";
 import { getPayoutManualReviewThreshold } from "../admin/config-service.js";
@@ -50,6 +54,73 @@ async function publishGiftAlert(alert: GiftAlert): Promise<void> {
   if (!res.ok) {
     console.error(`[wallet] Centrifugo gift-alert publish failed: ${res.status} ${await res.text().catch(() => "")}`);
   }
+}
+
+// Gifter badge tiers — cumulative Gursha value sent to ONE creator, same
+// "top gifter to this channel" scoping as Twitch's bit badges, not a
+// platform-wide leaderboard. Thresholds are santim (25 ETB = 1 Gursha at
+// the current base price from db/migrations/0019_gursha.sql).
+const BADGE_TIER_THRESHOLDS: { tier: GifterBadgeTier; thresholdSantim: number }[] = [
+  { tier: "platinum", thresholdSantim: 625_000 }, // 6,250 ETB / 250 Gursha
+  { tier: "gold", thresholdSantim: 125_000 }, //   1,250 ETB / 50 Gursha
+  { tier: "silver", thresholdSantim: 25_000 }, //    250 ETB / 10 Gursha
+  { tier: "bronze", thresholdSantim: 2_500 }, //      25 ETB / 1 Gursha
+];
+
+function tierForTotal(totalSantim: number): GifterBadgeTier {
+  for (const { tier, thresholdSantim } of BADGE_TIER_THRESHOLDS) {
+    if (totalSantim >= thresholdSantim) return tier;
+  }
+  return "none";
+}
+
+function nextTierThreshold(tier: GifterBadgeTier): number | null {
+  const currentIndex = BADGE_TIER_THRESHOLDS.findIndex((t) => t.tier === tier);
+  // currentIndex === -1 means tier is "none" — next is the lowest tier,
+  // the last entry in the descending-order array above.
+  const nextIndex = currentIndex === -1 ? BADGE_TIER_THRESHOLDS.length - 1 : currentIndex - 1;
+  return BADGE_TIER_THRESHOLDS[nextIndex]?.thresholdSantim ?? null;
+}
+
+export async function getGifterBadge(userId: string, creatorId: string): Promise<GifterBadge> {
+  const { rows } = await pool.query<{ total_gursha_santim: number; tier: GifterBadgeTier }>(
+    `SELECT total_gursha_santim, tier FROM gifter_badges WHERE user_id = $1 AND creator_id = $2`,
+    [userId, creatorId]
+  );
+  const row = rows[0];
+  const tier = row?.tier ?? "none";
+  return {
+    creatorId,
+    totalGurshaSantim: row?.total_gursha_santim ?? 0,
+    tier,
+    nextTierThresholdSantim: nextTierThreshold(tier),
+  };
+}
+
+// Called inside sendGift()'s transaction — the badge update is part of the
+// same atomic unit as the money movement, not a best-effort side effect.
+async function upsertGifterBadge(
+  client: PoolClient,
+  userId: string,
+  creatorId: string,
+  addedSantim: number
+): Promise<GifterBadge> {
+  const { rows } = await client.query<{ total_gursha_santim: number }>(
+    `INSERT INTO gifter_badges (user_id, creator_id, total_gursha_santim, tier)
+     VALUES ($1, $2, $3, 'none')
+     ON CONFLICT (user_id, creator_id) DO UPDATE
+       SET total_gursha_santim = gifter_badges.total_gursha_santim + $3, updated_at = now()
+     RETURNING total_gursha_santim`,
+    [userId, creatorId, addedSantim]
+  );
+  const total = rows[0]!.total_gursha_santim;
+  const tier = tierForTotal(total);
+  await client.query(`UPDATE gifter_badges SET tier = $1 WHERE user_id = $2 AND creator_id = $3`, [
+    tier,
+    userId,
+    creatorId,
+  ]);
+  return { creatorId, totalGurshaSantim: total, tier, nextTierThresholdSantim: nextTierThreshold(tier) };
 }
 
 export async function listGiftTypes(): Promise<GiftType[]> {
@@ -209,7 +280,7 @@ export async function completeTopupFromWebhook(webhook: ChapaWebhook): Promise<v
   }
 }
 
-export async function sendGift(senderId: string, input: SendGiftInput): Promise<{ id: string }> {
+export async function sendGift(senderId: string, input: SendGiftInput): Promise<SendGiftResponse> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -228,6 +299,14 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
     const stream = streamResult.rows[0];
     if (!stream) throw new AppError(404, "Stream not found");
     if (stream.creator_id === senderId) throw new AppError(400, "You can't gift your own stream");
+
+    // Dedication target, not a money recipient — the creator above is
+    // always who's actually paid. Validated for existence only so the
+    // alert/chat display doesn't silently show a broken reference.
+    if (input.recipientId) {
+      const recipientResult = await client.query(`SELECT 1 FROM users WHERE id = $1`, [input.recipientId]);
+      if (!recipientResult.rows[0]) throw new AppError(404, "Recipient not found");
+    }
 
     const profileResult = await client.query<{ revenue_share_bps: number }>(
       `SELECT revenue_share_bps FROM creator_profiles WHERE user_id = $1`,
@@ -268,8 +347,8 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
     await applyBalanceDelta(client, platformWalletId, platformShare);
 
     await client.query(
-      `INSERT INTO gifts_sent (ledger_transaction_id, sender_id, creator_id, stream_id, gift_type_id, quantity, message)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO gifts_sent (ledger_transaction_id, sender_id, creator_id, stream_id, gift_type_id, quantity, message, recipient_id, is_anonymous)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         ledgerTransactionId,
         senderId,
@@ -278,8 +357,12 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
         input.giftTypeId,
         input.quantity,
         input.message ?? null,
+        input.recipientId ?? null,
+        input.isAnonymous ?? false,
       ]
     );
+
+    const badge = await upsertGifterBadge(client, senderId, stream.creator_id, totalAmount);
 
     await client.query("COMMIT");
 
@@ -292,31 +375,37 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
       display_name: string;
       gift_name: string;
       animation_key: string;
+      recipient_username: string | null;
     }>(
-      `SELECT u.username, u.display_name, gt.name AS gift_name, gt.animation_key
+      `SELECT u.username, u.display_name, gt.name AS gift_name, gt.animation_key,
+              (SELECT username FROM users WHERE id = $3) AS recipient_username
        FROM users u, gift_types gt
        WHERE u.id = $1 AND gt.id = $2`,
-      [senderId, input.giftTypeId]
+      [senderId, input.giftTypeId, input.recipientId ?? null]
     );
     const alertInfo = alertRows[0];
     if (alertInfo) {
+      const isAnonymous = input.isAnonymous ?? false;
       await publishGiftAlert({
         id: ledgerTransactionId,
         streamId: input.streamId,
         senderId,
-        senderUsername: alertInfo.username,
-        senderDisplayName: alertInfo.display_name,
+        senderUsername: isAnonymous ? null : alertInfo.username,
+        senderDisplayName: isAnonymous ? null : alertInfo.display_name,
+        isAnonymous,
+        recipientUsername: alertInfo.recipient_username,
         giftTypeId: input.giftTypeId,
         giftName: alertInfo.gift_name,
         animationKey: alertInfo.animation_key,
         quantity: input.quantity,
         totalSantim: totalAmount,
         message: input.message ?? null,
+        badgeTier: badge.tier,
         createdAt: new Date().toISOString(),
       });
     }
 
-    return { id: ledgerTransactionId };
+    return { id: ledgerTransactionId, badge };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

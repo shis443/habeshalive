@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@habeshalive/shared";
+import type { ChatMessage, GifterBadgeTier } from "@habeshalive/shared";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
@@ -12,6 +12,7 @@ interface ChatMessageRow {
   display_name: string;
   avatar_url: string | null;
   body: string;
+  gifter_badge_tier: GifterBadgeTier | null;
   created_at: string;
 }
 
@@ -24,6 +25,7 @@ function toChatMessage(row: ChatMessageRow): ChatMessage {
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
     body: row.body,
+    gifterBadgeTier: row.gifter_badge_tier ?? "none",
     createdAt: row.created_at,
   };
 }
@@ -71,7 +73,10 @@ export async function sendChatMessage(userId: string, streamId: string, body: st
      RETURNING id, stream_id, user_id, body, created_at,
        (SELECT username FROM users WHERE id = $2) AS username,
        (SELECT display_name FROM users WHERE id = $2) AS display_name,
-       (SELECT avatar_url FROM users WHERE id = $2) AS avatar_url`,
+       (SELECT avatar_url FROM users WHERE id = $2) AS avatar_url,
+       (SELECT gb.tier FROM gifter_badges gb
+        JOIN streams s ON s.id = $1 AND s.creator_id = gb.creator_id
+        WHERE gb.user_id = $2) AS gifter_badge_tier`,
     [streamId, userId, body]
   );
   const row = rows[0];
@@ -89,9 +94,11 @@ export async function sendChatMessage(userId: string, streamId: string, body: st
 export async function getChatHistory(streamId: string): Promise<ChatMessage[]> {
   const { rows } = await pool.query<ChatMessageRow>(
     `SELECT cm.id, cm.stream_id, cm.user_id, cm.body, cm.created_at,
-            u.username, u.display_name, u.avatar_url
+            u.username, u.display_name, u.avatar_url, gb.tier AS gifter_badge_tier
      FROM chat_messages cm
      JOIN users u ON u.id = cm.user_id
+     JOIN streams s ON s.id = cm.stream_id
+     LEFT JOIN gifter_badges gb ON gb.user_id = cm.user_id AND gb.creator_id = s.creator_id
      WHERE cm.stream_id = $1 AND cm.is_deleted = FALSE
      ORDER BY cm.created_at DESC
      LIMIT 50`,

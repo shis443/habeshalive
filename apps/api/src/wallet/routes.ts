@@ -17,6 +17,7 @@ import {
   getBalance,
   getCreatorPayoutContext,
   getEarningsThisMonth,
+  getGifterBadge,
   initiateTopup,
   listAllPayouts,
   listGiftTypes,
@@ -127,6 +128,14 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
       const input = sendGiftSchema.parse(req.body);
       return sendGift(req.user.sub, input);
     }
+  );
+
+  // Lets the Gursha modal show a "you're this far from the next badge"
+  // progress bar before the viewer has sent anything this session.
+  app.get<{ Params: { creatorId: string } }>(
+    "/gifter-badge/:creatorId",
+    { preHandler: app.authenticate },
+    async (req) => getGifterBadge(req.user.sub, req.params.creatorId)
   );
 
   app.post(

@@ -1,0 +1,277 @@
+/* Anchored panel, matching the pattern in TopNav.module.css's
+   .dropdownWrap/.dropdown: a zero-size relatively-positioned wrapper
+   sitting where the trigger is in the DOM flow, with the panel itself
+   absolutely positioned off it. GurshaModal's trigger (the Gursha button
+   in ChatPanel) sits at the bottom of the chat column, so this opens
+   upward (bottom: 100%) rather than downward like TopNav's header
+   dropdowns. */
+.anchor {
+  position: relative;
+}
+
+.panel {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  right: 0;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--surface-container-high);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: var(--space-4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 60;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.title {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--on-background);
+  margin: 0;
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--on-surface-variant);
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.badgeBlock {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  border-radius: 8px;
+  background: var(--surface-container);
+}
+
+.badgeRow {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-background);
+  margin-bottom: 6px;
+}
+
+.badgeMeta {
+  color: var(--on-surface-variant);
+  font-weight: 500;
+}
+
+.progressTrack {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--surface-container-lowest);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 9999px;
+}
+
+.modeRow {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.modeButton,
+.modeButtonActive {
+  flex: 1;
+  padding: 8px 6px;
+  border-radius: 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+}
+
+.modeButtonActive {
+  border-color: var(--primary);
+  background: rgba(208, 188, 255, 0.1);
+  color: var(--on-background);
+}
+
+.modeButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--on-background);
+  margin-bottom: var(--space-3);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+
+.themeTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-container);
+}
+
+.themeTileSelected {
+  box-shadow: 0 0 16px rgba(208, 188, 255, 0.2);
+}
+
+.themeEmoji {
+  font-size: 22px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.giftName {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--on-background);
+  text-align: center;
+}
+
+.field {
+  margin-bottom: var(--space-3);
+}
+
+.fieldLabel {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 4px;
+}
+
+.tierRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tierButton,
+.tierButtonActive {
+  flex: 1;
+  padding: 6px 0;
+  border-radius: 6px;
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container);
+  color: var(--on-background);
+}
+
+.tierButtonActive {
+  border-color: var(--primary);
+  background: rgba(208, 188, 255, 0.15);
+}
+
+.input {
+  width: 100%;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  padding: 10px var(--space-2);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.total {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-background);
+  margin: 0 0 var(--space-2);
+}
+
+.sendButton {
+  width: 100%;
+  padding: 12px var(--space-3);
+  border-radius: 4px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(208, 188, 255, 0.35);
+}
+
+.sendButton:disabled {
+  opacity: 0.6;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--error);
+  font-size: 13px;
+  margin: var(--space-2) 0 0;
+}
+
+.success {
+  color: var(--secondary);
+  font-size: 13px;
+  margin: var(--space-2) 0 0;
+}
+
+.backToSubscribe {
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.backToSubscribe:hover {
+  color: var(--on-background);
+}

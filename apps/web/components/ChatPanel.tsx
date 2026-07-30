@@ -1,22 +1,37 @@
 "use client";
 
-import type { ChatMessage, GiftType, StreamActivity } from "@habeshalive/shared";
+import type { ChatMessage, GifterBadgeTier, GiftType, StreamActivity } from "@habeshalive/shared";
 import { Centrifuge } from "centrifuge";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
 import { formatViewerCount } from "@/lib/format";
 import { usernameColor } from "@/lib/userColor";
 import { EmojiPickerButton } from "./EmojiPickerButton";
-import { GiftModal } from "./GiftModal";
+import { GurshaModal } from "./GurshaModal";
 import { CloseIcon, GiftIcon, GroupIcon, MoreIcon, SendIcon } from "./icons";
 import styles from "./ChatPanel.module.css";
 import { PinnedMessageBar } from "./PinnedMessageBar";
 import { StreamActivityStrip } from "./StreamActivityStrip";
 
+const BADGE_EMOJI: Record<GifterBadgeTier, string> = {
+  none: "",
+  bronze: "🥉",
+  silver: "🥈",
+  gold: "🥇",
+  platinum: "💎",
+};
+
 type ChatEntry =
   | { id: string; kind: "system"; text: string }
-  | { id: string; kind: "message"; username: string; text: string };
+  | {
+      id: string;
+      kind: "message";
+      userId: string;
+      username: string;
+      text: string;
+      gifterBadgeTier: GifterBadgeTier;
+    };
 
 const WELCOME_MESSAGE: ChatEntry = {
   id: "sys-welcome",
@@ -37,6 +52,7 @@ async function fetchChatToken(): Promise<string> {
 
 export function ChatPanel({
   streamId,
+  creatorId,
   viewerCount,
   giftTypes,
   isAuthed,
@@ -44,6 +60,7 @@ export function ChatPanel({
   activity,
 }: {
   streamId: string;
+  creatorId: string;
   viewerCount: number;
   giftTypes: GiftType[];
   isAuthed: boolean;
@@ -53,9 +70,22 @@ export function ChatPanel({
   const router = useRouter();
   const [messages, setMessages] = useState<ChatEntry[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
-  const [giftModalOpen, setGiftModalOpen] = useState(false);
+  const [gurshaModalOpen, setGurshaModalOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Real chatters to target with "Gursha a specific viewer" — drawn from
+  // who's actually spoken in this session rather than a separate
+  // "who's connected" API call the platform doesn't have.
+  const recentChatters = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const entry of messages) {
+      if (entry.kind === "message" && entry.username !== currentUsername) {
+        seen.set(entry.userId, entry.username);
+      }
+    }
+    return Array.from(seen, ([userId, username]) => ({ userId, username }));
+  }, [messages, currentUsername]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +112,14 @@ export function ChatPanel({
             if (missing.length === 0) return prev;
             return [
               ...prev,
-              ...missing.map((m) => ({ id: m.id, kind: "message" as const, username: m.displayName, text: m.body })),
+              ...missing.map((m) => ({
+                id: m.id,
+                kind: "message" as const,
+                userId: m.userId,
+                username: m.displayName,
+                text: m.body,
+                gifterBadgeTier: m.gifterBadgeTier,
+              })),
             ];
           });
         })
@@ -104,7 +141,17 @@ export function ChatPanel({
         // WS echo often wins the race) — dedup by id regardless of which
         // side runs first.
         if (prev.some((entry) => entry.id === m.id)) return prev;
-        return [...prev, { id: m.id, kind: "message", username: m.displayName, text: m.body }];
+        return [
+          ...prev,
+          {
+            id: m.id,
+            kind: "message",
+            userId: m.userId,
+            username: m.displayName,
+            text: m.body,
+            gifterBadgeTier: m.gifterBadgeTier,
+          },
+        ];
       });
     });
     // Fires on the first successful subscribe AND again on every
@@ -160,7 +207,17 @@ export function ChatPanel({
       const sent: ChatMessage = await res.json();
       setMessages((prev) => {
         if (prev.some((entry) => entry.id === sent.id)) return prev;
-        return [...prev, { id: sent.id, kind: "message", username: sent.displayName, text: sent.body }];
+        return [
+          ...prev,
+          {
+            id: sent.id,
+            kind: "message",
+            userId: sent.userId,
+            username: sent.displayName,
+            text: sent.body,
+            gifterBadgeTier: sent.gifterBadgeTier,
+          },
+        ];
       });
     } catch {
       setMessages((prev) => [
@@ -172,12 +229,12 @@ export function ChatPanel({
     }
   }
 
-  function handleGiftClick() {
+  function handleGurshaClick() {
     if (!isAuthed) {
       router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
-    setGiftModalOpen(true);
+    setGurshaModalOpen(true);
   }
 
   return (
@@ -213,6 +270,9 @@ export function ChatPanel({
             </div>
           ) : (
             <p key={entry.id} className={styles.message}>
+              {entry.gifterBadgeTier !== "none" && (
+                <span title={`${entry.gifterBadgeTier} gifter`}>{BADGE_EMOJI[entry.gifterBadgeTier]} </span>
+              )}
               <span className={styles.username} style={{ color: usernameColor(entry.username) }}>
                 {entry.username}
               </span>{" "}
@@ -224,7 +284,7 @@ export function ChatPanel({
       </div>
 
       <div className={styles.counters}>
-        <span className={styles.counter}>🎁 {activity.giftsCount} gifts this stream</span>
+        <span className={styles.counter}>🎁 {activity.giftsCount} Gursha this stream</span>
         <span className={styles.counter}>⭐ {activity.activeSubscribers} subscribers</span>
       </div>
 
@@ -242,8 +302,8 @@ export function ChatPanel({
           <button
             type="button"
             className={`${styles.iconButton} ${styles.giftButton}`}
-            aria-label="Send a gift"
-            onClick={handleGiftClick}
+            aria-label="Send Gursha"
+            onClick={handleGurshaClick}
           >
             <GiftIcon />
           </button>
@@ -251,15 +311,17 @@ export function ChatPanel({
             <SendIcon />
           </button>
         </form>
-        {!isAuthed && <p className={styles.loginHint}>Log in to chat and send gifts.</p>}
+        {!isAuthed && <p className={styles.loginHint}>Log in to chat and send Gursha.</p>}
       </div>
 
-      {giftModalOpen && (
-        <GiftModal
+      {gurshaModalOpen && (
+        <GurshaModal
           streamId={streamId}
+          creatorId={creatorId}
           giftTypes={giftTypes}
           isAuthed={isAuthed}
-          onClose={() => setGiftModalOpen(false)}
+          recentChatters={recentChatters}
+          onClose={() => setGurshaModalOpen(false)}
         />
       )}
     </div>

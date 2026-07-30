@@ -89,6 +89,20 @@ export function TierActionDropdown({
               {message.text}
             </p>
           )}
+          {mode === "subscribe" && (
+            <button
+              type="button"
+              className={styles.backToGursha}
+              onClick={() => {
+                dropdown.setOpen(false);
+                const target = document.querySelector<HTMLButtonElement>('[aria-label="Send Gursha"]');
+                target?.scrollIntoView({ behavior: "smooth", block: "center" });
+                target?.click();
+              }}
+            >
+              Send Gursha instead →
+            </button>
+          )}
         </div>
       )}
     </div>

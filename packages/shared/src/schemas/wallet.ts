@@ -8,30 +8,66 @@ export const giftTypeSchema = z.object({
 });
 export type GiftType = z.infer<typeof giftTypeSchema>;
 
+// quantity caps at 100, not 999 — the "custom quantity, maximum cap" the
+// Gursha modal asks for. At the 2500 santim (25 ETB) base unit price (see
+// db/migrations/0019_gursha.sql), 100 is 2500 ETB, already a real amount
+// of money; letting it go to 999 (24,975 ETB) the way the old generic gift
+// system did isn't a real safeguard.
 export const sendGiftSchema = z.object({
   streamId: z.string().uuid(),
   giftTypeId: z.string().uuid(),
-  quantity: z.number().int().positive().max(999),
+  quantity: z.number().int().positive().max(100),
   message: z.string().max(200).optional(),
+  // Dedication, not a money split — the creator (from streamId) is always
+  // who's actually paid, same 3-leg ledger as before. recipientId is
+  // purely who the gift is publicly attributed to ("gifted in honor of
+  // @username") when set; omitted means "to the Community."
+  recipientId: z.string().uuid().optional(),
+  isAnonymous: z.boolean().optional(),
 });
 export type SendGiftInput = z.infer<typeof sendGiftSchema>;
+
+export const gifterBadgeTierSchema = z.enum(["none", "bronze", "silver", "gold", "platinum"]);
+export type GifterBadgeTier = z.infer<typeof gifterBadgeTierSchema>;
+
+export const gifterBadgeSchema = z.object({
+  creatorId: z.string().uuid(),
+  totalGurshaSantim: z.number().int(),
+  tier: gifterBadgeTierSchema,
+  // Client-side progress-bar math needs to know both ends of the current
+  // band without hardcoding the threshold table twice.
+  nextTierThresholdSantim: z.number().int().nullable(),
+});
+export type GifterBadge = z.infer<typeof gifterBadgeSchema>;
+
+export const sendGiftResponseSchema = z.object({
+  id: z.string().uuid(),
+  badge: gifterBadgeSchema,
+});
+export type SendGiftResponse = z.infer<typeof sendGiftResponseSchema>;
 
 // Published to Centrifugo channel `gift-alerts:<streamId>` (see
 // apps/api/src/wallet/service.ts) so a live stream's overlay/alert widget
 // can react to a gift in realtime, the same way chatMessageSchema events
-// flow over `stream-chat:<streamId>`.
+// flow over `stream-chat:<streamId>`. senderUsername/senderDisplayName are
+// null when isAnonymous is true — the real sender is still recorded in
+// gifts_sent (for moderation/badges/admin), anonymity only hides identity
+// from what other viewers see over this channel and in chat.
 export const giftAlertSchema = z.object({
   id: z.string().uuid(),
   streamId: z.string().uuid(),
   senderId: z.string().uuid(),
-  senderUsername: z.string(),
-  senderDisplayName: z.string(),
+  senderUsername: z.string().nullable(),
+  senderDisplayName: z.string().nullable(),
+  isAnonymous: z.boolean(),
+  recipientUsername: z.string().nullable(),
   giftTypeId: z.string().uuid(),
   giftName: z.string(),
   animationKey: z.string(),
   quantity: z.number().int().positive(),
   totalSantim: z.number().int().positive(),
   message: z.string().max(200).nullable(),
+  badgeTier: gifterBadgeTierSchema,
   createdAt: z.string(),
 });
 export type GiftAlert = z.infer<typeof giftAlertSchema>;

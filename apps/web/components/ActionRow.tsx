@@ -30,7 +30,14 @@ export function ActionRow({
         mode="gift-sub-stub"
         secondary
       />
-      <TierActionDropdown label="Subscribe" tiers={tiers} creatorId={creatorId} isAuthed={isAuthed} mode="subscribe" />
+      {/* id is a real cross-navigation target, not decorative — GurshaModal's
+          "Subscribe instead" link scrolls to and clicks this element's
+          button, since the two modals are anchored in separate, unrelated
+          parts of the component tree (chat column vs. this action row) with
+          no shared modal-navigation state to hook into instead. */}
+      <div id="subscribe-action">
+        <TierActionDropdown label="Subscribe" tiers={tiers} creatorId={creatorId} isAuthed={isAuthed} mode="subscribe" />
+      </div>
       <ShareButton />
     </div>
   );

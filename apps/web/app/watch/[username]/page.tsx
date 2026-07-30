@@ -75,6 +75,7 @@ export default async function WatchPage({ params }: { params: Promise<{ username
         <div className={styles.chatColumn}>
           <ChatPanel
             streamId={stream.id}
+            creatorId={stream.creator.id}
             viewerCount={stream.viewerCount}
             giftTypes={giftTypes}
             isAuthed={!!user}

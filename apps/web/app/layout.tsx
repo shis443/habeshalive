@@ -27,7 +27,7 @@ const geist = Geist({
 
 export const metadata: Metadata = {
   title: "Birq",
-  description: "Live streaming and birr gifting for Ethiopian creators",
+  description: "Live streaming and Gursha gifting for Ethiopian creators",
 };
 
 export const viewport: Viewport = {
