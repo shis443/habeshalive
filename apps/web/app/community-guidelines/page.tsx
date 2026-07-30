@@ -20,10 +20,10 @@ export default function CommunityGuidelinesPage() {
       </ul>
       <h2>Chat and gift messages are automatically screened</h2>
       <p>
-        Stream titles and gift messages are checked against a list of flagged terms when they&apos;re
-        posted. A match doesn&apos;t auto-delete anything — it puts the content into a moderation
-        queue for a real review, so a legitimate message with an unlucky word match isn&apos;t
-        silently removed without anyone looking at it.
+        Stream titles, chat messages, and gift messages are all checked against a list of flagged
+        terms (in English and Amharic) when they&apos;re posted. A match doesn&apos;t auto-delete
+        anything — it puts the content into a moderation queue for a real review, so a legitimate
+        message with an unlucky word match isn&apos;t silently removed without anyone looking at it.
       </p>
       <h2>Reporting</h2>
       <p>

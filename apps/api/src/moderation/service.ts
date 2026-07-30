@@ -1,6 +1,7 @@
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
+import { imageModerationClient } from "./image-moderation-client.js";
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -17,21 +18,28 @@ async function getBlocklistTerms(): Promise<string[]> {
   return rows.map((row) => row.term);
 }
 
-// Single-word terms match on word boundaries (so "assassin" doesn't trip
-// on "ass"); multi-word phrases ("kill yourself") match as a plain
-// substring since \b boundaries around a phrase with internal spaces work
-// the same way in practice — kept as one code path either way.
+// Boundary-matched (so "assassin" doesn't trip on "ass") using Unicode
+// letter/number lookarounds rather than \b: JS's \b is defined in terms of
+// \w, which is ASCII-only ([A-Za-z0-9_]) regardless of the "u" flag — it
+// does NOT treat Amharic (or any non-Latin script) characters as "word"
+// characters at all. In practice that means \b never finds a boundary
+// inside or around Amharic text, so \bAMHARIC_TERM\b silently matches
+// nothing, ever — confirmed empirically before this fix (zero matches
+// even for a standalone term with no surrounding text). The lookaround
+// form below checks against \p{L}/\p{N} (any script's letters/numbers),
+// which correctly finds boundaries for Amharic the same way \b already
+// did for English, without changing English matching behavior at all.
 export async function scanText(text: string): Promise<string[]> {
   const terms = await getBlocklistTerms();
   const matched: string[] = [];
   for (const term of terms) {
-    const pattern = new RegExp(`\\b${escapeRegExp(term)}\\b`, "iu");
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}(?![\\p{L}\\p{N}])`, "iu");
     if (pattern.test(text)) matched.push(term);
   }
   return matched;
 }
 
-export type ModerationContentType = "stream_title" | "gift_message";
+export type ModerationContentType = "stream_title" | "gift_message" | "chat_message" | "stream_thumbnail";
 
 // Flags content for human review — never blocks or deletes it. The
 // content itself already went through by the time this runs (called
@@ -50,6 +58,40 @@ export async function flagIfMatched(
     `INSERT INTO moderation_flags (content_type, content_id, author_id, text_snapshot, matched_terms)
      VALUES ($1, $2, $3, $4, $5)`,
     [contentType, contentId, authorId, text, matches]
+  );
+}
+
+// Same after-the-fact "flag, never block" posture as flagIfMatched(), for
+// images instead of text. dataUri is the raw data:<mime>;base64,<payload>
+// string produced client-side (GoLivePanel.tsx's canvas.toDataURL) — no
+// object storage is wired up for thumbnails yet, so this is what's
+// actually stored in streams.thumbnail_url today. Silently no-ops on a
+// malformed data URI or a moderation-API failure rather than blocking
+// the stream from going live over a moderation-service hiccup; the
+// original text-based flagIfMatched() has the same fail-open bias.
+export async function flagIfImageMatched(
+  contentType: "stream_thumbnail",
+  contentId: string,
+  authorId: string,
+  dataUri: string
+): Promise<void> {
+  const base64 = dataUri.split(",")[1];
+  if (!base64) return;
+
+  let result;
+  try {
+    result = await imageModerationClient.moderate(Buffer.from(base64, "base64"));
+  } catch (err) {
+    console.error(`[moderation] image moderation call failed for ${contentType} ${contentId}:`, err);
+    return;
+  }
+  if (result.labels.length === 0) return;
+
+  const matched = result.labels.map((l) => `${l.name} (${l.confidencePercent.toFixed(0)}%)`);
+  await pool.query(
+    `INSERT INTO moderation_flags (content_type, content_id, author_id, text_snapshot, matched_terms)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [contentType, contentId, authorId, dataUri, matched]
   );
 }
 

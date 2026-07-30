@@ -2,6 +2,7 @@ import type { ChatMessage } from "@habeshalive/shared";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
+import { flagIfMatched } from "../moderation/service.js";
 
 interface ChatMessageRow {
   id: string;
@@ -76,6 +77,11 @@ export async function sendChatMessage(userId: string, streamId: string, body: st
   const row = rows[0];
   if (!row) throw new AppError(500, "Failed to store message");
   const message = toChatMessage(row);
+  // Same after-the-fact flag-for-review as stream titles and gift
+  // messages (never blocks/deletes) — chat is the highest-volume text
+  // surface on the platform and, unlike those two, was never scanned at
+  // all until now.
+  await flagIfMatched("chat_message", message.id, userId, body);
   await publishToCentrifugo(streamId, message);
   return message;
 }

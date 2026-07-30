@@ -57,6 +57,20 @@ const envSchema = z.object({
   // need "Public Access" enabled (or a custom domain) to have one; there
   // isn't one configured yet, hence the empty default.
   VOD_S3_PUBLIC_URL: z.string().default(""),
+  // Image moderation (AWS Rekognition's DetectModerationLabels) — same
+  // empty-by-default stub switch as everywhere else in this file. Chosen
+  // over Google Cloud Vision SafeSearch/Hive because it's the option this
+  // codebase already has SDK-family precedent for (@aws-sdk/client-s3 is
+  // already a dependency for VOD storage above); functionally any of the
+  // three would work. Flags likely nudity/violence/graphic content for
+  // human review — it is explicitly NOT a CSAM detector (no general
+  // moderation API is; that requires hash-matching against a known-CSAM
+  // database via a program like NCMEC/PhotoDNA or Thorn Safer, a separate
+  // vendor relationship this can't set up in code). See moderation/
+  // image-moderation-client.ts's file comment for the full reasoning.
+  AWS_REKOGNITION_ACCESS_KEY_ID: z.string().default(""),
+  AWS_REKOGNITION_SECRET_ACCESS_KEY: z.string().default(""),
+  AWS_REKOGNITION_REGION: z.string().default("us-east-1"),
 });
 
 export const env = envSchema.parse(process.env);

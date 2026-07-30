@@ -38,10 +38,21 @@ export function ModerationQueue({ items }: { items: ModerationFlag[] }) {
           <div key={item.id} className={styles.row}>
             <div className={styles.rowMain}>
               <span className={styles.rowTitle}>
-                {item.contentType === "stream_title" ? "Stream title" : "Gift message"} by @
-                {item.authorUsername}
+                {item.contentType === "stream_title"
+                  ? "Stream title"
+                  : item.contentType === "chat_message"
+                    ? "Chat message"
+                    : item.contentType === "stream_thumbnail"
+                      ? "Stream thumbnail"
+                      : "Gift message"}{" "}
+                by @{item.authorUsername}
               </span>
-              <span className={styles.rowDetail}>&ldquo;{item.textSnapshot}&rdquo;</span>
+              {item.contentType === "stream_thumbnail" ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a data: URI, next/image can't optimize it anyway
+                <img src={item.textSnapshot} alt="Flagged thumbnail" className={styles.flaggedThumbnail} />
+              ) : (
+                <span className={styles.rowDetail}>&ldquo;{item.textSnapshot}&rdquo;</span>
+              )}
               <div className={styles.terms}>
                 {item.matchedTerms.map((term) => (
                   <span key={term} className={styles.term}>

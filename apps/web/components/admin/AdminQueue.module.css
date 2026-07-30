@@ -85,6 +85,13 @@
   color: var(--on-surface-variant);
 }
 
+.flaggedThumbnail {
+  max-width: 240px;
+  max-height: 135px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
 .rowDetail {
   font-family: var(--font-body);
   font-size: 13px;

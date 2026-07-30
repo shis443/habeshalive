@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-export const moderationContentTypeSchema = z.enum(["stream_title", "gift_message"]);
+export const moderationContentTypeSchema = z.enum([
+  "stream_title",
+  "gift_message",
+  "chat_message",
+  "stream_thumbnail",
+]);
 
 export const moderationFlagSchema = z.object({
   id: z.string().uuid(),

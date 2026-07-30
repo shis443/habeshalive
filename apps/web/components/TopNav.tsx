@@ -34,8 +34,12 @@ const MORE_GENERAL = [
 const MORE_LEGAL = [
   { label: "Community Guidelines", href: "/community-guidelines" },
   { label: "Privacy Notice", href: "/privacy" },
+  { label: "Cookie Notice", href: "/cookie-preferences" },
   { label: "Terms", href: "/terms" },
+  { label: "Accessibility Statement", href: "/accessibility" },
+  { label: "Security", href: "/security" },
   { label: "Safety Center", href: "/safety-center" },
+  { label: "All Legal Docs", href: "/legal" },
 ];
 
 // No notifications backend exists yet — 0 is the honest count, not a fake

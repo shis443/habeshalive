@@ -15,7 +15,7 @@ import { pool } from "../common/db.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { AppError } from "../common/errors.js";
 import { env } from "../common/env.js";
-import { flagIfMatched } from "../moderation/service.js";
+import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
 import { videoProvider } from "./video-provider.js";
 
 export function thumbnailPlaceholderSvg(category: string): string {
@@ -330,6 +330,12 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   const streamId = rows[0]!.id;
 
   await flagIfMatched("stream_title", streamId, userId, input.title);
+  // Only real user uploads need moderating — thumbnailPlaceholderUrl()'s
+  // auto-generated SVGs above are server-rendered from a fixed category
+  // list, not user content.
+  if (input.thumbnailUrl) {
+    await flagIfImageMatched("stream_thumbnail", streamId, userId, input.thumbnailUrl);
+  }
   await logStreamEvent(streamId, "started");
 
   return getStreamById(streamId);

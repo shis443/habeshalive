@@ -40,6 +40,17 @@ export function StreamMeta({ stream }: { stream: StreamDetail }) {
         {stream.category && <span className={styles.tag}>{stream.category}</span>}
         {stream.language && <span className={styles.tag}>{stream.language}</span>}
       </div>
+      {stream.isSensitive && (
+        // Only opted-in viewers (or the creator) ever reach this page for a
+        // sensitive stream — getLiveStreamByUsername 404s everyone else
+        // before this component renders at all (streams/service.ts). This
+        // banner is the missing "you're seeing this because you opted in"
+        // context, not an access gate — the gate already happened.
+        <p className={styles.sensitiveNotice}>
+          This stream is labeled sensitive/mature content. You&apos;re seeing it because of your
+          Labeled Content setting.
+        </p>
+      )}
     </div>
   );
 }
