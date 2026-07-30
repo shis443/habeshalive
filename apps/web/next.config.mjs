@@ -80,7 +80,21 @@ const nextConfig = {
               // through a blob: URL — default-src alone doesn't cover
               // blob:, so without this the <video> element's own playback
               // (not just the segment fetches above) is blocked too.
-              `media-src 'self' blob:${vodOrigin ? ` ${vodOrigin}` : ""}`,
+              //
+              // srsOrigin also has to be listed here, separately from
+              // connect-src above: Safari (both desktop and iOS) plays HLS
+              // *natively* rather than via hls.js — VideoPlayer.tsx sets
+              // video.src directly to the real manifest URL, which is a
+              // media-src load, not a fetch/XHR one. Without this, that
+              // direct load is CSP-blocked in Safari specifically while
+              // every hls.js-based browser (Chrome, Firefox, Brave — all
+              // of which go through connect-src instead) plays fine,
+              // exactly matching a real report of "only works in one
+              // Chromium browser." Confirmed live: WebKit's console showed
+              // "Refused to load .../*.m3u8 because it does not appear in
+              // the media-src directive," while the same URL loaded
+              // successfully via fetch() in Chromium and Firefox.
+              `media-src 'self' blob: ${srsOrigin}${vodOrigin ? ` ${vodOrigin}` : ""}`,
               "font-src 'self' data:",
               "frame-ancestors 'none'",
               // object-src/base-uri/form-action don't fall back to
