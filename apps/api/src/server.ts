@@ -1,6 +1,7 @@
 import { buildApp } from "./app.js";
 import { settleAdRevenue } from "./ads/service.js";
 import { env } from "./common/env.js";
+import { sendScheduledGiftCards } from "./gift-cards/service.js";
 import { reapStaleStreams } from "./streams/service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
@@ -22,6 +23,10 @@ const VOD_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // on every single impression). More frequent than the other jobs since
 // this is real creator earnings a payout request could be waiting on.
 const AD_SETTLEMENT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+// Scheduled gift card deliveries (birthdays, holidays) — checked often
+// enough that "deliver on this date" reads as roughly accurate to a
+// purchaser without needing exact-minute precision.
+const GIFT_CARD_DELIVERY_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
 // Wrapped so a rejection inside reapStaleStreams (e.g. a DB blip) never
 // becomes an unhandled rejection that could crash the process — this runs
@@ -50,6 +55,12 @@ function runAdSettlement(): void {
   });
 }
 
+function runGiftCardDelivery(): void {
+  sendScheduledGiftCards().catch((err) => {
+    app.log.error(err, "sendScheduledGiftCards failed");
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -61,6 +72,8 @@ app
     setInterval(runVodCleanup, VOD_CLEANUP_INTERVAL_MS);
     runAdSettlement();
     setInterval(runAdSettlement, AD_SETTLEMENT_INTERVAL_MS);
+    runGiftCardDelivery();
+    setInterval(runGiftCardDelivery, GIFT_CARD_DELIVERY_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);

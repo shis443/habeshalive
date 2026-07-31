@@ -212,6 +212,7 @@ export const platformConfigSchema = z.object({
   approvedCreatorCap: z.number().int(),
   adRevenueShareBps: z.number().int(),
   adFrequencyCapPerHour: z.number().int(),
+  giftCardExpiryMonths: z.number().int(),
   updatedAt: z.string(),
   updatedByUsername: z.string().nullable(),
 });
@@ -227,6 +228,7 @@ export const updatePlatformConfigSchema = z.object({
   approvedCreatorCap: z.number().int().positive(),
   adRevenueShareBps: z.number().int().min(0).max(10000),
   adFrequencyCapPerHour: z.number().int().positive(),
+  giftCardExpiryMonths: z.number().int().positive(),
 });
 export type UpdatePlatformConfigInput = z.infer<typeof updatePlatformConfigSchema>;
 

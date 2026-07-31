@@ -12,6 +12,7 @@ interface ConfigRow {
   approved_creator_cap: number;
   ad_revenue_share_bps: number;
   ad_frequency_cap_per_hour: number;
+  gift_card_expiry_months: number;
   updated_at: string;
   updated_by_username: string | null;
 }
@@ -20,7 +21,7 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
   const { rows } = await pool.query<ConfigRow>(
     `SELECT pc.boost_price_santim, pc.boost_duration_ms, pc.default_revenue_share_bps,
             pc.payout_manual_review_threshold_santim, pc.vod_retention_days_default, pc.vod_retention_days_anchor,
-            pc.approved_creator_cap, pc.ad_revenue_share_bps, pc.ad_frequency_cap_per_hour,
+            pc.approved_creator_cap, pc.ad_revenue_share_bps, pc.ad_frequency_cap_per_hour, pc.gift_card_expiry_months,
             pc.updated_at, u.username AS updated_by_username
      FROM platform_config pc
      LEFT JOIN users u ON u.id = pc.updated_by
@@ -37,6 +38,7 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
     approvedCreatorCap: row.approved_creator_cap,
     adRevenueShareBps: row.ad_revenue_share_bps,
     adFrequencyCapPerHour: row.ad_frequency_cap_per_hour,
+    giftCardExpiryMonths: row.gift_card_expiry_months,
     updatedAt: row.updated_at,
     updatedByUsername: row.updated_by_username,
   };
@@ -85,6 +87,14 @@ export async function getAdConfig(): Promise<{ revenueShareBps: number; frequenc
   return { revenueShareBps: rows[0]!.ad_revenue_share_bps, frequencyCapPerHour: rows[0]!.ad_frequency_cap_per_hour };
 }
 
+// Read fresh by gift-cards/service.ts on every purchase.
+export async function getGiftCardExpiryMonths(): Promise<number> {
+  const { rows } = await pool.query<{ gift_card_expiry_months: number }>(
+    `SELECT gift_card_expiry_months FROM platform_config WHERE id = TRUE`
+  );
+  return rows[0]!.gift_card_expiry_months;
+}
+
 export async function updatePlatformConfig(adminId: string, input: UpdatePlatformConfigInput): Promise<PlatformConfig> {
   await pool.query(
     `UPDATE platform_config SET
@@ -97,7 +107,8 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
        approved_creator_cap = $7,
        ad_revenue_share_bps = $8,
        ad_frequency_cap_per_hour = $9,
-       updated_at = now(), updated_by = $10
+       gift_card_expiry_months = $10,
+       updated_at = now(), updated_by = $11
      WHERE id = TRUE`,
     [
       input.boostPriceSantim,
@@ -109,6 +120,7 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
       input.approvedCreatorCap,
       input.adRevenueShareBps,
       input.adFrequencyCapPerHour,
+      input.giftCardExpiryMonths,
       adminId,
     ]
   );

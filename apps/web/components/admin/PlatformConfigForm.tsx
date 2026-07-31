@@ -20,6 +20,7 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   const [approvedCreatorCap, setApprovedCreatorCap] = useState(config ? String(config.approvedCreatorCap) : "");
   const [adRevenueSharePct, setAdRevenueSharePct] = useState(config ? String(config.adRevenueShareBps / 100) : "");
   const [adFrequencyCap, setAdFrequencyCap] = useState(config ? String(config.adFrequencyCapPerHour) : "");
+  const [giftCardExpiryMonths, setGiftCardExpiryMonths] = useState(config ? String(config.giftCardExpiryMonths) : "");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -40,6 +41,7 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           approvedCreatorCap: Math.round(parseFloat(approvedCreatorCap || "0")),
           adRevenueShareBps: Math.round(parseFloat(adRevenueSharePct || "0") * 100),
           adFrequencyCapPerHour: Math.round(parseFloat(adFrequencyCap || "0")),
+          giftCardExpiryMonths: Math.round(parseFloat(giftCardExpiryMonths || "0")),
         }),
       });
       const data = await res.json();
@@ -149,6 +151,15 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
         className={filterStyles.input}
         value={adFrequencyCap}
         onChange={(e) => setAdFrequencyCap(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>Gift card expiry (months)</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={giftCardExpiryMonths}
+        onChange={(e) => setGiftCardExpiryMonths(e.target.value)}
       />
 
       <button type="button" className={styles.approveButton} disabled={submitting} onClick={submit}>

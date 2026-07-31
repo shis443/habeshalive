@@ -30,6 +30,7 @@ const MORE_GENERAL = [
   { label: "Advertisers", href: "/advertisers" },
   { label: "Blog", href: "/blog" },
   { label: "Careers", href: "/careers" },
+  { label: "Gift Cards", href: "/gift-cards" },
   { label: "Anchor Creator Program", href: "/anchor-creator-program" },
 ];
 const MORE_LEGAL = [

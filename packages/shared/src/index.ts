@@ -9,6 +9,7 @@ export * from "./schemas/avatars.js";
 export * from "./schemas/chat.js";
 export * from "./schemas/creator-applications.js";
 export * from "./schemas/follows.js";
+export * from "./schemas/gift-cards.js";
 export * from "./schemas/moderation.js";
 export * from "./schemas/reports.js";
 export * from "./schemas/search.js";

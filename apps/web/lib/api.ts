@@ -22,6 +22,8 @@ import {
   creatorStatsSchema,
   earningsThisMonthSchema,
   followStatusSchema,
+  giftCardAdminItemSchema,
+  giftCardPreviewSchema,
   giftTypeSchema,
   ledgerReconciliationSchema,
   ledgerTransactionLookupSchema,
@@ -29,6 +31,7 @@ import {
   moderationActionRecordSchema,
   moderationFlagSchema,
   myCreatorApplicationSchema,
+  myGiftCardSchema,
   mySubscriptionSchema,
   payoutHistoryItemSchema,
   payoutQueueItemSchema,
@@ -71,6 +74,8 @@ import {
   type CreatorStats,
   type EarningsThisMonth,
   type FollowStatus,
+  type GiftCardAdminItem,
+  type GiftCardPreview,
   type GiftType,
   type LedgerReconciliation,
   type LedgerTransactionLookup,
@@ -78,6 +83,7 @@ import {
   type ModerationActionRecord,
   type ModerationFlag,
   type MyCreatorApplication,
+  type MyGiftCard,
   type MySubscription,
   type PayoutHistoryItem,
   type PayoutQueueItem,
@@ -641,4 +647,38 @@ export async function getAdRevenueByCreator(): Promise<AdRevenueByCreator[]> {
     return [];
   }
   return adRevenueByCreatorSchema.array().parse(await res.json());
+}
+
+// --- Gift cards (B.3) ---
+
+export async function getMyGiftCards(): Promise<MyGiftCard[]> {
+  const res = await fetchAuthed("/gift-cards/mine");
+  if (!res.ok) {
+    console.error(`Failed to load gift cards (${res.status})`);
+    return [];
+  }
+  return myGiftCardSchema.array().parse(await res.json());
+}
+
+export async function getGiftCardPreview(code: string): Promise<GiftCardPreview | null> {
+  const res = await fetch(`${API_INTERNAL_URL}/gift-cards/preview?code=${encodeURIComponent(code)}`);
+  if (!res.ok) return null;
+  const body = await res.json();
+  return body ? giftCardPreviewSchema.parse(body) : null;
+}
+
+export async function getGiftCardsAdmin(status?: string): Promise<GiftCardAdminItem[]> {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetchAuthed(`/admin/gift-cards${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load gift cards (${res.status})`);
+    return [];
+  }
+  return giftCardAdminItemSchema.array().parse(await res.json());
+}
+
+export async function getSuspiciousGiftCardPurchasers(): Promise<{ username: string; count: number }[]> {
+  const res = await fetchAuthed("/admin/gift-cards/suspicious");
+  if (!res.ok) return [];
+  return res.json();
 }

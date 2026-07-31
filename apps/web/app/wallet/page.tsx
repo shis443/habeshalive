@@ -1,21 +1,24 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AddFundsSection } from "@/components/AddFundsSection";
 import { BalanceCard } from "@/components/BalanceCard";
 import { BottomNav } from "@/components/BottomNav";
+import { MyGiftCardsList } from "@/components/MyGiftCardsList";
 import { SubscriptionsList } from "@/components/SubscriptionsList";
 import { TopNav } from "@/components/TopNav";
 import { TransactionsList } from "@/components/TransactionsList";
-import { getCurrentUser, getMySubscriptions, getTransactions, getWalletBalance } from "@/lib/api";
+import { getCurrentUser, getMyGiftCards, getMySubscriptions, getTransactions, getWalletBalance } from "@/lib/api";
 import styles from "./page.module.css";
 
 export default async function WalletPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/wallet");
 
-  const [balance, transactions, subscriptions] = await Promise.all([
+  const [balance, transactions, subscriptions, giftCards] = await Promise.all([
     getWalletBalance(),
     getTransactions(),
     getMySubscriptions(),
+    getMyGiftCards(),
   ]);
 
   return (
@@ -28,6 +31,10 @@ export default async function WalletPage() {
           weeklyDeltaSantim={balance?.weeklyDeltaSantim ?? 0}
         />
         <AddFundsSection />
+        <p className={styles.subtext}>
+          <Link href="/gift-cards">Buy a gift card</Link> · <Link href="/gift-cards/redeem">Redeem a gift card</Link>
+        </p>
+        <MyGiftCardsList giftCards={giftCards} />
         <SubscriptionsList subscriptions={subscriptions ?? []} />
         <TransactionsList transactions={transactions ?? []} />
       </main>

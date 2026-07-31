@@ -26,6 +26,11 @@ import {
   updateAdCampaignStatus,
   updateAdLeadStatus,
 } from "../ads/service.js";
+import {
+  cancelGiftCard,
+  listGiftCardsAdmin,
+  listSuspiciousGiftCardPurchasers,
+} from "../gift-cards/service.js";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
 import { listAnchorCandidates, listAnchorCreators } from "./anchor-service.js";
@@ -253,4 +258,19 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/ad-revenue", { preHandler: app.requireAdmin }, async () => getAdRevenueByCreator());
+
+  // --- Gift cards (B.3) ---
+
+  app.get<{ Querystring: { status?: string } }>(
+    "/gift-cards",
+    { preHandler: app.requireAdmin },
+    async (req) => listGiftCardsAdmin(req.query.status)
+  );
+
+  app.get("/gift-cards/suspicious", { preHandler: app.requireAdmin }, async () => listSuspiciousGiftCardPurchasers());
+
+  app.post<{ Params: { id: string } }>("/gift-cards/:id/cancel", { preHandler: app.requireAdmin }, async (req) => {
+    await cancelGiftCard(req.user.sub, req.params.id);
+    return { ok: true };
+  });
 };

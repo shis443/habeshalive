@@ -85,6 +85,17 @@
   color: var(--on-surface-variant);
 }
 
+.flaggedBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3);
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
+  background: color-mix(in srgb, var(--error) 8%, var(--surface-container-lowest));
+  margin-bottom: var(--space-3);
+}
+
 .flaggedThumbnail {
   max-width: 240px;
   max-height: 135px;
