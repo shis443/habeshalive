@@ -1,4 +1,5 @@
 import { buildApp } from "./app.js";
+import { settleAdRevenue } from "./ads/service.js";
 import { env } from "./common/env.js";
 import { reapStaleStreams } from "./streams/service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
@@ -16,6 +17,11 @@ const SUBSCRIPTION_RENEWAL_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // Same "daily in spirit" reasoning as subscription renewal above — expired
 // VODs sitting an extra few hours costs nothing.
 const VOD_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// Ad revenue settlement (see ads/service.ts's settleAdRevenue — batches
+// impressions into one ledger transaction per creator instead of writing
+// on every single impression). More frequent than the other jobs since
+// this is real creator earnings a payout request could be waiting on.
+const AD_SETTLEMENT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
 // Wrapped so a rejection inside reapStaleStreams (e.g. a DB blip) never
 // becomes an unhandled rejection that could crash the process — this runs
@@ -38,6 +44,12 @@ function runVodCleanup(): void {
   });
 }
 
+function runAdSettlement(): void {
+  settleAdRevenue().catch((err) => {
+    app.log.error(err, "settleAdRevenue failed");
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -47,6 +59,8 @@ app
     setInterval(runSubscriptionRenewal, SUBSCRIPTION_RENEWAL_INTERVAL_MS);
     runVodCleanup();
     setInterval(runVodCleanup, VOD_CLEANUP_INTERVAL_MS);
+    runAdSettlement();
+    setInterval(runAdSettlement, AD_SETTLEMENT_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);

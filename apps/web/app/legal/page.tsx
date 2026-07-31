@@ -14,6 +14,7 @@ const LEGAL_DOCS = [
     href: "/cookie-preferences",
     description: "What cookies Birq sets and your choices around them.",
   },
+  { label: "Ad Choices", href: "/ad-choices", description: "What ad targeting Birq uses and your choices." },
   {
     label: "Accessibility Statement",
     href: "/accessibility",

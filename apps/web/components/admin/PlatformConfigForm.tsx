@@ -18,6 +18,8 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   const [vodDefaultDays, setVodDefaultDays] = useState(config ? String(config.vodRetentionDaysDefault) : "");
   const [vodAnchorDays, setVodAnchorDays] = useState(config ? String(config.vodRetentionDaysAnchor) : "");
   const [approvedCreatorCap, setApprovedCreatorCap] = useState(config ? String(config.approvedCreatorCap) : "");
+  const [adRevenueSharePct, setAdRevenueSharePct] = useState(config ? String(config.adRevenueShareBps / 100) : "");
+  const [adFrequencyCap, setAdFrequencyCap] = useState(config ? String(config.adFrequencyCapPerHour) : "");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -36,6 +38,8 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           vodRetentionDaysDefault: Math.round(parseFloat(vodDefaultDays || "0")),
           vodRetentionDaysAnchor: Math.round(parseFloat(vodAnchorDays || "0")),
           approvedCreatorCap: Math.round(parseFloat(approvedCreatorCap || "0")),
+          adRevenueShareBps: Math.round(parseFloat(adRevenueSharePct || "0") * 100),
+          adFrequencyCapPerHour: Math.round(parseFloat(adFrequencyCap || "0")),
         }),
       });
       const data = await res.json();
@@ -125,6 +129,26 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
         className={filterStyles.input}
         value={approvedCreatorCap}
         onChange={(e) => setApprovedCreatorCap(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>Ad revenue share to creators (%)</label>
+      <input
+        type="number"
+        step="0.5"
+        min="0"
+        max="100"
+        className={filterStyles.input}
+        value={adRevenueSharePct}
+        onChange={(e) => setAdRevenueSharePct(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>Ad frequency cap (max times a viewer sees one creative per hour)</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={adFrequencyCap}
+        onChange={(e) => setAdFrequencyCap(e.target.value)}
       />
 
       <button type="button" className={styles.approveButton} disabled={submitting} onClick={submit}>

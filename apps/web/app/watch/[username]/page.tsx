@@ -1,5 +1,6 @@
 import { ActionRow } from "@/components/ActionRow";
 import { AboutCreator } from "@/components/AboutCreator";
+import { AdDisplayBanner } from "@/components/AdDisplayBanner";
 import { BottomNav } from "@/components/BottomNav";
 import { ChatPanel } from "@/components/ChatPanel";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
@@ -13,6 +14,7 @@ import {
   getGiftTypes,
   getLiveStreamByUsername,
   getLiveStreams,
+  getServedAd,
   getStreamActivity,
   getSubscriptionTiers,
   getVods,
@@ -42,11 +44,12 @@ export default async function WatchPage({ params }: { params: Promise<{ username
     );
   }
 
-  const [giftTypes, tiers, activity, followStatus] = await Promise.all([
+  const [giftTypes, tiers, activity, followStatus, displayAd] = await Promise.all([
     getGiftTypes(),
     getSubscriptionTiers(),
     getStreamActivity(stream.id),
     getFollowStatus(stream.creator.id),
+    getServedAd(stream.id, "display_banner"),
   ]);
 
   return (
@@ -57,6 +60,7 @@ export default async function WatchPage({ params }: { params: Promise<{ username
         <div className={styles.playerColumn}>
           <VideoPlayer src={stream.playbackUrl} />
           <div className={styles.body}>
+            <AdDisplayBanner ad={displayAd} />
             <StreamMeta stream={stream} />
             <ActionRow
               creatorId={stream.creator.id}

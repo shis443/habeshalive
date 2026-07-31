@@ -21,12 +21,13 @@ import styles from "./TopNav.module.css";
 
 type SettingsView = "main" | "language" | "labeled-content";
 
-// Advertisers and Gift Card were removed, not just left as placeholders —
-// this platform runs on birr gifting, not ads, and platform gift cards
-// aren't a scoped feature anywhere in the app. Don't link to pages for
-// things that don't exist.
+// Advertisers and Ad Choices are real now (B.2's house ad server) — link
+// to them the same as everything else that's actually built. Only link to
+// pages that exist; skip whatever still doesn't (Download Apps, Press,
+// Developers, Music on Birq — no native apps or that content exist yet).
 const MORE_GENERAL = [
   { label: "About", href: "/about" },
+  { label: "Advertisers", href: "/advertisers" },
   { label: "Blog", href: "/blog" },
   { label: "Careers", href: "/careers" },
   { label: "Anchor Creator Program", href: "/anchor-creator-program" },
@@ -35,6 +36,7 @@ const MORE_LEGAL = [
   { label: "Community Guidelines", href: "/community-guidelines" },
   { label: "Privacy Notice", href: "/privacy" },
   { label: "Cookie Notice", href: "/cookie-preferences" },
+  { label: "Ad Choices", href: "/ad-choices" },
   { label: "Terms", href: "/terms" },
   { label: "Accessibility Statement", href: "/accessibility" },
   { label: "Security", href: "/security" },

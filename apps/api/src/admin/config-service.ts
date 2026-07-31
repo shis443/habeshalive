@@ -10,6 +10,8 @@ interface ConfigRow {
   vod_retention_days_default: number;
   vod_retention_days_anchor: number;
   approved_creator_cap: number;
+  ad_revenue_share_bps: number;
+  ad_frequency_cap_per_hour: number;
   updated_at: string;
   updated_by_username: string | null;
 }
@@ -18,7 +20,8 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
   const { rows } = await pool.query<ConfigRow>(
     `SELECT pc.boost_price_santim, pc.boost_duration_ms, pc.default_revenue_share_bps,
             pc.payout_manual_review_threshold_santim, pc.vod_retention_days_default, pc.vod_retention_days_anchor,
-            pc.approved_creator_cap, pc.updated_at, u.username AS updated_by_username
+            pc.approved_creator_cap, pc.ad_revenue_share_bps, pc.ad_frequency_cap_per_hour,
+            pc.updated_at, u.username AS updated_by_username
      FROM platform_config pc
      LEFT JOIN users u ON u.id = pc.updated_by
      WHERE pc.id = TRUE`
@@ -32,6 +35,8 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
     vodRetentionDaysDefault: row.vod_retention_days_default,
     vodRetentionDaysAnchor: row.vod_retention_days_anchor,
     approvedCreatorCap: row.approved_creator_cap,
+    adRevenueShareBps: row.ad_revenue_share_bps,
+    adFrequencyCapPerHour: row.ad_frequency_cap_per_hour,
     updatedAt: row.updated_at,
     updatedByUsername: row.updated_by_username,
   };
@@ -72,6 +77,14 @@ export async function getVodRetentionDays(): Promise<{ default: number; anchor: 
   return { default: rows[0]!.vod_retention_days_default, anchor: rows[0]!.vod_retention_days_anchor };
 }
 
+// Read fresh by ads/service.ts on every ad-serve call and every settlement run.
+export async function getAdConfig(): Promise<{ revenueShareBps: number; frequencyCapPerHour: number }> {
+  const { rows } = await pool.query<{ ad_revenue_share_bps: number; ad_frequency_cap_per_hour: number }>(
+    `SELECT ad_revenue_share_bps, ad_frequency_cap_per_hour FROM platform_config WHERE id = TRUE`
+  );
+  return { revenueShareBps: rows[0]!.ad_revenue_share_bps, frequencyCapPerHour: rows[0]!.ad_frequency_cap_per_hour };
+}
+
 export async function updatePlatformConfig(adminId: string, input: UpdatePlatformConfigInput): Promise<PlatformConfig> {
   await pool.query(
     `UPDATE platform_config SET
@@ -82,7 +95,9 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
        vod_retention_days_default = $5,
        vod_retention_days_anchor = $6,
        approved_creator_cap = $7,
-       updated_at = now(), updated_by = $8
+       ad_revenue_share_bps = $8,
+       ad_frequency_cap_per_hour = $9,
+       updated_at = now(), updated_by = $10
      WHERE id = TRUE`,
     [
       input.boostPriceSantim,
@@ -92,6 +107,8 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
       input.vodRetentionDaysDefault,
       input.vodRetentionDaysAnchor,
       input.approvedCreatorCap,
+      input.adRevenueShareBps,
+      input.adFrequencyCapPerHour,
       adminId,
     ]
   );

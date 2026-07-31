@@ -1,7 +1,12 @@
 import {
   activeBoostSchema,
+  adCampaignAdminItemSchema,
+  adCreativeAdminItemSchema,
+  adLeadAdminItemSchema,
   adminAuditActionSchema,
   adminSummarySchema,
+  adRevenueByCreatorSchema,
+  advertiserSchema,
   anchorCandidateSchema,
   appealSchema,
   authUserSchema,
@@ -9,6 +14,7 @@ import {
   avatarSelectionSchema,
   blocklistTermSchema,
   boostRevenueByCreatorSchema,
+  creatorAdsSettingsSchema,
   creatorApplicationAdminItemSchema,
   creatorApplicationCapStatusSchema,
   creatorListItemSchema,
@@ -30,6 +36,7 @@ import {
   platformWalletSummarySchema,
   reportSchema,
   searchResultsSchema,
+  servedAdSchema,
   streamActivitySchema,
   streamArchiveItemSchema,
   streamDefaultsSchema,
@@ -42,8 +49,13 @@ import {
   vodSchema,
   walletBalanceSchema,
   type ActiveBoost,
+  type AdCampaignAdminItem,
+  type AdCreativeAdminItem,
+  type AdLeadAdminItem,
   type AdminAuditAction,
   type AdminSummary,
+  type AdRevenueByCreator,
+  type Advertiser,
   type AnchorCandidate,
   type Appeal,
   type AuthUser,
@@ -51,6 +63,7 @@ import {
   type AvatarSelection,
   type BlocklistTerm,
   type BoostRevenueByCreator,
+  type CreatorAdsSettings,
   type CreatorApplicationAdminItem,
   type CreatorApplicationCapStatus,
   type CreatorListItem,
@@ -72,6 +85,7 @@ import {
   type PlatformWalletSummary,
   type Report,
   type SearchResults,
+  type ServedAd,
   type StreamActivity,
   type StreamArchiveItem,
   type StreamDefaults,
@@ -554,4 +568,77 @@ export async function getCreatorApplications(
     return [];
   }
   return creatorApplicationAdminItemSchema.array().parse(await res.json());
+}
+
+// --- Ads (B.2) ---
+
+export async function getServedAd(streamId: string, format: string): Promise<ServedAd | null> {
+  const res = await fetchAuthed(`/ads/serve?streamId=${streamId}&format=${format}`);
+  if (!res.ok) return null;
+  const body = await res.json();
+  return body ? servedAdSchema.parse(body) : null;
+}
+
+export async function getSponsoredCard(category?: string, language?: string): Promise<ServedAd | null> {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  if (language) params.set("language", language);
+  const res = await fetch(`${API_INTERNAL_URL}/ads/sponsored-card?${params.toString()}`);
+  if (!res.ok) return null;
+  const body = await res.json();
+  return body ? servedAdSchema.parse(body) : null;
+}
+
+export async function getCreatorAdsSettings(): Promise<CreatorAdsSettings | null> {
+  const res = await fetchAuthed("/ads/creator-settings");
+  if (!res.ok) {
+    console.error(`Failed to load creator ads settings (${res.status})`);
+    return null;
+  }
+  return creatorAdsSettingsSchema.parse(await res.json());
+}
+
+export async function getAdvertisers(): Promise<Advertiser[]> {
+  const res = await fetchAuthed("/admin/advertisers");
+  if (!res.ok) {
+    console.error(`Failed to load advertisers (${res.status})`);
+    return [];
+  }
+  return advertiserSchema.array().parse(await res.json());
+}
+
+export async function getAdCampaigns(): Promise<AdCampaignAdminItem[]> {
+  const res = await fetchAuthed("/admin/ad-campaigns");
+  if (!res.ok) {
+    console.error(`Failed to load ad campaigns (${res.status})`);
+    return [];
+  }
+  return adCampaignAdminItemSchema.array().parse(await res.json());
+}
+
+export async function getAdCreatives(campaignId: string): Promise<AdCreativeAdminItem[]> {
+  const res = await fetchAuthed(`/admin/ad-campaigns/${campaignId}/creatives`);
+  if (!res.ok) {
+    console.error(`Failed to load ad creatives (${res.status})`);
+    return [];
+  }
+  return adCreativeAdminItemSchema.array().parse(await res.json());
+}
+
+export async function getAdLeads(): Promise<AdLeadAdminItem[]> {
+  const res = await fetchAuthed("/admin/ad-leads");
+  if (!res.ok) {
+    console.error(`Failed to load ad leads (${res.status})`);
+    return [];
+  }
+  return adLeadAdminItemSchema.array().parse(await res.json());
+}
+
+export async function getAdRevenueByCreator(): Promise<AdRevenueByCreator[]> {
+  const res = await fetchAuthed("/admin/ad-revenue");
+  if (!res.ok) {
+    console.error(`Failed to load ad revenue (${res.status})`);
+    return [];
+  }
+  return adRevenueByCreatorSchema.array().parse(await res.json());
 }

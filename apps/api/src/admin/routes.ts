@@ -1,13 +1,31 @@
 import {
+  createAdCampaignSchema,
+  createAdCreativeSchema,
+  createAdvertiserSchema,
   extendGracePeriodSchema,
   forceEndStreamSchema,
   manualAdjustmentSchema,
   rejectCreatorApplicationSchema,
   suspendCreatorSchema,
+  updateAdCampaignStatusSchema,
+  updateAdLeadStatusSchema,
   updateCreatorSchema,
   updatePlatformConfigSchema,
   updateUserRoleSchema,
 } from "@habeshalive/shared";
+import {
+  approveAdCreative,
+  createAdCampaign,
+  createAdCreative,
+  createAdvertiser,
+  getAdRevenueByCreator,
+  listAdCampaigns,
+  listAdCreatives,
+  listAdLeads,
+  listAdvertisers,
+  updateAdCampaignStatus,
+  updateAdLeadStatus,
+} from "../ads/service.js";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
 import { listAnchorCandidates, listAnchorCreators } from "./anchor-service.js";
@@ -183,4 +201,56 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { ok: true };
     }
   );
+
+  // --- Ads (B.2) ---
+
+  app.get("/advertisers", { preHandler: app.requireAdmin }, async () => listAdvertisers());
+
+  app.post("/advertisers", { preHandler: app.requireAdmin }, async (req) => {
+    const input = createAdvertiserSchema.parse(req.body);
+    return createAdvertiser(req.user.sub, input);
+  });
+
+  app.get("/ad-campaigns", { preHandler: app.requireAdmin }, async () => listAdCampaigns());
+
+  app.post("/ad-campaigns", { preHandler: app.requireAdmin }, async (req) => {
+    const input = createAdCampaignSchema.parse(req.body);
+    return createAdCampaign(req.user.sub, input);
+  });
+
+  app.patch<{ Params: { id: string } }>("/ad-campaigns/:id/status", { preHandler: app.requireAdmin }, async (req) => {
+    const input = updateAdCampaignStatusSchema.parse(req.body);
+    await updateAdCampaignStatus(req.user.sub, req.params.id, input.status);
+    return { ok: true };
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/ad-campaigns/:id/creatives",
+    { preHandler: app.requireAdmin },
+    async (req) => listAdCreatives(req.params.id)
+  );
+
+  app.post("/ad-creatives", { preHandler: app.requireAdmin }, async (req) => {
+    const input = createAdCreativeSchema.parse(req.body);
+    return createAdCreative(req.user.sub, input);
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/ad-creatives/:id/approve",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      await approveAdCreative(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
+
+  app.get("/ad-leads", { preHandler: app.requireAdmin }, async () => listAdLeads());
+
+  app.patch<{ Params: { id: string } }>("/ad-leads/:id/status", { preHandler: app.requireAdmin }, async (req) => {
+    const input = updateAdLeadStatusSchema.parse(req.body);
+    await updateAdLeadStatus(req.user.sub, req.params.id, input.status);
+    return { ok: true };
+  });
+
+  app.get("/ad-revenue", { preHandler: app.requireAdmin }, async () => getAdRevenueByCreator());
 };

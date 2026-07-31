@@ -2,7 +2,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { ExploreGrid } from "@/components/ExploreGrid";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
 import { TopNav } from "@/components/TopNav";
-import { getCurrentUser, getLiveStreams } from "@/lib/api";
+import { getCurrentUser, getLiveStreams, getSponsoredCard } from "@/lib/api";
 import styles from "./page.module.css";
 
 export default async function ExplorePage({
@@ -15,10 +15,11 @@ export default async function ExplorePage({
   // category filter (it's a persistent "who's live" list, not scoped to
   // the pill selection) — only re-fetch a second, filtered list when a
   // category is actually selected, so the common "All" case stays one call.
-  const [allStreams, filteredStreams, user] = await Promise.all([
+  const [allStreams, filteredStreams, user, sponsoredCard] = await Promise.all([
     getLiveStreams(),
     category ? getLiveStreams(category) : Promise.resolve(null),
     getCurrentUser(),
+    getSponsoredCard(category),
   ]);
   const gridStreams = filteredStreams ?? allStreams;
 
@@ -27,7 +28,7 @@ export default async function ExplorePage({
       <TopNav isAuthed={!!user} />
       <LiveChannelsSidebar streams={allStreams} />
       <main className={styles.main}>
-        <ExploreGrid streams={gridStreams} selectedCategory={category ?? "all"} />
+        <ExploreGrid streams={gridStreams} selectedCategory={category ?? "all"} sponsoredCard={sponsoredCard} />
       </main>
       <BottomNav active="explore" />
     </>

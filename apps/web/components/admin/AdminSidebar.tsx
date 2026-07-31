@@ -72,6 +72,9 @@ export function AdminSidebar() {
       <Link href="/admin/boosts" className={pathname.startsWith("/admin/boosts") ? styles.linkActive : styles.link}>
         Boosts
       </Link>
+      <Link href="/admin/ads" className={pathname.startsWith("/admin/ads") ? styles.linkActive : styles.link}>
+        Ads
+      </Link>
       <Link
         href="/admin/subscriptions"
         className={pathname.startsWith("/admin/subscriptions") ? styles.linkActive : styles.link}

@@ -1,0 +1,78 @@
+.panel {
+  background: var(--surface-container);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.title {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin: 0;
+}
+
+.toggleOn,
+.toggleOff {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--outline-variant);
+}
+
+.toggleOn {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+.toggleOff {
+  background: transparent;
+  color: var(--on-surface-variant);
+}
+
+.subtext {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-3);
+}
+
+.revenueRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.revenueLabel {
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.revenueValue {
+  font-family: var(--font-headline);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--primary);
+}
+
+.error {
+  color: var(--error);
+  font-size: 12px;
+  margin-top: var(--space-2);
+}

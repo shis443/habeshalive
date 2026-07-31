@@ -1,0 +1,28 @@
+.wrap {
+  display: block;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-container);
+  margin: var(--space-3) 0;
+}
+
+.image {
+  width: 100%;
+  max-height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.sponsoredLabel {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-family: var(--font-label);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}

@@ -1,6 +1,7 @@
 import { formatSantimAsBirr } from "@habeshalive/shared";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AdsManagerPanel } from "@/components/AdsManagerPanel";
 import { BottomNav } from "@/components/BottomNav";
 import { GoLivePanel } from "@/components/GoLivePanel";
 import { ModerationPanel } from "@/components/ModerationPanel";
@@ -9,6 +10,7 @@ import { TopNav } from "@/components/TopNav";
 import { WalletPanel } from "@/components/WalletPanel";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import {
+  getCreatorAdsSettings,
   getCreatorStats,
   getCurrentUser,
   getEarningsThisMonth,
@@ -31,6 +33,10 @@ export default async function DashboardPage() {
     getCreatorStats(),
     getLiveStreamByUsername(user.username),
   ]);
+  // Ads Manager only makes sense once someone actually has creator access
+  // (same gate GoLivePanel below already keys off streamKey for) — no
+  // point fetching it for a viewer who can't stream yet.
+  const adsSettings = streamKey ? await getCreatorAdsSettings() : null;
 
   return (
     <>
@@ -65,6 +71,7 @@ export default async function DashboardPage() {
           />
         )}
         <WalletPanel balanceSantim={balance?.balanceSantim ?? 0} />
+        <AdsManagerPanel settings={adsSettings} />
         <ModerationPanel />
       </main>
       <BottomNav active="go-live" />
