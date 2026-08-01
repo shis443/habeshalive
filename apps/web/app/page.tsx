@@ -17,7 +17,7 @@ export default async function ExplorePage({
   // category is actually selected, so the common "All" case stays one call.
   const [allStreams, filteredStreams, user, sponsoredCard] = await Promise.all([
     getLiveStreams(),
-    category ? getLiveStreams(category) : Promise.resolve(null),
+    category ? getLiveStreams({ category }) : Promise.resolve(null),
     getCurrentUser(),
     getSponsoredCard(category),
   ]);

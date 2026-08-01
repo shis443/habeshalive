@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,24 +27,27 @@ type SettingsView = "main" | "language" | "labeled-content";
 // pages that exist; skip whatever still doesn't (Download Apps, Press,
 // Developers, Music on Birq — no native apps or that content exist yet).
 const MORE_GENERAL = [
-  { label: "About", href: "/about" },
-  { label: "Advertisers", href: "/advertisers" },
-  { label: "Blog", href: "/blog" },
-  { label: "Careers", href: "/careers" },
-  { label: "Gift Cards", href: "/gift-cards" },
-  { label: "Anchor Creator Program", href: "/anchor-creator-program" },
-];
+  { labelKey: "browse", href: "/browse" },
+  { labelKey: "help", href: "/help" },
+  { labelKey: "about", href: "/about" },
+  { labelKey: "advertisers", href: "/advertisers" },
+  { labelKey: "blog", href: "/blog" },
+  { labelKey: "careers", href: "/careers" },
+  { labelKey: "giftCards", href: "/gift-cards" },
+  { labelKey: "anchorProgram", href: "/anchor-creator-program" },
+] as const;
 const MORE_LEGAL = [
-  { label: "Community Guidelines", href: "/community-guidelines" },
-  { label: "Privacy Notice", href: "/privacy" },
-  { label: "Cookie Notice", href: "/cookie-preferences" },
-  { label: "Ad Choices", href: "/ad-choices" },
-  { label: "Terms", href: "/terms" },
-  { label: "Accessibility Statement", href: "/accessibility" },
-  { label: "Security", href: "/security" },
-  { label: "Safety Center", href: "/safety-center" },
-  { label: "All Legal Docs", href: "/legal" },
-];
+  { labelKey: "communityGuidelines", href: "/community-guidelines" },
+  { labelKey: "privacyNotice", href: "/privacy" },
+  { labelKey: "privacyCenter", href: "/privacy-center" },
+  { labelKey: "cookieNotice", href: "/cookie-preferences" },
+  { labelKey: "adChoices", href: "/ad-choices" },
+  { labelKey: "terms", href: "/terms" },
+  { labelKey: "accessibility", href: "/accessibility" },
+  { labelKey: "security", href: "/security" },
+  { labelKey: "safetyCenter", href: "/safety-center" },
+  { labelKey: "allLegalDocs", href: "/legal" },
+] as const;
 
 // No notifications backend exists yet — 0 is the honest count, not a fake
 // placeholder number. The dropdown below always shows an empty state.
@@ -51,6 +55,9 @@ const UNREAD_COUNT = 0;
 
 export function TopNav({ isAuthed }: { isAuthed: boolean }) {
   const router = useRouter();
+  const t = useTranslations("nav");
+  const tGeneral = useTranslations("moreGeneral");
+  const tLegal = useTranslations("moreLegal");
   const [query, setQuery] = useState("");
 
   const more = useDropdown<HTMLDivElement>();
@@ -132,32 +139,32 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           <button
             type="button"
             className={styles.iconButton}
-            aria-label="More"
+            aria-label={t("more")}
             onClick={() => more.setOpen((o) => !o)}
           >
             <MoreIcon />
           </button>
           {more.open && (
             <div className={`${styles.dropdown} ${styles.dropdownWide} ${styles.dropdownLeft}`}>
-              <span className={styles.groupLabel}>General</span>
+              <span className={styles.groupLabel}>{t("groupGeneral")}</span>
               {MORE_GENERAL.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={styles.menuItem}
                 >
-                  {item.label}
+                  {tGeneral(item.labelKey)}
                 </Link>
               ))}
               <div className={styles.divider} />
-              <span className={styles.groupLabel}>Help &amp; Legal</span>
+              <span className={styles.groupLabel}>{t("groupHelpLegal")}</span>
               {MORE_LEGAL.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={styles.menuItem}
                 >
-                  {item.label}
+                  {tLegal(item.labelKey)}
                 </Link>
               ))}
             </div>
@@ -172,12 +179,12 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
       <form className={styles.searchForm} onSubmit={handleSearch}>
         <input
           type="search"
-          placeholder="Search"
+          placeholder={t("search")}
           className={styles.searchInput}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button type="submit" className={styles.searchButton} aria-label="Search">
+        <button type="submit" className={styles.searchButton} aria-label={t("search")}>
           <SearchIcon />
         </button>
       </form>
@@ -187,7 +194,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           <button
             type="button"
             className={`${styles.iconButton} ${styles.badgeWrap}`}
-            aria-label="Notifications"
+            aria-label={t("notifications")}
             onClick={() => notifications.setOpen((o) => !o)}
           >
             <BellIcon />
@@ -195,7 +202,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           </button>
           {notifications.open && (
             <div className={styles.dropdown}>
-              <p className={styles.emptyState}>No new notifications</p>
+              <p className={styles.emptyState}>{t("noNotifications")}</p>
             </div>
           )}
         </div>
@@ -204,7 +211,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           <button
             type="button"
             className={styles.iconButton}
-            aria-label="Settings"
+            aria-label={t("settings")}
             onClick={() => settings.setOpen((o) => !o)}
           >
             <GearIcon />
@@ -214,24 +221,24 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
               {settingsView === "main" && (
                 <>
                   <button type="button" className={styles.rowItem} onClick={() => setSettingsView("language")}>
-                    <span className={styles.rowLabel}>Language</span>
+                    <span className={styles.rowLabel}>{t("language")}</span>
                     <ChevronRightIcon />
                   </button>
                   <button type="button" className={styles.rowItem} onClick={toggleTheme}>
-                    <span className={styles.rowLabel}>Dark theme</span>
+                    <span className={styles.rowLabel}>{t("darkTheme")}</span>
                     <span className={`${styles.toggle} ${theme === "dark" ? styles.toggleOn : ""}`}>
                       <span className={`${styles.toggleKnob} ${theme === "dark" ? styles.toggleKnobOn : ""}`} />
                     </span>
                   </button>
                   <Link href="/cookie-preferences" className={styles.menuItem}>
-                    Cookies &amp; Ads Choices
+                    {t("cookiesAds")}
                   </Link>
                   <button
                     type="button"
                     className={styles.rowItem}
                     onClick={() => setSettingsView("labeled-content")}
                   >
-                    <span className={styles.rowLabel}>Labeled Content</span>
+                    <span className={styles.rowLabel}>{t("labeledContent")}</span>
                     <ChevronRightIcon />
                   </button>
                 </>
@@ -241,7 +248,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                 <>
                   <button type="button" className={styles.backRow} onClick={() => setSettingsView("main")}>
                     <BackIcon className={styles.backIcon} />
-                    Language
+                    {t("language")}
                   </button>
                   {UI_LANGUAGES.map((lang) => (
                     <button
@@ -254,7 +261,13 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                       {language === lang && <CheckIcon className={styles.checkMark} />}
                     </button>
                   ))}
-                  {language !== "English" && (
+                  {language === "Amharic" && (
+                    <p className={styles.settingsNote}>
+                      Amharic saved — navigation and menus are translated. Most page content is
+                      still English while full translation coverage is worked on.
+                    </p>
+                  )}
+                  {language !== "English" && language !== "Amharic" && (
                     <p className={styles.settingsNote}>
                       {language} saved. The interface itself is still English-only — full
                       translation is coming later.
@@ -267,7 +280,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                 <>
                   <button type="button" className={styles.backRow} onClick={() => setSettingsView("main")}>
                     <BackIcon className={styles.backIcon} />
-                    Labeled Content
+                    {t("labeledContent")}
                   </button>
                   {!isAuthed ? (
                     <p className={styles.settingsNote}>
@@ -275,7 +288,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                       to you.
                     </p>
                   ) : sensitivePref === null ? (
-                    <p className={styles.settingsNote}>Loading…</p>
+                    <p className={styles.settingsNote}>{t("loading")}</p>
                   ) : (
                     <>
                       <button
@@ -284,7 +297,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                         onClick={handleToggleSensitive}
                         disabled={sensitiveSaving}
                       >
-                        <span className={styles.rowLabel}>Show sensitive/mature content</span>
+                        <span className={styles.rowLabel}>{t("showSensitive")}</span>
                         <span className={`${styles.toggle} ${sensitivePref ? styles.toggleOn : ""}`}>
                           <span className={`${styles.toggleKnob} ${sensitivePref ? styles.toggleKnobOn : ""}`} />
                         </span>
@@ -306,7 +319,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
             <button
               type="button"
               className={styles.iconButton}
-              aria-label="Your account"
+              aria-label={t("yourAccount")}
               onClick={() => account.setOpen((o) => !o)}
             >
               <ProfileIcon />
@@ -314,10 +327,10 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
             {account.open && (
               <div className={styles.dropdown}>
                 <Link href="/dashboard" className={styles.menuItem}>
-                  Dashboard
+                  {t("dashboard")}
                 </Link>
                 <Link href="/wallet" className={styles.menuItem}>
-                  Wallet
+                  {t("wallet")}
                 </Link>
                 <div className={styles.divider} />
                 <button
@@ -326,7 +339,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                   onClick={handleLogout}
                   disabled={loggingOut}
                 >
-                  {loggingOut ? "Logging out…" : "Log out"}
+                  {loggingOut ? t("loggingOut") : t("logOut")}
                 </button>
               </div>
             )}
@@ -334,10 +347,10 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
         ) : (
           <>
             <Link href="/login" className={styles.loginLink}>
-              Log in
+              {t("logIn")}
             </Link>
             <Link href="/signup" className={styles.signupButton}>
-              Sign up
+              {t("signUp")}
             </Link>
           </>
         )}

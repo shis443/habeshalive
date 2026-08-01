@@ -1,0 +1,43 @@
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.select {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--space-1);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.tagForm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tagInput {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--space-1);
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+  min-width: 160px;
+}
+
+.clearTag {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}

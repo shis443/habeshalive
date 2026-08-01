@@ -17,6 +17,7 @@ import { AppError } from "../common/errors.js";
 import { env } from "../common/env.js";
 import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
 import { isApprovedCreator } from "../creator-applications/service.js";
+import { linkTagsToStream } from "./tags-service.js";
 import { videoProvider } from "./video-provider.js";
 
 export function thumbnailPlaceholderSvg(category: string): string {
@@ -66,6 +67,7 @@ interface StreamRow {
   peak_viewers: number;
   is_boosted: boolean;
   is_sensitive: boolean;
+  tags: string[];
 }
 
 function toStreamDetail(row: StreamRow): StreamDetail {
@@ -81,6 +83,7 @@ function toStreamDetail(row: StreamRow): StreamDetail {
     viewerCount: row.peak_viewers,
     isBoosted: row.is_boosted,
     isSensitive: row.is_sensitive,
+    tags: row.tags,
     creator: {
       id: row.creator_id,
       username: row.username,
@@ -91,13 +94,22 @@ function toStreamDetail(row: StreamRow): StreamDetail {
   };
 }
 
+// Shared by every function that returns a StreamDetail (listLiveStreams,
+// listAllLiveStreamsForAdmin, getStreamById, getLiveStreamByUsername) —
+// adding tags here once flows through all of them, rather than touching
+// four separate queries.
 const STREAM_SELECT_COLUMNS = `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
   s.started_at, s.status, s.peak_viewers, s.is_sensitive,
   u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio,
   EXISTS (
     SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
-  ) AS is_boosted
+  ) AS is_boosted,
+  COALESCE(
+    (SELECT array_agg(st.name ORDER BY st.name) FROM stream_tag_links stl
+     JOIN stream_tags st ON st.id = stl.tag_id WHERE stl.stream_id = s.id),
+    ARRAY[]::text[]
+  ) AS tags
 `;
 
 async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> {
@@ -155,26 +167,46 @@ export async function rotateStreamKey(userId: string): Promise<StreamKeyResponse
   return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey };
 }
 
-// category is matched case-insensitively — same reasoning CategoryPills'
-// client-side filter used to document: stream.category is free-form text
-// (VARCHAR(50), no enum/CHECK constraint), so an exact-case match would
-// silently miss real streams over a casing difference alone.
+// category/language matched case-insensitively — stream.category and
+// .language are free-form text (no enum/CHECK constraint), so an
+// exact-case match would silently miss real streams over a casing
+// difference alone. tag is normalized lowercase already (see
+// tags-service.ts), matched exactly against the same normalized form.
 // viewerId gates labeled (is_sensitive) streams to viewers whose own
 // account preference opts in — see db/migrations/0012. NULL (anonymous or
 // not opted in) never matches the EXISTS, so those streams are simply
 // absent from the list rather than shown-but-blurred.
-export async function listLiveStreams(category?: string, viewerId?: string): Promise<StreamDetail[]> {
+const SORT_CLAUSES = {
+  viewers: "s.peak_viewers DESC NULLS LAST, s.started_at DESC",
+  recent: "s.started_at DESC",
+  alphabetical: "s.title ASC",
+} as const;
+export type LiveStreamSort = keyof typeof SORT_CLAUSES;
+
+export async function listLiveStreams(filters: {
+  category?: string;
+  language?: string;
+  tag?: string;
+  viewerId?: string;
+  sort?: LiveStreamSort;
+} = {}): Promise<StreamDetail[]> {
+  const sortClause = SORT_CLAUSES[filters.sort ?? "viewers"];
   const { rows } = await pool.query<StreamRow>(
     `SELECT ${STREAM_SELECT_COLUMNS}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.status = 'live'
        AND ($1::text IS NULL OR lower(s.category) = lower($1))
-       AND (s.is_sensitive = FALSE OR EXISTS (
-         SELECT 1 FROM users v WHERE v.id = $2 AND v.show_sensitive_content = TRUE
+       AND ($2::text IS NULL OR lower(s.language) = lower($2))
+       AND ($3::text IS NULL OR EXISTS (
+         SELECT 1 FROM stream_tag_links stl JOIN stream_tags st ON st.id = stl.tag_id
+         WHERE stl.stream_id = s.id AND st.name = lower($3)
        ))
-     ORDER BY is_boosted DESC, s.peak_viewers DESC NULLS LAST, s.started_at DESC`,
-    [category ?? null, viewerId ?? null]
+       AND (s.is_sensitive = FALSE OR EXISTS (
+         SELECT 1 FROM users v WHERE v.id = $4 AND v.show_sensitive_content = TRUE
+       ))
+     ORDER BY is_boosted DESC, ${sortClause}`,
+    [filters.category ?? null, filters.language ?? null, filters.tag ?? null, filters.viewerId ?? null]
   );
   return rows.map(toStreamDetail);
 }
@@ -345,6 +377,9 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   // list, not user content.
   if (input.thumbnailUrl) {
     await flagIfImageMatched("stream_thumbnail", streamId, userId, input.thumbnailUrl);
+  }
+  if (input.tags && input.tags.length > 0) {
+    await linkTagsToStream(pool, streamId, input.tags);
   }
   await logStreamEvent(streamId, "started");
 

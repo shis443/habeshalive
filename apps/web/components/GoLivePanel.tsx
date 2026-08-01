@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { SRS_WHIP_URL } from "@/lib/config";
 import { StreamKeyRow } from "./StreamKeyRow";
+import { StreamTagsInput } from "./StreamTagsInput";
 import styles from "./GoLivePanel.module.css";
 
 type Method = "obs" | "browser";
@@ -127,6 +128,7 @@ export function GoLivePanel({
   const [thumbnailProcessing, setThumbnailProcessing] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [setupIsSensitive, setSetupIsSensitive] = useState(false);
+  const [setupTags, setSetupTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (initialIsLive) return;
@@ -215,6 +217,7 @@ export function GoLivePanel({
           language: setupLanguage,
           thumbnailUrl: setupThumbnail ?? undefined,
           isSensitive: setupIsSensitive,
+          tags: setupTags.length > 0 ? setupTags : undefined,
         }),
       });
       const data = await res.json();
@@ -263,6 +266,7 @@ export function GoLivePanel({
           language: setupLanguage,
           thumbnailUrl: setupThumbnail ?? undefined,
           isSensitive: setupIsSensitive,
+          tags: setupTags.length > 0 ? setupTags : undefined,
         }),
       });
       const goLiveData = await goLiveRes.json();
@@ -440,6 +444,10 @@ export function GoLivePanel({
                 </option>
               ))}
             </select>
+          </div>
+          <div className={styles.field}>
+            <span className={styles.fieldLabel}>Tags (optional, up to 5)</span>
+            <StreamTagsInput tags={setupTags} onChange={setSetupTags} />
           </div>
           <div className={styles.field}>
             <span className={styles.fieldLabel}>Thumbnail (optional)</span>

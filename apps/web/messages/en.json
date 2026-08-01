@@ -1,0 +1,49 @@
+{
+  "nav": {
+    "explore": "Explore",
+    "following": "Following",
+    "goLive": "Go live",
+    "wallet": "Wallet",
+    "search": "Search",
+    "more": "More",
+    "notifications": "Notifications",
+    "noNotifications": "No new notifications",
+    "settings": "Settings",
+    "language": "Language",
+    "darkTheme": "Dark theme",
+    "cookiesAds": "Cookies & Ads Choices",
+    "labeledContent": "Labeled Content",
+    "logIn": "Log in",
+    "signUp": "Sign up",
+    "dashboard": "Dashboard",
+    "logOut": "Log out",
+    "loggingOut": "Logging out…",
+    "yourAccount": "Your account",
+    "groupGeneral": "General",
+    "groupHelpLegal": "Help & Legal",
+    "showSensitive": "Show sensitive/mature content",
+    "loading": "Loading…"
+  },
+  "moreGeneral": {
+    "browse": "Browse",
+    "help": "Help",
+    "about": "About",
+    "advertisers": "Advertisers",
+    "blog": "Blog",
+    "careers": "Careers",
+    "giftCards": "Gift Cards",
+    "anchorProgram": "Anchor Creator Program"
+  },
+  "moreLegal": {
+    "communityGuidelines": "Community Guidelines",
+    "privacyNotice": "Privacy Notice",
+    "privacyCenter": "Privacy Center",
+    "cookieNotice": "Cookie Notice",
+    "adChoices": "Ad Choices",
+    "terms": "Terms",
+    "accessibility": "Accessibility Statement",
+    "security": "Security",
+    "safetyCenter": "Safety Center",
+    "allLegalDocs": "All Legal Docs"
+  }
+}

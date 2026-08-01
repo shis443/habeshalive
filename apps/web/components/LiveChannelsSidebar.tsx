@@ -2,11 +2,13 @@
 
 import type { LiveStream } from "@habeshalive/shared";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { formatViewerCount } from "@/lib/format";
 import styles from "./LiveChannelsSidebar.module.css";
 import { ChevronRightIcon } from "./icons";
+
+const STORAGE_KEY = "birq:sidebar-collapsed";
 
 export function LiveChannelsSidebar({
   streams,
@@ -15,7 +17,24 @@ export function LiveChannelsSidebar({
   streams: LiveStream[];
   defaultCollapsed?: boolean;
 }) {
+  // Starts at defaultCollapsed (matching what the server rendered) to avoid
+  // a hydration mismatch, then reconciles with whatever the visitor last
+  // chose once mounted — a one-frame flash beats React complaining that
+  // client/server markup diverged.
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  useEffect(() => {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored !== null) setCollapsed(stored === "1");
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((c) => {
+      const next = !c;
+      window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
+
   const sorted = [...streams].sort((a, b) => b.viewerCount - a.viewerCount);
 
   return (
@@ -26,7 +45,7 @@ export function LiveChannelsSidebar({
           type="button"
           className={styles.collapseButton}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={toggleCollapsed}
         >
           <ChevronRightIcon className={collapsed ? undefined : styles.chevronExpanded} />
         </button>
@@ -47,7 +66,6 @@ export function LiveChannelsSidebar({
                 ) : (
                   <span className={styles.avatarPlaceholder} />
                 )}
-                <span className={styles.liveDot} />
               </span>
               {!collapsed && (
                 <>

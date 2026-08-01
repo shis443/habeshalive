@@ -35,6 +35,7 @@ interface StreamSearchRow {
   bio: string | null;
   is_boosted: boolean;
   is_sensitive: boolean;
+  tags: string[];
 }
 
 // viewerId gates labeled (is_sensitive) streams the same way
@@ -49,7 +50,12 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
             u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio,
             EXISTS (
               SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
-            ) AS is_boosted
+            ) AS is_boosted,
+            COALESCE(
+              (SELECT array_agg(st.name ORDER BY st.name) FROM stream_tag_links stl
+               JOIN stream_tags st ON st.id = stl.tag_id WHERE stl.stream_id = s.id),
+              ARRAY[]::text[]
+            ) AS tags
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.status = 'live' AND s.search_vector @@ to_tsquery('simple', $1)
@@ -73,6 +79,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
     viewerCount: row.peak_viewers,
     isBoosted: row.is_boosted,
     isSensitive: row.is_sensitive,
+    tags: row.tags,
     creator: {
       id: row.creator_id,
       username: row.username,

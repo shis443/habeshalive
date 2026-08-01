@@ -45,6 +45,7 @@ import {
   streamDefaultsSchema,
   streamDetailSchema,
   streamKeySchema,
+  streamTagAdminItemSchema,
   subscriptionAdminItemSchema,
   subscriptionTierSchema,
   transactionSchema,
@@ -97,6 +98,7 @@ import {
   type StreamDefaults,
   type StreamDetail,
   type StreamKeyResponse,
+  type StreamTagAdminItem,
   type SubscriptionAdminItem,
   type SubscriptionTier,
   type Transaction,
@@ -115,9 +117,18 @@ import { fetchAuthed } from "./session";
 // logged in, is how the API resolves their "show sensitive content"
 // preference (see db/migrations/0012). Anonymous visitors still work
 // fine: fetchAuthed just omits the header when there's no session.
-export async function getLiveStreams(category?: string): Promise<LiveStream[]> {
-  const path = category ? `/streams/live?category=${encodeURIComponent(category)}` : `/streams/live`;
-  const res = await fetchAuthed(path);
+export type LiveStreamSort = "viewers" | "recent" | "alphabetical";
+
+export async function getLiveStreams(
+  filters: { category?: string; language?: string; tag?: string; sort?: LiveStreamSort } = {}
+): Promise<LiveStream[]> {
+  const params = new URLSearchParams();
+  if (filters.category) params.set("category", filters.category);
+  if (filters.language) params.set("language", filters.language);
+  if (filters.tag) params.set("tag", filters.tag);
+  if (filters.sort) params.set("sort", filters.sort);
+  const qs = params.toString();
+  const res = await fetchAuthed(qs ? `/streams/live?${qs}` : `/streams/live`);
   if (!res.ok) {
     // The homepage's primary data fetch — a k6 load test caught this
     // throwing on any non-200 (including a transient 429 from the API's
@@ -681,4 +692,13 @@ export async function getSuspiciousGiftCardPurchasers(): Promise<{ username: str
   const res = await fetchAuthed("/admin/gift-cards/suspicious");
   if (!res.ok) return [];
   return res.json();
+}
+
+export async function getStreamTagsAdmin(): Promise<StreamTagAdminItem[]> {
+  const res = await fetchAuthed("/admin/stream-tags");
+  if (!res.ok) {
+    console.error(`Failed to load stream tags (${res.status})`);
+    return [];
+  }
+  return streamTagAdminItemSchema.array().parse(await res.json());
 }

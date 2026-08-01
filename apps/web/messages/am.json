@@ -1,0 +1,49 @@
+{
+  "nav": {
+    "explore": "ያስሱ",
+    "following": "የተከተልኳቸው",
+    "goLive": "ቀጥታ ስርጭት ጀምር",
+    "wallet": "ቦርሳ",
+    "search": "ፈልግ",
+    "more": "ተጨማሪ",
+    "notifications": "ማሳወቂያዎች",
+    "noNotifications": "አዲስ ማሳወቂያ የለም",
+    "settings": "ቅንብሮች",
+    "language": "ቋንቋ",
+    "darkTheme": "ጨለማ ገጽታ",
+    "cookiesAds": "ኩኪዎች እና የማስታወቂያ ምርጫዎች",
+    "labeledContent": "የተሰየመ ይዘት",
+    "logIn": "ግባ",
+    "signUp": "ተመዝገብ",
+    "dashboard": "ዳሽቦርድ",
+    "logOut": "ውጣ",
+    "loggingOut": "በመውጣት ላይ…",
+    "yourAccount": "መለያዎ",
+    "groupGeneral": "አጠቃላይ",
+    "groupHelpLegal": "እገዛ እና ህጋዊ",
+    "showSensitive": "ሚስጥራዊ/ለአዋቂዎች ብቻ የሆነ ይዘት አሳይ",
+    "loading": "በመጫን ላይ…"
+  },
+  "moreGeneral": {
+    "browse": "አስስ",
+    "help": "እገዛ",
+    "about": "ስለ እኛ",
+    "advertisers": "አስተዋዋቂዎች",
+    "blog": "ብሎግ",
+    "careers": "የስራ እድሎች",
+    "giftCards": "የስጦታ ካርዶች",
+    "anchorProgram": "አንከር ፈጣሪ ፕሮግራም"
+  },
+  "moreLegal": {
+    "communityGuidelines": "የማህበረሰብ መመሪያዎች",
+    "privacyNotice": "የግላዊነት ማስታወቂያ",
+    "privacyCenter": "የግላዊነት ማዕከል",
+    "cookieNotice": "የኩኪ ማስታወቂያ",
+    "adChoices": "የማስታወቂያ ምርጫዎች",
+    "terms": "ውሎች",
+    "accessibility": "የተደራሽነት መግለጫ",
+    "security": "ደህንነት",
+    "safetyCenter": "የደህንነት ማዕከል",
+    "allLegalDocs": "ሁሉም ህጋዊ ሰነዶች"
+  }
+}

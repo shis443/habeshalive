@@ -1,7 +1,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import createNextIntlPlugin from "next-intl/plugin";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 // The browser talks to the API directly (not just via the /api/backend
 // proxy) in a couple of places — LoginForm's request-otp call and
@@ -113,4 +115,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

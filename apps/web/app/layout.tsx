@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Hanken_Grotesk, Inter } from "next/font/google";
 import type { ReactNode } from "react";
+import { IntlProvider } from "@/components/IntlProvider";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
@@ -51,8 +52,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className={`${hankenGrotesk.variable} ${inter.variable} ${geist.variable}`}>
-        {children}
-        <ServiceWorkerRegister />
+        <IntlProvider>
+          {children}
+          <ServiceWorkerRegister />
+        </IntlProvider>
       </body>
     </html>
   );

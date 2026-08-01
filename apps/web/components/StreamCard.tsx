@@ -28,6 +28,11 @@ export function StreamCard({ stream }: { stream: LiveStream }) {
         <div className={styles.tags}>
           {stream.category && <span className={styles.tag}>{stream.category}</span>}
           {stream.language && <span className={styles.tag}>{stream.language}</span>}
+          {stream.tags.slice(0, 3).map((tag) => (
+            <span key={tag} className={styles.tag}>
+              {tag}
+            </span>
+          ))}
         </div>
       </div>
     </Link>

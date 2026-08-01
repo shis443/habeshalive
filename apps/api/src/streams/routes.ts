@@ -20,7 +20,9 @@ import {
   markLiveByProviderStreamId,
   rotateStreamKey,
   thumbnailPlaceholderSvg,
+  type LiveStreamSort,
 } from "./service.js";
+import { searchTagNames } from "./tags-service.js";
 
 // SRS's http_hooks can't send custom headers — only a fully-specified URL —
 // so the secret travels as a query param there. Other callers (tests, any
@@ -41,11 +43,21 @@ function keyByUser(req: FastifyRequest): string {
 }
 
 export const streamRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: { category?: string } }>(
+  const VALID_SORTS = new Set<LiveStreamSort>(["viewers", "recent", "alphabetical"]);
+  app.get<{ Querystring: { category?: string; language?: string; tag?: string; sort?: string } }>(
     "/live",
     { preHandler: app.tryAuthenticate },
-    async (req) => listLiveStreams(req.query.category, req.user?.sub)
+    async (req) =>
+      listLiveStreams({
+        category: req.query.category,
+        language: req.query.language,
+        tag: req.query.tag,
+        sort: VALID_SORTS.has(req.query.sort as LiveStreamSort) ? (req.query.sort as LiveStreamSort) : undefined,
+        viewerId: req.user?.sub,
+      })
   );
+
+  app.get<{ Querystring: { q?: string } }>("/tags/search", async (req) => searchTagNames(req.query.q ?? ""));
 
   app.get("/defaults", { preHandler: app.authenticate }, async (req) => getStreamDefaults(req.user.sub));
 

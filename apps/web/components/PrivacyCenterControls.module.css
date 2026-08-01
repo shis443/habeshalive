@@ -1,0 +1,44 @@
+.control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--space-2);
+  background: var(--surface-container);
+  margin: var(--space-3) 0;
+}
+
+.controlLabel {
+  font-weight: 600;
+  color: var(--on-background);
+  margin: 0 0 var(--space-1);
+}
+
+.controlHint {
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  margin: 0;
+}
+
+.toggle,
+.toggleOn {
+  flex: none;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toggle {
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+}
+
+.toggleOn {
+  background: var(--primary);
+  color: var(--on-primary);
+}

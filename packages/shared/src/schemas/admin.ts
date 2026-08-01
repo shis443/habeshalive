@@ -267,3 +267,20 @@ export const anchorCandidateSchema = z.object({
   accountCreatedAt: z.string(),
 });
 export type AnchorCandidate = z.infer<typeof anchorCandidateSchema>;
+
+// --- Stream tags (C.6) ---
+
+export const streamTagAdminItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  isBanned: z.boolean(),
+  usageCount: z.number().int(),
+  createdAt: z.string(),
+});
+export type StreamTagAdminItem = z.infer<typeof streamTagAdminItemSchema>;
+
+export const mergeStreamTagsSchema = z.object({
+  sourceTagId: z.string().uuid(),
+  targetTagId: z.string().uuid(),
+});
+export type MergeStreamTagsInput = z.infer<typeof mergeStreamTagsSchema>;

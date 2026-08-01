@@ -39,6 +39,11 @@ export function StreamMeta({ stream }: { stream: StreamDetail }) {
       <div className={styles.tags}>
         {stream.category && <span className={styles.tag}>{stream.category}</span>}
         {stream.language && <span className={styles.tag}>{stream.language}</span>}
+        {stream.tags.map((tag) => (
+          <span key={tag} className={styles.tag}>
+            {tag}
+          </span>
+        ))}
       </div>
       {stream.isSensitive && (
         // Only opted-in viewers (or the creator) ever reach this page for a

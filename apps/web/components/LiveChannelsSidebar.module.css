@@ -81,6 +81,7 @@
   border-radius: 50%;
   background: var(--surface-container-high);
   object-fit: cover;
+  box-shadow: 0 0 0 2px var(--surface-container), 0 0 0 4px var(--error);
 }
 
 .avatarPlaceholder {
@@ -88,17 +89,7 @@
   height: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container-lowest));
-}
-
-.liveDot {
-  position: absolute;
-  bottom: -1px;
-  right: -1px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--error);
-  border: 2px solid var(--surface-container);
+  box-shadow: 0 0 0 2px var(--surface-container), 0 0 0 4px var(--error);
 }
 
 .info {

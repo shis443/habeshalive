@@ -5,6 +5,7 @@ import {
   extendGracePeriodSchema,
   forceEndStreamSchema,
   manualAdjustmentSchema,
+  mergeStreamTagsSchema,
   rejectCreatorApplicationSchema,
   suspendCreatorSchema,
   updateAdCampaignStatusSchema,
@@ -31,6 +32,7 @@ import {
   listGiftCardsAdmin,
   listSuspiciousGiftCardPurchasers,
 } from "../gift-cards/service.js";
+import { listTagsAdmin, mergeTags, setTagBanned } from "../streams/tags-service.js";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
 import { listAnchorCandidates, listAnchorCreators } from "./anchor-service.js";
@@ -271,6 +273,26 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
   app.post<{ Params: { id: string } }>("/gift-cards/:id/cancel", { preHandler: app.requireAdmin }, async (req) => {
     await cancelGiftCard(req.user.sub, req.params.id);
+    return { ok: true };
+  });
+
+  // --- Stream tags (C.6) ---
+
+  app.get("/stream-tags", { preHandler: app.requireAdmin }, async () => listTagsAdmin());
+
+  app.post<{ Params: { id: string } }>("/stream-tags/:id/ban", { preHandler: app.requireAdmin }, async (req) => {
+    await setTagBanned(req.user.sub, req.params.id, true);
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/stream-tags/:id/unban", { preHandler: app.requireAdmin }, async (req) => {
+    await setTagBanned(req.user.sub, req.params.id, false);
+    return { ok: true };
+  });
+
+  app.post("/stream-tags/merge", { preHandler: app.requireAdmin }, async (req) => {
+    const input = mergeStreamTagsSchema.parse(req.body);
+    await mergeTags(req.user.sub, input.sourceTagId, input.targetTagId);
     return { ok: true };
   });
 };

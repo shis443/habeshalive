@@ -82,6 +82,12 @@ export function AdminSidebar() {
         Gift Cards
       </Link>
       <Link
+        href="/admin/stream-tags"
+        className={pathname.startsWith("/admin/stream-tags") ? styles.linkActive : styles.link}
+      >
+        Stream Tags
+      </Link>
+      <Link
         href="/admin/subscriptions"
         className={pathname.startsWith("/admin/subscriptions") ? styles.linkActive : styles.link}
       >
