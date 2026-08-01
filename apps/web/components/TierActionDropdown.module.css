@@ -67,6 +67,13 @@
   font-size: 12px;
 }
 
+.perk {
+  padding: var(--space-2);
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  border-bottom: 1px solid var(--outline-variant);
+}
+
 .message {
   padding: var(--space-2);
   font-size: 12px;

@@ -72,6 +72,7 @@ export function TierActionDropdown({
       </button>
       {dropdown.open && (
         <div className={styles.dropdown}>
+          {mode === "subscribe" && <p className={styles.perk}>No ads on this creator&apos;s stream while subscribed.</p>}
           {tiers.map((tier) => (
             <button
               key={tier.id}
