@@ -43,6 +43,16 @@ function keyByUser(req: FastifyRequest): string {
   return req.user?.sub ? `user:${req.user.sub}` : req.ip;
 }
 
+// SRS's `param` field is the raw query string appended to the RTMP/WHIP
+// stream name (e.g. "?key=abc123"), forwarded verbatim from whatever the
+// encoder published to. See srsCallbackSchema's comment for why the actual
+// stream_key now travels here instead of as the stream name itself.
+function extractKeyFromParam(param: string | undefined): string | null {
+  if (!param) return null;
+  const qs = param.startsWith("?") ? param.slice(1) : param;
+  return new URLSearchParams(qs).get("key");
+}
+
 export const streamRoutes: FastifyPluginAsync = async (app) => {
   const VALID_SORTS = new Set<LiveStreamSort>(["viewers", "recent", "alphabetical"]);
   app.get<{ Querystring: { category?: string; language?: string; tag?: string; sort?: string } }>(
@@ -125,14 +135,14 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
   app.post("/webhooks/live-started", async (req, reply) => {
     assertWebhookSecret(req);
     const input = srsCallbackSchema.parse(req.body);
-    await markLiveByProviderStreamId(input.stream);
+    await markLiveByProviderStreamId(input.stream, extractKeyFromParam(input.param));
     reply.send({ code: 0 });
   });
 
   app.post("/webhooks/live-ended", async (req, reply) => {
     assertWebhookSecret(req);
     const input = srsCallbackSchema.parse(req.body);
-    await markEndedByProviderStreamId(input.stream);
+    await markEndedByProviderStreamId(input.stream, extractKeyFromParam(input.param));
     reply.send({ code: 0 });
   });
 

@@ -116,12 +116,18 @@ export const vodSchema = z.object({
 export type Vod = z.infer<typeof vodSchema>;
 
 // SRS's on_publish/on_unpublish HTTP callback body — both hooks send the
-// same shape. `stream` is the RTMP stream name, i.e. our stream_key, since
-// creators publish to rtmp://host/live/{stream_key}. SRS sends several other
-// fields (action, app, vhost, client_id, ip, param, ...) but this is the
-// only one our routing logic needs.
+// same shape. `stream` is the RTMP stream name. As of the stream-key
+// exposure fix, that's the creator's own user id (safe to expose — it's
+// already public everywhere), NOT the secret publish credential: creators
+// publish to rtmp://host/live/{userId}?key={stream_key}, and `param` is
+// where SRS forwards that query string (e.g. "?key=abc123"). The old shape
+// (`stream` = the raw stream_key) embedded the publish secret directly in
+// the public playback URL, since SRS's HLS output path mirrors whatever
+// name was used to publish — see streams/service.ts's markLiveByProviderStreamId
+// for where `param` gets parsed and validated against the real secret.
 export const srsCallbackSchema = z.object({
   stream: z.string().min(1),
+  param: z.string().optional(),
 });
 export type SrsCallback = z.infer<typeof srsCallbackSchema>;
 

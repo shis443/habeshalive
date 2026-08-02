@@ -157,9 +157,20 @@ async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> 
   }
 }
 
+// The "Stream Key" field value a creator pastes into OBS is a composed
+// `{userId}?key={secret}` string, not the bare secret — see the stream-key
+// exposure fix note on srsCallbackSchema. userId is the RTMP "stream name"
+// (and therefore also the HLS playback path SRS serves it at), the actual
+// `?key=` part travels as an RTMP query param SRS forwards to on_publish as
+// `param`. GoLivePanel's buildWhipUrl and StreamKeyRow both consume this
+// same composed string unchanged, splitting it apart only where needed.
+function composeStreamKeyField(userId: string, secret: string): string {
+  return `${userId}?key=${secret}`;
+}
+
 export async function getStreamKey(userId: string): Promise<StreamKeyResponse> {
   const profile = await ensureCreatorProfile(userId);
-  return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey: profile.stream_key };
+  return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey: composeStreamKeyField(userId, profile.stream_key) };
 }
 
 export async function rotateStreamKey(userId: string): Promise<StreamKeyResponse> {
@@ -169,7 +180,7 @@ export async function rotateStreamKey(userId: string): Promise<StreamKeyResponse
     streamKey,
     userId,
   ]);
-  return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey };
+  return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey: composeStreamKeyField(userId, streamKey) };
 }
 
 // category/language matched case-insensitively — stream.category and
@@ -416,7 +427,10 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   );
   if (userRows[0]?.is_suspended) throw new AppError(403, "Your streaming privileges are currently suspended");
 
-  const profile = await ensureCreatorProfile(userId);
+  // Return value unused here — goLive no longer needs the raw stream_key
+  // (playback_url is now keyed by userId, not the secret), just the
+  // side effect of ensuring a profile/approval exists.
+  await ensureCreatorProfile(userId);
 
   await pool.query(
     `UPDATE streams SET status = 'ended', ended_at = now()
@@ -433,14 +447,17 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
     userId,
   ]);
 
-  const playbackUrl = videoProvider.getPlaybackUrl(profile.stream_key);
+  // Keyed by userId, not profile.stream_key — see composeStreamKeyField's
+  // comment. The playback URL (and provider_stream_id, used to match
+  // incoming SRS webhooks) must never contain the actual publish secret.
+  const playbackUrl = videoProvider.getPlaybackUrl(userId);
   const thumbnailUrl = input.thumbnailUrl ?? thumbnailPlaceholderUrl(input.category);
 
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive)
      VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8)
      RETURNING id`,
-    [userId, input.title, input.category, input.language, thumbnailUrl, playbackUrl, profile.stream_key, input.isSensitive ?? false]
+    [userId, input.title, input.category, input.language, thumbnailUrl, playbackUrl, userId, input.isSensitive ?? false]
   );
   const streamId = rows[0]!.id;
 
@@ -675,13 +692,33 @@ export async function reapStaleStreams(): Promise<void> {
   }
 }
 
-export async function markLiveByProviderStreamId(providerStreamId: string): Promise<void> {
+// providerStreamId is the creator's own userId (the public RTMP "stream
+// name" — see composeStreamKeyField); providedKey is whatever SRS forwarded
+// in `param`'s "key" query param, which must match the creator's real
+// stream_key or this is either a stale/forged publish attempt or a stranger
+// who only knows the (public) userId. Also closes a real gap found in the
+// security audit: this is the only place that authorizes an actual RTMP
+// publish, and it previously never checked is_suspended/is_banned at all —
+// only the browser go-live path (goLive()) did, so a suspended creator
+// could keep publishing over raw RTMP with a previously-issued key.
+export async function markLiveByProviderStreamId(providerStreamId: string, providedKey: string | null): Promise<void> {
   const profile = await pool.query<CreatorProfileRow>(
-    `SELECT user_id, stream_key FROM creator_profiles WHERE stream_key = $1`,
+    `SELECT user_id, stream_key FROM creator_profiles WHERE user_id = $1`,
     [providerStreamId]
   );
   const creatorId = profile.rows[0]?.user_id;
   if (!creatorId) throw new AppError(404, "Unknown provider stream id");
+  if (!providedKey || providedKey !== profile.rows[0]!.stream_key) {
+    throw new AppError(401, "Invalid stream key");
+  }
+
+  const userStatus = await pool.query<{ is_suspended: boolean; is_banned: boolean }>(
+    `SELECT is_suspended, is_banned FROM users WHERE id = $1`,
+    [creatorId]
+  );
+  if (userStatus.rows[0]?.is_suspended || userStatus.rows[0]?.is_banned) {
+    throw new AppError(403, "Streaming privileges are currently suspended");
+  }
 
   // SRS's on_publish callback carries no playback URL — build it ourselves.
   const playbackUrl = videoProvider.getPlaybackUrl(providerStreamId);
@@ -750,23 +787,30 @@ export async function markLiveByProviderStreamId(providerStreamId: string): Prom
 }
 
 export async function getMostRecentStreamIdByProviderStreamId(providerStreamId: string): Promise<string | null> {
+  // providerStreamId is now the userId directly (see markLiveByProviderStreamId's
+  // comment) — provider_stream_id on streams is written as userId too, so
+  // no join through creator_profiles is needed anymore.
   const { rows } = await pool.query<{ id: string }>(
-    `SELECT s.id FROM streams s
-     JOIN creator_profiles cp ON cp.user_id = s.creator_id
-     WHERE cp.stream_key = $1
-     ORDER BY s.created_at DESC LIMIT 1`,
+    `SELECT id FROM streams WHERE provider_stream_id = $1 ORDER BY created_at DESC LIMIT 1`,
     [providerStreamId]
   );
   return rows[0]?.id ?? null;
 }
 
-export async function markEndedByProviderStreamId(providerStreamId: string): Promise<void> {
+export async function markEndedByProviderStreamId(providerStreamId: string, providedKey: string | null): Promise<void> {
   const profile = await pool.query<CreatorProfileRow>(
-    `SELECT user_id FROM creator_profiles WHERE stream_key = $1`,
+    `SELECT user_id, stream_key FROM creator_profiles WHERE user_id = $1`,
     [providerStreamId]
   );
   const creatorId = profile.rows[0]?.user_id;
   if (!creatorId) throw new AppError(404, "Unknown provider stream id");
+  // Same key check as markLiveByProviderStreamId — providerStreamId (the
+  // userId) is public, so without this a forged on_unpublish for any known
+  // creator would be trivial for anyone who also has the shared
+  // VIDEO_WEBHOOK_SECRET (defense in depth, not the primary boundary).
+  if (!providedKey || providedKey !== profile.rows[0]!.stream_key) {
+    throw new AppError(401, "Invalid stream key");
+  }
 
   const { rows } = await pool.query<{ id: string }>(
     `UPDATE streams SET status = 'ended', ended_at = now()

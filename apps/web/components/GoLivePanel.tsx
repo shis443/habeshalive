@@ -49,10 +49,18 @@ function fileToCompressedDataUrl(file: File): Promise<string> {
   });
 }
 
-function buildWhipUrl(streamKey: string): string {
+// streamKeyField is the composed "{userId}?key={secret}" string (see
+// apps/api/src/streams/service.ts's composeStreamKeyField) — same value
+// shown/copied in the OBS tab's Stream Key field, since OBS just
+// concatenates server + "/" + that string into one RTMP URL and SRS parses
+// the "?key=" part back out as a query param on its own. WHIP already
+// speaks in URL query params directly, so it's split apart here instead.
+function buildWhipUrl(streamKeyField: string): string {
+  const [publicStreamId, key] = streamKeyField.split("?key=");
   const url = new URL(SRS_WHIP_URL);
   url.searchParams.set("app", "live");
-  url.searchParams.set("stream", streamKey);
+  url.searchParams.set("stream", publicStreamId ?? streamKeyField);
+  if (key) url.searchParams.set("key", key);
   // No `eip` param here on purpose — SRS's rtc_server.candidate (see
   // infra/srs/fly.toml's SRS_WEBRTC_CANDIDATE) already advertises the
   // correct public ip:port on its own. Passing `eip` too used to add a
