@@ -28,8 +28,14 @@ function getSnapshot() {
   return state;
 }
 
+// A stable module-level constant, not a fresh object literal per call —
+// useSyncExternalStore requires getServerSnapshot to return a referentially
+// stable value when nothing changed, or React treats every render as a
+// change (real bug, caught live: "The result of getServerSnapshot should
+// be cached to avoid an infinite loop").
+const SERVER_SNAPSHOT: AuthModalState = { open: false, initialMode: "login" };
 function getServerSnapshot(): AuthModalState {
-  return { open: false, initialMode: "login" };
+  return SERVER_SNAPSHOT;
 }
 
 export function openAuthModal(mode: "login" | "signup" = "login") {

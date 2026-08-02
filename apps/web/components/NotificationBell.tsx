@@ -3,12 +3,23 @@
 import type { Notification } from "@habeshalive/shared";
 import { Centrifuge } from "centrifuge";
 import { useEffect, useState } from "react";
-import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
+import { CENTRIFUGO_WS_URL } from "@/lib/config";
 import styles from "./TopNav.module.css";
 import { BellIcon } from "./icons";
 
+// Unlike ChatPanel's fetchChatToken (deliberately calls the API directly
+// so anonymous viewers get a connection token too — public chat needs no
+// identity), this MUST go through the authenticated /api/backend proxy:
+// the notifications channel is user-restricted (Centrifugo's `#user_id`
+// mechanism — see infra/centrifugo/config.json), so the token has to
+// carry the real signed-in user's id or Centrifugo correctly rejects the
+// subscription with "permission denied". A direct cross-origin call to
+// the API can't carry the httpOnly session cookie at all, so it always
+// resolves to an anonymous token — confirmed live via raw WS frame
+// inspection before this fix (subscribe attempt came back
+// {"error":{"code":103,"message":"permission denied"}}).
 async function fetchToken(): Promise<string> {
-  const res = await fetch(`${API_BASE_URL}/chat/token`, { method: "POST" });
+  const res = await fetch("/api/backend/chat/token", { method: "POST" });
   const data = await res.json();
   return data.token as string;
 }
