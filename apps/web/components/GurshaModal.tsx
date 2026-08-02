@@ -2,8 +2,7 @@
 
 import { formatSantimAsBirr, type GifterBadge, type GiftType } from "@habeshalive/shared";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useDropdown } from "@/lib/useDropdown";
+import { useEffect, useRef, useState } from "react";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { CloseIcon } from "./icons";
 import styles from "./GurshaModal.module.css";
@@ -58,14 +57,26 @@ export function GurshaModal({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const dropdown = useDropdown<HTMLDivElement>();
-  const { setOpen } = dropdown;
+  // This modal is already mount/unmount-controlled by the parent
+  // (ChatPanel's gurshaModalOpen state) — it doesn't need useDropdown's
+  // internal open/close state machine, just the outside-click part.
+  // A prior version borrowed useDropdown wholesale: it starts `open: false`,
+  // and `setOpen(true)` doesn't take effect until the next render — so the
+  // very next effect, reading the same stale `open === false`, called
+  // onClose() immediately in the same effect flush. Net effect: the modal
+  // mounted and unmounted itself before a viewer could ever see it ("won't
+  // show for more than a blink"). This version has no internal open state
+  // to race — an outside click just calls onClose() directly.
+  const anchorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    setOpen(true);
-  }, [setOpen]);
-  useEffect(() => {
-    if (!dropdown.open) onClose();
-  }, [dropdown.open, onClose]);
+    function handleOutsideClick(e: MouseEvent) {
+      if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [onClose]);
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -132,7 +143,7 @@ export function GurshaModal({
       : 100;
 
   return (
-    <div className={styles.anchor} ref={dropdown.ref}>
+    <div className={styles.anchor} ref={anchorRef}>
       <div className={styles.panel}>
         <div className={styles.header}>
           <h3 className={styles.title}>Send Gursha</h3>

@@ -29,7 +29,15 @@ export function ChatSettingsPanel({
         <GearIcon />
       </button>
       {dropdown.open && (
-        <div className={`${styles.menu} ${panelStyles.panel}`}>
+        // ShareSheet.module.css's shared .menu anchors `left: 0`, which is
+        // correct for most of its other consumers but not this one: the
+        // gear icon is the rightmost item in the chat header, so a menu
+        // growing rightward from it runs off the sidebar/viewport edge (the
+        // panel's own min-width is ~220px against a header that's often
+        // narrower than that once you're this close to its right edge).
+        // Overridden inline, not via a second CSS class, so it can't lose a
+        // specificity/load-order fight with the shared stylesheet.
+        <div className={`${styles.menu} ${panelStyles.panel}`} style={{ left: "auto", right: 0 }}>
           <label className={panelStyles.row}>
             <span>Large emoji</span>
             <input
