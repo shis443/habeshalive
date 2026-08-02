@@ -28,7 +28,12 @@ import { walletRoutes } from "./wallet/routes.js";
 export function buildApp() {
   const app = Fastify({ logger: true });
 
-  app.register(cors, { origin: true });
+  // Explicit allowlist, not `origin: true` (reflects any Origin header) —
+  // WEB_PUBLIC_URL is the one legitimate browser origin this API is ever
+  // loaded from (see apps/web/lib/config.ts's API_BASE_URL, used by a
+  // handful of client components that call this API directly rather than
+  // through the /api/backend/* same-origin proxy).
+  app.register(cors, { origin: [env.WEB_PUBLIC_URL] });
   app.register(jwt, { secret: env.JWT_SECRET });
 
   // Shared Redis-backed store (ioredis) so limits are enforced across all

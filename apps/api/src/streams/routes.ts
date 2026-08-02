@@ -1,4 +1,5 @@
 import { createStreamSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@habeshalive/shared";
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getBoostPricing } from "../admin/config-service.js";
 import { env } from "../common/env.js";
@@ -31,7 +32,15 @@ import { searchTagNames } from "./tags-service.js";
 function assertWebhookSecret(req: FastifyRequest): void {
   const query = req.query as Record<string, unknown>;
   const provided = req.headers["x-webhook-secret"] ?? query.secret;
-  if (provided !== env.VIDEO_WEBHOOK_SECRET) {
+  // Constant-time compare, same reasoning as wallet/routes.ts's Chapa
+  // signature check — a plain !== leaks timing information about how many
+  // leading characters matched, in principle usable to brute-force the
+  // secret byte-by-byte. Length-checked first since timingSafeEqual throws
+  // on mismatched buffer lengths rather than returning false.
+  if (typeof provided !== "string") throw new AppError(401, "Invalid webhook secret");
+  const providedBuf = Buffer.from(provided);
+  const expectedBuf = Buffer.from(env.VIDEO_WEBHOOK_SECRET);
+  if (providedBuf.length !== expectedBuf.length || !timingSafeEqual(providedBuf, expectedBuf)) {
     throw new AppError(401, "Invalid webhook secret");
   }
 }

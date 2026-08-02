@@ -1,6 +1,39 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { env } from "../common/env.js";
 
+// Force-drops every live WebSocket connection Centrifugo has open for this
+// user (chat, gift-alerts, notifications — any namespace, since a user's
+// "sub" is shared across all of them). Bans previously only set a DB flag:
+// an already-connected banned user kept receiving live chat/gift-alert
+// pushes until their token naturally expired (up to an hour — see
+// createCentrifugoConnectionToken's exp). This makes it immediate. A code
+// in the 4000-4999 range signals the client shouldn't auto-reconnect (per
+// Centrifugo's disconnect code conventions), matching "banned, not a
+// transient network blip."
+const BANNED_DISCONNECT_CODE = 4001;
+
+export async function disconnectUserRealtime(userId: string, reason: string): Promise<void> {
+  try {
+    const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
+      method: "POST",
+      headers: { "X-API-Key": env.CENTRIFUGO_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "disconnect",
+        params: { user: userId, disconnect: { code: BANNED_DISCONNECT_CODE, reason } },
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[centrifugo] disconnect failed for user ${userId}: ${res.status}`);
+    }
+  } catch (err) {
+    // Best-effort — a banned user still can't post (rejectIfBanned) or
+    // mint a fresh token past their current one's expiry; this just
+    // shortens the window on an already-open connection, so a Centrifugo
+    // blip here shouldn't fail the ban action itself.
+    console.error(`[centrifugo] disconnect request failed for user ${userId}:`, err);
+  }
+}
+
 // Centrifugo connection tokens are plain HS256 JWTs signed with its own
 // token_hmac_secret_key (NOT this app's JWT_SECRET — a different secret,
 // shared only with the Centrifugo deployment, see infra/centrifugo). No

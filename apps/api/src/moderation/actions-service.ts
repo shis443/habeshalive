@@ -1,5 +1,6 @@
 import type { ModerationActionRecord } from "@habeshalive/shared";
 import { logAdminAction } from "../admin/audit.js";
+import { disconnectUserRealtime } from "../chat/token.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { notify } from "../notifications/service.js";
@@ -25,6 +26,13 @@ export async function banUser(actorId: string, targetUserId: string, reason?: st
     await notify(targetUserId, "moderation_action", "Your account was banned", {
       body: reason,
       linkUrl: "/safety-center",
+    });
+    // Previously a ban only set a DB flag — an already-open chat/gift-alert
+    // WebSocket kept working until its token naturally expired (up to an
+    // hour). Detached like notify() above: a Centrifugo blip here shouldn't
+    // fail the ban action itself, see disconnectUserRealtime's own comment.
+    disconnectUserRealtime(targetUserId, reason ?? "Account banned").catch((err) => {
+      console.error("[moderation] disconnectUserRealtime failed:", err);
     });
   } catch (err) {
     await client.query("ROLLBACK");
