@@ -4,6 +4,24 @@ This describes the system as it actually runs — one narrative, kept in sync
 with `docker-compose.yml`. There is no separate "future migration" plan for
 video hosting; self-hosted SRS is the answer, not a placeholder for one.
 
+> **This document predates a large amount of what's actually built.** It
+> was written during the platform's early build (payments, chat,
+> moderation, search, a six-metric admin dashboard) and was never
+> continuously extended as later work shipped: subscriptions, boosts,
+> gift cards, house advertising, notifications, multi-account sessions,
+> account deletion, Google/Apple sign-in, the full 22-section admin panel
+> (RBAC, ledger reconciliation, creator applications, stream tags,
+> announcements, anchor creator program, and more), and the whole watch
+> experience (browse, i18n, language filters). None of that is described
+> below — for what those areas actually look like today, the source is
+> the ground truth (`apps/api/src/{subscriptions,ads,gift-cards,
+> notifications,admin}/`, `apps/web/app/admin/`), not this file. What's
+> still accurate below (the video pipeline, chat delivery mechanism, auth,
+> payments, rate limiting, testing/CI approach) has been spot-checked and
+> corrected as of 2026-08-02 — see `docs/SECURITY.md`, `docs/OPERATIONS.md`,
+> and `docs/ROADMAP.md` for what that audit found, including two real
+> fixes (stream-key exposure, CORS) applied directly to the sections below.
+
 ## Topology
 
 ```
@@ -37,12 +55,24 @@ which connects to Centrifugo directly from the browser.
 
 ## Video pipeline (SRS)
 
-- **Ingest**: creators point OBS at `rtmp://<SRS_RTMP_HOST>/live/<stream_key>`,
-  which resolves to HAProxy's `1935` frontend, TCP-load-balanced (round
-  robin) across the SRS nodes. The stream key is generated locally when a
-  creator first requests one (`GET /streams/key`) — SRS needs no
-  provisioning API call the way a managed provider would; any RTMP stream
-  name just works.
+- **Ingest**: creators point OBS at a server URL (`rtmp://<SRS_RTMP_HOST>/live`)
+  and a "Stream Key" field whose actual value is a composed
+  `<userId>?key=<secret>` string (`composeStreamKeyField` in
+  `apps/api/src/streams/service.ts`) — **not** the bare secret. This is a
+  2026-08-02 fix, not the original design: the RTMP "stream name" (and
+  therefore the public HLS playback path, since SRS's HLS output mirrors
+  whatever name was used to publish) used to be the raw `stream_key`
+  itself, meaning the actual publish credential was embedded directly in
+  every viewer's `playbackUrl` and retrievable from an unauthenticated
+  `GET /streams/live`. Now the stream name is the creator's own `userId`
+  (already public everywhere else — every stream listing already returns
+  `creator.id`), and the real secret travels only as SRS's `param` field
+  (the RTMP query string), validated server-side against
+  `creator_profiles.stream_key` before a publish is authorized — see
+  `docs/SECURITY.md`'s Stream ingest security section for the full
+  writeup. The stream key is generated locally when a creator first
+  requests one (`GET /streams/key`) — SRS needs no provisioning API call
+  the way a managed provider would; any RTMP stream name just works.
 - **Multi-node HLS**: a given RTMP publish always lands on exactly one SRS
   node (inherent to a single TCP connection), but HAProxy's HLS frontend
   (`8080`, HTTP mode, `balance uri`) makes an independent per-request
@@ -58,16 +88,21 @@ which connects to Centrifugo directly from the browser.
   writeup.)
 - **Output**: SRS transmuxes the incoming RTMP to HLS automatically and
   serves it over its own HTTP server at
-  `http://<SRS_HTTP_HOST>/live/<stream_key>.m3u8` (via HAProxy). `apps/api`
+  `http://<SRS_HTTP_HOST>/live/<userId>.m3u8` (via HAProxy in the
+  multi-node local-dev topology; directly in production, which is a
+  single SRS Fly machine — see `docs/OPERATIONS.md`'s Topology section for
+  how production actually differs from this diagram). `apps/api`
   constructs this URL itself (`videoProvider.getPlaybackUrl`) — SRS's
   callbacks don't send a playback URL back.
 - **Callbacks**: SRS calls `POST /streams/webhooks/live-started` on publish
   and `POST /streams/webhooks/live-ended` on unpublish (configured in
   `infra/srs/conf/srs.conf.template`, `vhost.http_hooks`). The payload is
-  SRS's own shape (`{ action, stream, app, vhost, param, ... }`); only
-  `stream` (the stream key) is used. SRS can't send custom headers on these
-  calls, so the webhook secret travels as a `?secret=` query param instead
-  of the `x-webhook-secret` header other callers use — both are accepted.
+  SRS's own shape (`{ action, stream, app, vhost, param, ... }`); `stream`
+  is the userId and `param` carries the `?key=` secret (see the Ingest
+  bullet above). SRS can't send custom headers on these calls, so the
+  webhook secret travels as a `?secret=` query param instead of the
+  `x-webhook-secret` header other callers use — both are accepted, and
+  compared with `timingSafeEqual`.
 - **Player**: `apps/web`'s `VideoPlayer` component uses `hls.js` against
   whatever `playback_url` the API returns, with a native-HLS fallback for
   Safari.
