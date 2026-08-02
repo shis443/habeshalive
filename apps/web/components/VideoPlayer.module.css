@@ -4,12 +4,25 @@
   aspect-ratio: 16 / 9;
 }
 
+/* Scoped to the player's own box, not a page-wide layout change (hiding
+   the sidebar/resizing the chat column) — see VideoPlayer.tsx's comment.
+   A real, honest "bigger video" mode without threading state through
+   siblings this component has no relationship to. */
+.theater {
+  aspect-ratio: auto;
+  height: min(80vh, 100vw * 9 / 16);
+}
+
 .video {
   width: 100%;
   height: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
   display: block;
+}
+
+.theater .video {
+  aspect-ratio: auto;
 }
 
 .statusOverlay {
@@ -25,6 +38,62 @@
   text-transform: uppercase;
   background: rgba(0, 0, 0, 0.35);
   pointer-events: none;
+}
+
+.controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), transparent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wrap:hover .controls,
+.wrap:focus-within .controls {
+  opacity: 1;
+}
+
+.controlButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: #fff;
+  border-radius: 4px;
+}
+
+.controlButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.controlButtonActive {
+  color: var(--primary);
+}
+
+.volumeSlider {
+  width: 70px;
+  accent-color: var(--primary);
+}
+
+.qualityLabel {
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0 var(--space-1);
+}
+
+.spacer {
+  flex: 1;
 }
 
 .offline {

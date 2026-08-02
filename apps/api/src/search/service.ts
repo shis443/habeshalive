@@ -33,6 +33,7 @@ interface StreamSearchRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  is_verified: boolean;
   is_boosted: boolean;
   is_sensitive: boolean;
   tags: string[];
@@ -47,7 +48,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
   const { rows } = await pool.query<StreamSearchRow>(
     `SELECT s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
             s.started_at, s.status, s.peak_viewers, s.is_sensitive,
-            u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio,
+            u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
             EXISTS (
               SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
             ) AS is_boosted,
@@ -86,6 +87,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
       displayName: row.display_name,
       avatarUrl: row.avatar_url,
       bio: row.bio,
+      isVerified: row.is_verified,
     },
   }));
 }

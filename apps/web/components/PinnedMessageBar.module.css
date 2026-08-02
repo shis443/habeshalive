@@ -36,10 +36,30 @@
   transform: rotate(0deg);
 }
 
-.body {
+.bodyRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
   padding: 0 var(--space-2) var(--space-2) calc(var(--space-2) + 20px);
+}
+
+.body {
+  flex: 1;
   font-family: var(--font-body);
   font-size: 13px;
   color: var(--on-background);
   margin: 0;
+}
+
+.bodyAuthor {
+  font-weight: 600;
+}
+
+.unpinButton {
+  flex: none;
+  color: var(--on-surface-variant);
+}
+
+.unpinButton:hover {
+  color: var(--on-background);
 }

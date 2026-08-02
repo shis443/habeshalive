@@ -1,18 +1,23 @@
 "use client";
 
-import type { ChatMessage, GifterBadgeTier, GiftType, StreamActivity } from "@habeshalive/shared";
+import type { ChatMessage, GifterBadgeTier, GiftType, PinnedMessage, StreamActivity } from "@habeshalive/shared";
 import { Centrifuge } from "centrifuge";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
 import { formatViewerCount } from "@/lib/format";
+import { useChatSettings } from "@/lib/useChatSettings";
 import { usernameColor } from "@/lib/userColor";
+import { AnnouncementBanner } from "./AnnouncementBanner";
+import { ChatSettingsPanel } from "./ChatSettingsPanel";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { GurshaModal } from "./GurshaModal";
-import { CloseIcon, GiftIcon, GroupIcon, MoreIcon, SendIcon } from "./icons";
+import { CloseIcon, GiftIcon, PinIcon, SendIcon } from "./icons";
 import styles from "./ChatPanel.module.css";
 import { PinnedMessageBar } from "./PinnedMessageBar";
+import { RecentGiftersStrip } from "./RecentGiftersStrip";
 import { StreamActivityStrip } from "./StreamActivityStrip";
+import { ViewerListPanel } from "./ViewerListPanel";
 
 const BADGE_EMOJI: Record<GifterBadgeTier, string> = {
   none: "",
@@ -20,6 +25,12 @@ const BADGE_EMOJI: Record<GifterBadgeTier, string> = {
   silver: "🥈",
   gold: "🥇",
   platinum: "💎",
+};
+const ROLE_EMOJI: Record<ChatMessage["senderRole"], string> = {
+  viewer: "",
+  creator: "",
+  moderator: "🛡️",
+  admin: "👑",
 };
 
 type ChatEntry =
@@ -31,6 +42,9 @@ type ChatEntry =
       username: string;
       text: string;
       gifterBadgeTier: GifterBadgeTier;
+      senderRole: ChatMessage["senderRole"];
+      subscriberMonths: number | null;
+      createdAt: string;
     };
 
 const WELCOME_MESSAGE: ChatEntry = {
@@ -38,6 +52,20 @@ const WELCOME_MESSAGE: ChatEntry = {
   kind: "system",
   text: "Welcome to the chat! Please be respectful.",
 };
+
+function toEntry(m: ChatMessage): ChatEntry {
+  return {
+    id: m.id,
+    kind: "message",
+    userId: m.userId,
+    username: m.displayName,
+    text: m.body,
+    gifterBadgeTier: m.gifterBadgeTier,
+    senderRole: m.senderRole,
+    subscriberMonths: m.subscriberMonths,
+    createdAt: m.createdAt,
+  };
+}
 
 async function fetchChatToken(): Promise<string> {
   // Deliberately hits the API directly (not the /api/backend proxy) — this
@@ -57,6 +85,8 @@ export function ChatPanel({
   giftTypes,
   isAuthed,
   currentUsername,
+  currentUserId,
+  currentUserRole,
   activity,
 }: {
   streamId: string;
@@ -65,14 +95,22 @@ export function ChatPanel({
   giftTypes: GiftType[];
   isAuthed: boolean;
   currentUsername: string | null;
+  currentUserId: string | null;
+  currentUserRole: "viewer" | "creator" | "moderator" | "admin" | null;
   activity: StreamActivity;
 }) {
   const router = useRouter();
+  const { settings, update: updateSettings } = useChatSettings();
   const [messages, setMessages] = useState<ChatEntry[]>([WELCOME_MESSAGE]);
+  const [pinnedMessage, setPinnedMessage] = useState<PinnedMessage | null>(null);
+  const [balanceSantim, setBalanceSantim] = useState<number | null>(null);
   const [input, setInput] = useState("");
   const [gurshaModalOpen, setGurshaModalOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const canModerate =
+    isAuthed && !!currentUserId && (currentUserId === creatorId || currentUserRole === "moderator" || currentUserRole === "admin");
 
   // Real chatters to target with "Gursha a specific viewer" — drawn from
   // who's actually spoken in this session rather than a separate
@@ -86,6 +124,23 @@ export function ChatPanel({
     }
     return Array.from(seen, ([userId, username]) => ({ userId, username }));
   }, [messages, currentUsername]);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/chat/${streamId}/pinned`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setPinnedMessage)
+      .catch(() => {});
+  }, [streamId]);
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    fetch("/api/backend/wallet/balance")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setBalanceSantim(data.balanceSantim);
+      })
+      .catch(() => {});
+  }, [isAuthed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,17 +165,7 @@ export function ChatPanel({
             const existingIds = new Set(prev.map((entry) => entry.id));
             const missing = history.filter((m) => !existingIds.has(m.id));
             if (missing.length === 0) return prev;
-            return [
-              ...prev,
-              ...missing.map((m) => ({
-                id: m.id,
-                kind: "message" as const,
-                userId: m.userId,
-                username: m.displayName,
-                text: m.body,
-                gifterBadgeTier: m.gifterBadgeTier,
-              })),
-            ];
+            return [...prev, ...missing.map(toEntry)];
           });
         })
         .catch(() => {
@@ -133,7 +178,14 @@ export function ChatPanel({
 
     const sub = centrifuge.newSubscription(`stream-chat:${streamId}`);
     sub.on("publication", (ctx) => {
-      const m = ctx.data as ChatMessage;
+      const data = ctx.data as
+        | { type: "message"; message: ChatMessage }
+        | { type: "pin"; pinnedMessage: PinnedMessage | null };
+      if (data.type === "pin") {
+        setPinnedMessage(data.pinnedMessage);
+        return;
+      }
+      const m = data.message;
       setMessages((prev) => {
         // Own messages are also appended in handleSend once its POST
         // resolves, and the two can arrive in either order (the server
@@ -141,17 +193,7 @@ export function ChatPanel({
         // WS echo often wins the race) — dedup by id regardless of which
         // side runs first.
         if (prev.some((entry) => entry.id === m.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: m.id,
-            kind: "message",
-            userId: m.userId,
-            username: m.displayName,
-            text: m.body,
-            gifterBadgeTier: m.gifterBadgeTier,
-          },
-        ];
+        return [...prev, toEntry(m)];
       });
     });
     // Fires on the first successful subscribe AND again on every
@@ -207,17 +249,7 @@ export function ChatPanel({
       const sent: ChatMessage = await res.json();
       setMessages((prev) => {
         if (prev.some((entry) => entry.id === sent.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: sent.id,
-            kind: "message",
-            userId: sent.userId,
-            username: sent.displayName,
-            text: sent.body,
-            gifterBadgeTier: sent.gifterBadgeTier,
-          },
-        ];
+        return [...prev, toEntry(sent)];
       });
     } catch {
       setMessages((prev) => [
@@ -237,24 +269,51 @@ export function ChatPanel({
     setGurshaModalOpen(true);
   }
 
+  async function handlePin(messageId: string) {
+    try {
+      const res = await fetch(`/api/backend/chat/${streamId}/pinned`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId }),
+      });
+      if (res.ok) setPinnedMessage(await res.json());
+    } catch {
+      // Pinning is a moderation nicety, not core chat — a failure here
+      // just leaves the old pin (or none) in place.
+    }
+  }
+
+  async function handleUnpin() {
+    try {
+      await fetch(`/api/backend/chat/${streamId}/pinned`, { method: "DELETE" });
+      setPinnedMessage(null);
+    } catch {
+      // Same as above — best-effort.
+    }
+  }
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <span className={styles.headerTitle}>Stream Chat</span>
         <div className={styles.headerIcons}>
-          <span className={styles.counter}>
-            <GroupIcon />
-            {formatViewerCount(viewerCount)}
-          </span>
-          <MoreIcon />
+          <span className={styles.counter}>{formatViewerCount(viewerCount)}</span>
+          <ViewerListPanel streamId={streamId} />
+          <ChatSettingsPanel settings={settings} onChange={updateSettings} />
         </div>
       </div>
 
-      <PinnedMessageBar moderator="cm_moderator" text="M3 LINKS → check the description for the Discord invite" />
+      <AnnouncementBanner />
+
+      {pinnedMessage && (
+        <PinnedMessageBar pinned={pinnedMessage} canUnpin={canModerate} onUnpin={handleUnpin} />
+      )}
+
+      <RecentGiftersStrip streamId={streamId} />
 
       <StreamActivityStrip events={activity.recentEvents} />
 
-      <div className={styles.messages}>
+      <div className={`${styles.messages} ${styles[`font-${settings.fontSize}`]}`}>
         {messages.map((entry) =>
           entry.kind === "system" ? (
             <div key={entry.id} className={styles.systemMessage}>
@@ -270,13 +329,47 @@ export function ChatPanel({
             </div>
           ) : (
             <p key={entry.id} className={styles.message}>
+              {settings.showTimestamps && (
+                <span className={styles.timestamp}>
+                  {new Date(entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{" "}
+                </span>
+              )}
+              {ROLE_EMOJI[entry.senderRole] && (
+                <span
+                  className={settings.largeEmoji ? styles.badgeLarge : styles.badge}
+                  title={entry.senderRole}
+                >
+                  {ROLE_EMOJI[entry.senderRole]}{" "}
+                </span>
+              )}
+              {entry.subscriberMonths !== null && (
+                <span className={styles.subBadge} title={`Subscribed ${entry.subscriberMonths}mo`}>
+                  ⭐{entry.subscriberMonths}mo{" "}
+                </span>
+              )}
               {entry.gifterBadgeTier !== "none" && (
-                <span title={`${entry.gifterBadgeTier} gifter`}>{BADGE_EMOJI[entry.gifterBadgeTier]} </span>
+                <span
+                  className={settings.largeEmoji ? styles.badgeLarge : styles.badge}
+                  title={`${entry.gifterBadgeTier} gifter`}
+                >
+                  {BADGE_EMOJI[entry.gifterBadgeTier]}{" "}
+                </span>
               )}
               <span className={styles.username} style={{ color: usernameColor(entry.username) }}>
                 {entry.username}
               </span>{" "}
               {entry.text}
+              {canModerate && (
+                <button
+                  type="button"
+                  className={styles.pinTrigger}
+                  onClick={() => handlePin(entry.id)}
+                  aria-label="Pin this message"
+                  title="Pin this message"
+                >
+                  <PinIcon />
+                </button>
+              )}
             </p>
           )
         )}
@@ -312,6 +405,9 @@ export function ChatPanel({
           </button>
         </form>
         {!isAuthed && <p className={styles.loginHint}>Log in to chat and send Gursha.</p>}
+        {isAuthed && balanceSantim !== null && (
+          <p className={styles.balanceHint}>Wallet: {(balanceSantim / 100).toFixed(2)} birr</p>
+        )}
       </div>
 
       {gurshaModalOpen && (

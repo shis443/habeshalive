@@ -20,6 +20,9 @@ export const liveStreamSchema = z.object({
     displayName: z.string(),
     avatarUrl: z.string().nullable(),
     bio: z.string().nullable(),
+    // Admin-set only (see admin/creators-service.ts) — no automated
+    // verification criteria exist yet.
+    isVerified: z.boolean(),
   }),
 });
 export type LiveStream = z.infer<typeof liveStreamSchema>;
@@ -28,6 +31,27 @@ export const streamDetailSchema = liveStreamSchema.extend({
   status: streamStatusSchema,
 });
 export type StreamDetail = z.infer<typeof streamDetailSchema>;
+
+// D.1: individual viewer currently connected to the stream's chat channel,
+// resolved from Centrifugo's presence API (see streams/service.ts's
+// getViewerList) — anonymous connections (no logged-in userId) are
+// summarized as a count, not listed individually, since there's no
+// profile to show.
+export const viewerListEntrySchema = z.object({
+  userId: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  avatarUrl: z.string().nullable(),
+  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  gifterBadgeTier: z.enum(["none", "bronze", "silver", "gold", "platinum"]),
+});
+export type ViewerListEntry = z.infer<typeof viewerListEntrySchema>;
+
+export const viewerListSchema = z.object({
+  viewers: z.array(viewerListEntrySchema),
+  anonymousCount: z.number().int().nonnegative(),
+});
+export type ViewerList = z.infer<typeof viewerListSchema>;
 
 export const createStreamSchema = z.object({
   title: z.string().min(1).max(140),

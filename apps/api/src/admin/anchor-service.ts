@@ -8,6 +8,7 @@ interface CreatorRow {
   revenue_share_bps: number;
   is_anchor_creator: boolean;
   is_suspended: boolean;
+  is_verified: boolean;
   total_payouts_santim: string | null;
   stream_count: string;
   follower_count: string;
@@ -25,6 +26,7 @@ function mapCreatorRow(row: CreatorRow): CreatorListItem {
     revenueShareBps: row.revenue_share_bps,
     isAnchorCreator: row.is_anchor_creator,
     isSuspended: row.is_suspended,
+    isVerified: row.is_verified,
     totalPayoutsSantim: Number(row.total_payouts_santim ?? 0),
     streamCount: Number(row.stream_count),
     followerCount: Number(row.follower_count),
@@ -33,7 +35,7 @@ function mapCreatorRow(row: CreatorRow): CreatorListItem {
 
 export async function listAnchorCreators(): Promise<CreatorListItem[]> {
   const { rows } = await pool.query<CreatorRow>(
-    `SELECT u.id, u.username, u.display_name, cp.revenue_share_bps, cp.is_anchor_creator, u.is_suspended,
+    `SELECT u.id, u.username, u.display_name, cp.revenue_share_bps, cp.is_anchor_creator, u.is_suspended, u.is_verified,
             (SELECT sum(amount_santim) FROM payouts WHERE creator_id = u.id AND status = 'paid') AS total_payouts_santim,
             (SELECT count(*) FROM streams WHERE creator_id = u.id) AS stream_count,
             (SELECT count(*) FROM follows WHERE creator_id = u.id) AS follower_count

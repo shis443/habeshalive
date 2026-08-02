@@ -18,6 +18,14 @@ export const chatMessageSchema = z.object({
   // (gifter_badges is scoped per-creator, see db/migrations/0019_gursha.sql)
   // — "none" means never gifted this creator, not "no badge system exists."
   gifterBadgeTier: gifterBadgeTierSchema,
+  // Platform role at send time (live-joined against users.role, same
+  // computed-not-stored pattern as gifterBadgeTier above — a later role
+  // change doesn't rewrite history, it just changes what the next message
+  // reflects).
+  senderRole: z.enum(["viewer", "creator", "moderator", "admin"]),
+  // Whole months since subscriptions.started_at for an active subscription
+  // to THIS stream's creator specifically; null if not subscribed.
+  subscriberMonths: z.number().int().nullable(),
   createdAt: z.string(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
@@ -26,3 +34,24 @@ export const chatTokenSchema = z.object({
   token: z.string(),
 });
 export type ChatToken = z.infer<typeof chatTokenSchema>;
+
+export const pinnedMessageSchema = z.object({
+  message: chatMessageSchema,
+  pinnedByUsername: z.string(),
+  pinnedAt: z.string(),
+});
+export type PinnedMessage = z.infer<typeof pinnedMessageSchema>;
+
+export const pinMessageSchema = z.object({
+  messageId: z.string().uuid(),
+});
+export type PinMessageInput = z.infer<typeof pinMessageSchema>;
+
+export const recentGifterSchema = z.object({
+  userId: z.string().uuid().nullable(),
+  username: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  totalSantim: z.number().int(),
+  isAnonymous: z.boolean(),
+});
+export type RecentGifter = z.infer<typeof recentGifterSchema>;

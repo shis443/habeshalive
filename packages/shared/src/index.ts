@@ -4,6 +4,7 @@ export * from "./money.js";
 export * from "./thumbnailRender.js";
 export * from "./schemas/admin.js";
 export * from "./schemas/ads.js";
+export * from "./schemas/announcements.js";
 export * from "./schemas/auth.js";
 export * from "./schemas/avatars.js";
 export * from "./schemas/chat.js";

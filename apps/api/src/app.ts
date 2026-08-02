@@ -5,6 +5,7 @@ import Fastify from "fastify";
 import { ZodError } from "zod";
 import { adminRoutes } from "./admin/routes.js";
 import { adRoutes } from "./ads/routes.js";
+import { announcementRoutes } from "./announcements/routes.js";
 import { authRoutes } from "./auth/routes.js";
 import { avatarRoutes } from "./avatars/routes.js";
 import { chatRoutes } from "./chat/routes.js";
@@ -162,6 +163,7 @@ export function buildApp() {
   });
 
   app.register(authRoutes, { prefix: "/auth" });
+  app.register(announcementRoutes, { prefix: "/announcements" });
   app.register(avatarRoutes, { prefix: "/avatars" });
   app.register(chatRoutes, { prefix: "/chat" });
   app.register(followRoutes, { prefix: "/follows" });

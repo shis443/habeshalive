@@ -8,6 +8,7 @@ import {
   adRevenueByCreatorSchema,
   advertiserSchema,
   anchorCandidateSchema,
+  announcementAdminItemSchema,
   appealSchema,
   authUserSchema,
   avatarManifestSchema,
@@ -61,6 +62,7 @@ import {
   type AdRevenueByCreator,
   type Advertiser,
   type AnchorCandidate,
+  type AnnouncementAdminItem,
   type Appeal,
   type AuthUser,
   type AvatarManifest,
@@ -701,4 +703,13 @@ export async function getStreamTagsAdmin(): Promise<StreamTagAdminItem[]> {
     return [];
   }
   return streamTagAdminItemSchema.array().parse(await res.json());
+}
+
+export async function getAnnouncementsAdmin(): Promise<AnnouncementAdminItem[]> {
+  const res = await fetchAuthed("/admin/announcements");
+  if (!res.ok) {
+    console.error(`Failed to load announcements (${res.status})`);
+    return [];
+  }
+  return announcementAdminItemSchema.array().parse(await res.json());
 }

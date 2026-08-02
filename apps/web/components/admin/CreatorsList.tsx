@@ -64,6 +64,25 @@ export function CreatorsList({ items }: { items: CreatorListItem[] }) {
     }
   }
 
+  async function toggleVerified(item: CreatorListItem) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/backend/admin/creators/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isVerified: !item.isVerified }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to update");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function suspend(id: string) {
     if (!suspendReason.trim()) return;
     setSaving(true);
@@ -112,6 +131,7 @@ export function CreatorsList({ items }: { items: CreatorListItem[] }) {
               <div className={styles.rowMain}>
                 <span className={styles.rowTitle}>
                   @{item.username}
+                  {item.isVerified && <span className={creatorStyles.anchorBadge}>Verified</span>}
                   {item.isAnchorCreator && <span className={creatorStyles.anchorBadge}>Anchor</span>}
                   {item.isSuspended && <span className={creatorStyles.suspendedBadge}>Suspended</span>}
                 </span>
@@ -142,6 +162,9 @@ export function CreatorsList({ items }: { items: CreatorListItem[] }) {
                 </div>
                 <button type="button" className={styles.denyButton} disabled={saving} onClick={() => toggleAnchor(item)}>
                   {item.isAnchorCreator ? "Remove anchor status" : "Mark as anchor creator"}
+                </button>
+                <button type="button" className={styles.denyButton} disabled={saving} onClick={() => toggleVerified(item)}>
+                  {item.isVerified ? "Remove verified badge" : "Grant verified badge"}
                 </button>
 
                 {item.isSuspended ? (

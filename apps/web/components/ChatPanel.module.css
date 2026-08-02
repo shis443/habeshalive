@@ -47,8 +47,52 @@
   line-height: 1.4;
 }
 
+.font-small .message {
+  font-size: 12px;
+}
+.font-medium .message {
+  font-size: 13px;
+}
+.font-large .message {
+  font-size: 15px;
+}
+
 .username {
   font-weight: 700;
+}
+
+.timestamp {
+  color: var(--on-surface-variant);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  font-size: 1em;
+}
+
+.badgeLarge {
+  font-size: 1.35em;
+  vertical-align: middle;
+}
+
+.subBadge {
+  color: var(--secondary);
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+.pinTrigger {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+  color: var(--on-surface-variant);
+  opacity: 0.5;
+}
+
+.pinTrigger:hover {
+  opacity: 1;
+  color: var(--primary);
 }
 
 .systemMessage {
@@ -156,6 +200,13 @@
 }
 
 .loginHint {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  margin: var(--space-1) 0 0;
+}
+
+.balanceHint {
   font-family: var(--font-label);
   font-size: 11px;
   color: var(--on-surface-variant);

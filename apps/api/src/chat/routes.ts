@@ -1,7 +1,14 @@
-import { sendChatMessageSchema } from "@habeshalive/shared";
+import { pinMessageSchema, sendChatMessageSchema } from "@habeshalive/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { createCentrifugoConnectionToken } from "./token.js";
-import { getChatHistory, sendChatMessage } from "./service.js";
+import {
+  getChatHistory,
+  getPinnedMessage,
+  getRecentGifters,
+  pinMessage,
+  sendChatMessage,
+  unpinMessage,
+} from "./service.js";
 
 // Same keying rationale as wallet/routes.ts's keyByUser: this route already
 // requires app.authenticate, so req.user.sub is reliably set by the time
@@ -29,6 +36,32 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { streamId: string } }>("/:streamId/messages", async (req) =>
     getChatHistory(req.params.streamId)
+  );
+
+  app.get<{ Params: { streamId: string } }>("/:streamId/pinned", async (req) =>
+    getPinnedMessage(req.params.streamId)
+  );
+
+  app.post<{ Params: { streamId: string } }>(
+    "/:streamId/pinned",
+    { preHandler: app.authenticate },
+    async (req) => {
+      const input = pinMessageSchema.parse(req.body);
+      return pinMessage(req.user.sub, req.params.streamId, input.messageId);
+    }
+  );
+
+  app.delete<{ Params: { streamId: string } }>(
+    "/:streamId/pinned",
+    { preHandler: app.authenticate },
+    async (req, reply) => {
+      await unpinMessage(req.user.sub, req.params.streamId);
+      reply.send({ ok: true });
+    }
+  );
+
+  app.get<{ Params: { streamId: string } }>("/:streamId/recent-gifters", async (req) =>
+    getRecentGifters(req.params.streamId)
   );
 
   app.post<{ Params: { streamId: string } }>(

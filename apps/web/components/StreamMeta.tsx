@@ -1,4 +1,5 @@
 import type { StreamDetail } from "@habeshalive/shared";
+import Link from "next/link";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { formatViewerCount } from "@/lib/format";
 import styles from "./StreamMeta.module.css";
@@ -19,7 +20,7 @@ export function StreamMeta({ stream }: { stream: StreamDetail }) {
         <div className={styles.headerInfo}>
           <p className={styles.creatorName}>
             {stream.creator.displayName}
-            <VerifiedIcon className={styles.verifiedIcon} />
+            {stream.creator.isVerified && <VerifiedIcon className={styles.verifiedIcon} />}
           </p>
           <div className={styles.statusRow}>
             <span className={styles.liveBadge}>Live</span>
@@ -37,7 +38,11 @@ export function StreamMeta({ stream }: { stream: StreamDetail }) {
       </div>
       <h1 className={styles.title}>{stream.title}</h1>
       <div className={styles.tags}>
-        {stream.category && <span className={styles.tag}>{stream.category}</span>}
+        {stream.category && (
+          <Link href={`/browse?view=channels&category=${encodeURIComponent(stream.category)}`} className={styles.tag}>
+            {stream.category}
+          </Link>
+        )}
         {stream.language && <span className={styles.tag}>{stream.language}</span>}
         {stream.tags.map((tag) => (
           <span key={tag} className={styles.tag}>

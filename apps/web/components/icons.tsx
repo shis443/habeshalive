@@ -244,3 +244,63 @@ export function BlockedIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function PauseIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className} fill="currentColor" stroke="none">
+      <rect x="5" y="4" width="4" height="16" rx="1" />
+      <rect x="15" y="4" width="4" height="16" rx="1" />
+    </svg>
+  );
+}
+
+export function VolumeIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor" stroke="none" />
+      <path d="M17 8a5 5 0 0 1 0 8M19.5 5.5a9 9 0 0 1 0 13" />
+    </svg>
+  );
+}
+
+export function MutedIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor" stroke="none" />
+      <path d="M16 9l5 6M21 9l-5 6" />
+    </svg>
+  );
+}
+
+export function FullscreenIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+    </svg>
+  );
+}
+
+export function ExitFullscreenIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+    </svg>
+  );
+}
+
+export function TheaterIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <rect x="3" y="7" width="18" height="10" rx="2" />
+    </svg>
+  );
+}
+
+export function PipIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <rect x="3" y="4" width="18" height="14" rx="1.5" />
+      <rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

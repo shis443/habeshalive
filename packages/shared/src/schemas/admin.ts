@@ -154,6 +154,7 @@ export const creatorListItemSchema = z.object({
   revenueShareBps: z.number().int(),
   isAnchorCreator: z.boolean(),
   isSuspended: z.boolean(),
+  isVerified: z.boolean(),
   totalPayoutsSantim: z.number().int(),
   streamCount: z.number().int(),
   followerCount: z.number().int(),
@@ -163,6 +164,7 @@ export type CreatorListItem = z.infer<typeof creatorListItemSchema>;
 export const updateCreatorSchema = z.object({
   revenueShareBps: z.number().int().min(0).max(10000).optional(),
   isAnchorCreator: z.boolean().optional(),
+  isVerified: z.boolean().optional(),
 });
 export type UpdateCreatorInput = z.infer<typeof updateCreatorSchema>;
 

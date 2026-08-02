@@ -1,0 +1,61 @@
+.trigger {
+  display: flex;
+  align-items: center;
+  color: var(--on-surface-variant);
+}
+
+.trigger:hover {
+  color: var(--on-background);
+}
+
+.panel {
+  right: 0;
+  left: auto;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--space-1) var(--space-2);
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatarPlaceholder {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-container-highest);
+}
+
+.name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--on-background);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: var(--space-2);
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  margin: 0;
+}
+
+.anonymous {
+  padding: var(--space-1) var(--space-2);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin: 0;
+}

@@ -88,6 +88,12 @@ export function AdminSidebar() {
         Stream Tags
       </Link>
       <Link
+        href="/admin/announcements"
+        className={pathname.startsWith("/admin/announcements") ? styles.linkActive : styles.link}
+      >
+        Announcements
+      </Link>
+      <Link
         href="/admin/subscriptions"
         className={pathname.startsWith("/admin/subscriptions") ? styles.linkActive : styles.link}
       >

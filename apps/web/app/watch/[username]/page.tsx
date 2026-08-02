@@ -63,7 +63,9 @@ export default async function WatchPage({ params }: { params: Promise<{ username
             <AdDisplayBanner ad={displayAd} />
             <StreamMeta stream={stream} />
             <ActionRow
+              streamId={stream.id}
               creatorId={stream.creator.id}
+              creatorUsername={stream.creator.username}
               isAuthed={!!user}
               isFollowing={followStatus.following}
               isOwner={!!user && user.id === stream.creator.id}
@@ -84,6 +86,8 @@ export default async function WatchPage({ params }: { params: Promise<{ username
             giftTypes={giftTypes}
             isAuthed={!!user}
             currentUsername={user?.username ?? null}
+            currentUserId={user?.id ?? null}
+            currentUserRole={user?.role ?? null}
             activity={activity}
           />
         </div>

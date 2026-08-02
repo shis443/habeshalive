@@ -58,7 +58,15 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        // Excludes /embed/* (negative lookahead) — that route needs the
+        // opposite frame-ancestors policy (see the dedicated block below).
+        // CSP headers don't override when multiple match the same path —
+        // browsers enforce the INTERSECTION of every CSP header sent, so a
+        // permissive frame-ancestors on a more specific block would still
+        // be cancelled out by 'none' here if both matched the same
+        // request. They have to be mutually exclusive at the source level,
+        // not layered.
+        source: "/:path((?!embed).*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
@@ -104,6 +112,34 @@ const nextConfig = {
               // them undefined ("Failure to Define Directive with No
               // Fallback"), and it's right to: an undefined form-action
               // would let an XSS bug redirect form submissions offsite.
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+            ].join("; "),
+          },
+        ],
+      },
+      {
+        // D.3 embed target: the whole point is being framed on someone
+        // else's page, so this is the deliberate opposite of the strict
+        // block above — no X-Frame-Options, frame-ancestors * instead of
+        // 'none'. Otherwise the same media/connect allowances the player
+        // itself needs (hls.js + Safari's native HLS path — see the strict
+        // block's comments for why both are listed).
+        source: "/embed/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              `img-src 'self' data: ${apiOrigin}`,
+              `connect-src 'self' ${apiOrigin} ${srsOrigin} ${centrifugoOrigin} ${srsWhipOrigin}`,
+              `media-src 'self' blob: ${srsOrigin}${vodOrigin ? ` ${vodOrigin}` : ""}`,
+              "font-src 'self' data:",
+              "frame-ancestors *",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

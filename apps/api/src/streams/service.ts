@@ -8,6 +8,8 @@ import {
   type StreamDefaults,
   type StreamDetail,
   type StreamKeyResponse,
+  type ViewerList,
+  type ViewerListEntry,
 } from "@habeshalive/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { getBoostPricing, getDefaultRevenueShareBps } from "../admin/config-service.js";
@@ -64,6 +66,7 @@ interface StreamRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  is_verified: boolean;
   peak_viewers: number;
   is_boosted: boolean;
   is_sensitive: boolean;
@@ -90,6 +93,7 @@ function toStreamDetail(row: StreamRow): StreamDetail {
       displayName: row.display_name,
       avatarUrl: row.avatar_url,
       bio: row.bio,
+      isVerified: row.is_verified,
     },
   };
 }
@@ -101,7 +105,7 @@ function toStreamDetail(row: StreamRow): StreamDetail {
 const STREAM_SELECT_COLUMNS = `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
   s.started_at, s.status, s.peak_viewers, s.is_sensitive,
-  u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio,
+  u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
   EXISTS (
     SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
   ) AS is_boosted,
@@ -309,6 +313,74 @@ export async function getStreamActivity(streamId: string): Promise<StreamActivit
       username: row.username,
       label: row.label,
     })),
+  };
+}
+
+// D.1 viewer list: Centrifugo's presence API for the stream-chat channel
+// (presence: true in infra/centrifugo/config.json's "stream-chat"
+// namespace — already enabled, just never queried until now). "sub" on
+// each connection token is either a real userId or an "anon-<hex>"
+// placeholder (see chat/token.ts) — anonymous connections are summarized
+// as a count only, since there's no profile to show for them.
+interface CentrifugoPresenceResult {
+  result?: { presence?: Record<string, { user: string }> };
+}
+
+export async function getViewerList(streamId: string): Promise<ViewerList> {
+  const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
+    method: "POST",
+    headers: { "X-API-Key": env.CENTRIFUGO_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ method: "presence", params: { channel: `stream-chat:${streamId}` } }),
+  });
+  if (!res.ok) {
+    // Presence is a nice-to-have overlay, not core chat delivery — degrade
+    // to an empty list rather than break the watch page over it.
+    console.error(`[viewer-list] Centrifugo presence failed: ${res.status}`);
+    return { viewers: [], anonymousCount: 0 };
+  }
+  const data = (await res.json()) as CentrifugoPresenceResult;
+  const clients = Object.values(data.result?.presence ?? {});
+
+  const userIds = new Set<string>();
+  let anonymousCount = 0;
+  for (const client of clients) {
+    if (client.user && !client.user.startsWith("anon-")) userIds.add(client.user);
+    else anonymousCount += 1;
+  }
+  if (userIds.size === 0) return { viewers: [], anonymousCount };
+
+  const stream = await pool.query<{ creator_id: string }>(`SELECT creator_id FROM streams WHERE id = $1`, [
+    streamId,
+  ]);
+  const creatorId = stream.rows[0]?.creator_id;
+
+  const { rows } = await pool.query<{
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+    role: string;
+    gifter_badge_tier: string | null;
+  }>(
+    `SELECT u.id, u.username, u.display_name, u.avatar_url, u.role,
+            gb.tier AS gifter_badge_tier
+     FROM users u
+     LEFT JOIN gifter_badges gb ON gb.user_id = u.id AND gb.creator_id = $2
+     WHERE u.id = ANY($1::uuid[])
+     ORDER BY u.display_name`,
+    [Array.from(userIds), creatorId ?? null]
+  );
+
+  return {
+    viewers: rows.map((row) => ({
+      userId: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url,
+      role: row.role as ViewerListEntry["role"],
+      gifterBadgeTier: (row.gifter_badge_tier ?? "none") as ViewerListEntry["gifterBadgeTier"],
+    })),
+    anonymousCount,
   };
 }
 

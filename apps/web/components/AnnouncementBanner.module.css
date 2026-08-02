@@ -1,0 +1,47 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--primary-container, var(--surface-container-high));
+  color: var(--on-primary-container, var(--on-background));
+}
+
+.text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.actionButton {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.dismissButton {
+  display: flex;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.dismissButton:hover {
+  opacity: 1;
+}

@@ -2,6 +2,7 @@ import {
   createAdCampaignSchema,
   createAdCreativeSchema,
   createAdvertiserSchema,
+  createAnnouncementSchema,
   extendGracePeriodSchema,
   forceEndStreamSchema,
   manualAdjustmentSchema,
@@ -32,6 +33,7 @@ import {
   listGiftCardsAdmin,
   listSuspiciousGiftCardPurchasers,
 } from "../gift-cards/service.js";
+import { createAnnouncement, deactivateAnnouncement, listAnnouncementsAdmin } from "../announcements/service.js";
 import { listTagsAdmin, mergeTags, setTagBanned } from "../streams/tags-service.js";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
@@ -295,4 +297,22 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await mergeTags(req.user.sub, input.sourceTagId, input.targetTagId);
     return { ok: true };
   });
+
+  // --- Announcements (D.2) ---
+
+  app.get("/announcements", { preHandler: app.requireAdmin }, async () => listAnnouncementsAdmin());
+
+  app.post("/announcements", { preHandler: app.requireAdmin }, async (req) => {
+    const input = createAnnouncementSchema.parse(req.body);
+    return createAnnouncement(req.user.sub, input);
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/announcements/:id/deactivate",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      await deactivateAnnouncement(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
 };
