@@ -125,8 +125,15 @@ export type Vod = z.infer<typeof vodSchema>;
 // the public playback URL, since SRS's HLS output path mirrors whatever
 // name was used to publish — see streams/service.ts's markLiveByProviderStreamId
 // for where `param` gets parsed and validated against the real secret.
+// .uuid(), not just .min(1) — `stream` is always a userId now (a Postgres
+// UUID column), and markLiveByProviderStreamId/markEndedByProviderStreamId
+// query creator_profiles by it directly. A non-UUID value used to just miss
+// (stream_key was TEXT) and cleanly 404; against a UUID column it's a raw
+// Postgres "invalid input syntax for type uuid" error instead — confirmed
+// live, a garbage `stream` value 500'd rather than 404'ing. Rejecting it in
+// validation instead gives a clean 400.
 export const srsCallbackSchema = z.object({
-  stream: z.string().min(1),
+  stream: z.string().uuid(),
   param: z.string().optional(),
 });
 export type SrsCallback = z.infer<typeof srsCallbackSchema>;
