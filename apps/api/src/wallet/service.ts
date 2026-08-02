@@ -41,19 +41,33 @@ function channelForGiftAlerts(streamId: string): string {
 // and the ledger by the time this runs, so a publish failure here only
 // costs the live on-stream alert, not the money movement.
 async function publishGiftAlert(alert: GiftAlert): Promise<void> {
-  const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
-    method: "POST",
-    headers: {
-      "X-API-Key": env.CENTRIFUGO_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      method: "publish",
-      params: { channel: channelForGiftAlerts(alert.streamId), data: alert },
-    }),
-  });
-  if (!res.ok) {
-    console.error(`[wallet] Centrifugo gift-alert publish failed: ${res.status} ${await res.text().catch(() => "")}`);
+  // Whole fetch wrapped, not just the !res.ok branch — a network-level
+  // failure (Centrifugo unreachable) throws out of a bare fetch() before
+  // there's a response to check, which the comment above ("a publish
+  // failure here only costs the live alert") didn't actually hold for
+  // until this fix — sendGift() awaits this after the money movement is
+  // already committed, so an uncaught throw here would have reported a
+  // real, already-successful gift send as a failure to the client. Same
+  // class of bug fixed the same way in chat/service.ts, streams/service.ts,
+  // and notifications/service.ts — found by running the new money-path
+  // tests locally without Centrifugo running.
+  try {
+    const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": env.CENTRIFUGO_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        method: "publish",
+        params: { channel: channelForGiftAlerts(alert.streamId), data: alert },
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[wallet] Centrifugo gift-alert publish failed: ${res.status} ${await res.text().catch(() => "")}`);
+    }
+  } catch (err) {
+    console.error(`[wallet] Centrifugo gift-alert publish request failed:`, err);
   }
 }
 

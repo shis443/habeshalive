@@ -86,19 +86,31 @@ const SENDER_ROLE_AND_TENURE_RETURNING_SQL = `
 // event — apps/web/components/ChatPanel.tsx's subscription handler
 // dispatches on `type`.
 async function publishToCentrifugo(channel: string, data: unknown): Promise<void> {
-  const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
-    method: "POST",
-    headers: {
-      "X-API-Key": env.CENTRIFUGO_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ method: "publish", params: { channel, data } }),
-  });
-  if (!res.ok) {
-    // Don't fail the whole request over a real-time fan-out hiccup — the
-    // underlying write is already durably stored; a viewer who reloads
-    // (or the next poll) still sees it. Only the instant push is lost.
-    console.error(`[chat] Centrifugo publish failed: ${res.status} ${await res.text().catch(() => "")}`);
+  // The whole fetch is wrapped, not just the !res.ok branch below — a
+  // network-level failure (Centrifugo unreachable) throws out of a bare
+  // fetch() call before there's even a response to check, which the
+  // !res.ok branch alone can't catch. Found by actually running Centrifugo-
+  // adjacent tests locally without Centrifugo running (see
+  // notifications/service.ts's publishUnreadUpdate for the same fix and
+  // the fuller writeup) — without this, the comment below ("don't fail the
+  // whole request") wasn't actually true for this failure mode.
+  try {
+    const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": env.CENTRIFUGO_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ method: "publish", params: { channel, data } }),
+    });
+    if (!res.ok) {
+      // Don't fail the whole request over a real-time fan-out hiccup — the
+      // underlying write is already durably stored; a viewer who reloads
+      // (or the next poll) still sees it. Only the instant push is lost.
+      console.error(`[chat] Centrifugo publish failed: ${res.status} ${await res.text().catch(() => "")}`);
+    }
+  } catch (err) {
+    console.error(`[chat] Centrifugo publish request failed:`, err);
   }
 }
 

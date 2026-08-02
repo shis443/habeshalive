@@ -65,10 +65,27 @@ export async function createTestCreator(revenueShareBps = 8000): Promise<TestCre
   return { ...user, streamId: streamResult.rows[0]!.id };
 }
 
-export async function getGiftTypeId(name: "Buna" | "Injera" | "Lion" | "Crown"): Promise<string> {
+// db/migrations/0019_gursha.sql DELETEd the original Buna/Injera/Lion/Crown
+// seed (different prices each) and replaced it with four same-priced
+// "Mulmul" theme rows (2500 santim each) as part of the Gursha rebrand —
+// found because the pre-existing test suite still referenced the deleted
+// names and failed against a fully-migrated database (this repo has no git
+// remote, so CI had never actually run to catch it).
+export async function getGiftTypeId(
+  name: "Classic Mulmul" | "Golden Mulmul" | "Berbere Mulmul" | "Holiday Mulmul"
+): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(`SELECT id FROM gift_types WHERE name = $1`, [name]);
   const row = rows[0];
   if (!row) throw new Error(`Gift type ${name} not seeded — run db:migrate`);
+  return row.id;
+}
+
+// db/migrations/0003_subscriptions.sql seeds three global (not per-creator)
+// tiers once, idempotently — same pattern as getGiftTypeId above.
+export async function getSubscriptionTierId(name: "Tier 1" | "Tier 2" | "Tier 3"): Promise<string> {
+  const { rows } = await pool.query<{ id: string }>(`SELECT id FROM subscription_tiers WHERE name = $1`, [name]);
+  const row = rows[0];
+  if (!row) throw new Error(`Subscription tier ${name} not seeded — run db:migrate`);
   return row.id;
 }
 
@@ -120,6 +137,22 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   );
   const ledgerTransactionIds = txRows.map((r) => r.id);
 
+  // subscriptions/gift_cards/stream_boosts have no ON DELETE CASCADE from
+  // users (none of subscriber_id/creator_id/purchaser_id/redeemed_by
+  // specify it) — added when test coverage for these paths was added, since
+  // the final `DELETE FROM users` below would otherwise fail its FK
+  // constraint the first time a test actually created one of these rows.
+  await pool.query(`DELETE FROM subscriptions WHERE subscriber_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
+  await pool.query(
+    `DELETE FROM gift_cards WHERE purchaser_id = ANY($1) OR redeemed_by = ANY($1)`,
+    [userIds]
+  );
+  await pool.query(`DELETE FROM stream_boosts WHERE creator_id = ANY($1)`, [userIds]);
+  // Also no CASCADE from users — surfaced once a test actually exercised
+  // an admin action (cancelBoost/cancelGiftCard, both call logAdminAction)
+  // or sent more than one gift to the same creator (gifter_badges).
+  await pool.query(`DELETE FROM admin_actions WHERE actor_id = ANY($1)`, [userIds]);
+  await pool.query(`DELETE FROM gifter_badges WHERE user_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM gifts_sent WHERE sender_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM payouts WHERE creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM ledger_entries WHERE ledger_transaction_id = ANY($1)`, [ledgerTransactionIds]);
@@ -129,6 +162,8 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
     [userIds]
   );
   await pool.query(`DELETE FROM wallets WHERE owner_type = 'user' AND owner_id = ANY($1)`, [userIds]);
+  // streams and creator_profiles both have ON DELETE CASCADE from users
+  // (confirmed in db/schema.sql) — no explicit delete needed for either.
   await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [userIds]);
 
   // Deleting entries that belonged to the shared platform wallet leaves its

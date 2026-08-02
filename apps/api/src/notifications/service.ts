@@ -35,17 +35,33 @@ function channelForUser(userId: string): string {
 // publishToCentrifugo — reuses the already-live Centrifugo connection
 // rather than polling, but every push is a nice-to-have on top of a
 // durably-stored row, never the only copy of the notification.
+// Found by actually running the new money-path tests locally (Centrifugo
+// wasn't running): a non-2xx response was already handled, but a network-
+// level failure (Centrifugo unreachable — connection refused, DNS, timeout)
+// threw out of the bare `fetch` call instead. Every notify() caller in
+// this codebase — sendGift, subscribe, redeemGiftCard, payout completion,
+// banUser, and more — awaits notify() (several after already committing
+// the real money movement), so an uncaught throw here meant a Centrifugo
+// blip would make those requests report failure to the client even though
+// the underlying operation had already succeeded. This is push-delivery
+// only (the notification row itself is already durably committed by the
+// time this runs — see notify()'s comment), so a failure here should never
+// be able to fail the caller.
 async function publishUnreadUpdate(userId: string, unreadCount: number): Promise<void> {
-  const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
-    method: "POST",
-    headers: { "X-API-Key": env.CENTRIFUGO_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      method: "publish",
-      params: { channel: channelForUser(userId), data: { type: "unread_count", count: unreadCount } },
-    }),
-  });
-  if (!res.ok) {
-    console.error(`[notifications] Centrifugo publish failed: ${res.status} ${await res.text().catch(() => "")}`);
+  try {
+    const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
+      method: "POST",
+      headers: { "X-API-Key": env.CENTRIFUGO_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "publish",
+        params: { channel: channelForUser(userId), data: { type: "unread_count", count: unreadCount } },
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[notifications] Centrifugo publish failed: ${res.status} ${await res.text().catch(() => "")}`);
+    }
+  } catch (err) {
+    console.error(`[notifications] Centrifugo publish request failed:`, err);
   }
 }
 

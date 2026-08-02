@@ -123,11 +123,11 @@ describe("gift split", () => {
     const platformBefore = await getWalletBalance(platformWalletId);
     const creatorBefore = await getWalletBalance(creator.walletId);
 
-    const lionGiftTypeId = await getGiftTypeId("Lion"); // 10,000 santim
+    const giftTypeId = await getGiftTypeId("Classic Mulmul"); // 2,500 santim
     const { id: ledgerTransactionId } = await sendGift(viewer.id, {
       streamId: creator.streamId,
-      giftTypeId: lionGiftTypeId,
-      quantity: 2, // total 20,000 santim
+      giftTypeId,
+      quantity: 8, // total 20,000 santim
       message: "Keep it up!",
     });
 
@@ -140,10 +140,10 @@ describe("gift split", () => {
 
   it("rejects a gift when the sender has insufficient balance", async () => {
     const viewer = await trackUser(await createTestViewer());
-    const lionGiftTypeId = await getGiftTypeId("Lion");
+    const giftTypeId = await getGiftTypeId("Classic Mulmul");
 
     await expect(
-      sendGift(viewer.id, { streamId: creator.streamId, giftTypeId: lionGiftTypeId, quantity: 1 })
+      sendGift(viewer.id, { streamId: creator.streamId, giftTypeId, quantity: 1 })
     ).rejects.toMatchObject({ statusCode: 400 } satisfies Partial<AppError>);
 
     expect(await getWalletBalance(viewer.walletId)).toBe(0);
@@ -154,20 +154,21 @@ describe("gift split", () => {
     const viewer = await trackUser(await createTestViewer());
     await fundWallet(viewer.id, 100_000);
 
-    const bunaGiftTypeId = await getGiftTypeId("Buna"); // 500 santim
+    const giftTypeId = await getGiftTypeId("Golden Mulmul"); // 2,500 santim
     const { id: ledgerTransactionId } = await sendGift(viewer.id, {
       streamId: oddCreator.streamId,
-      giftTypeId: bunaGiftTypeId,
-      quantity: 7, // total 3,500 santim — doesn't divide evenly by 3333bps
+      giftTypeId,
+      quantity: 1, // total 2,500 santim — doesn't divide evenly by 3333bps
     });
 
     await assertTransactionBalanced(ledgerTransactionId);
 
     const creatorBalance = await getWalletBalance(oddCreator.walletId);
-    const platformWalletId = await getPlatformWalletId();
-    // Whatever the split, creator + platform delta must equal the total exactly.
+    // Whatever the split, creator + platform delta must equal the total exactly
+    // — assertTransactionBalanced above is the real check; this just confirms
+    // the creator's share is a genuine partial amount, not 0 or the full total.
     expect(creatorBalance).toBeGreaterThan(0);
-    expect(creatorBalance).toBeLessThan(3_500);
+    expect(creatorBalance).toBeLessThan(2_500);
   });
 });
 

@@ -339,18 +339,28 @@ interface CentrifugoPresenceResult {
 }
 
 export async function getViewerList(streamId: string): Promise<ViewerList> {
-  const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
-    method: "POST",
-    headers: { "X-API-Key": env.CENTRIFUGO_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ method: "presence", params: { channel: `stream-chat:${streamId}` } }),
-  });
-  if (!res.ok) {
-    // Presence is a nice-to-have overlay, not core chat delivery — degrade
-    // to an empty list rather than break the watch page over it.
-    console.error(`[viewer-list] Centrifugo presence failed: ${res.status}`);
+  let data: CentrifugoPresenceResult;
+  try {
+    const res = await fetch(`${env.CENTRIFUGO_URL}/api`, {
+      method: "POST",
+      headers: { "X-API-Key": env.CENTRIFUGO_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "presence", params: { channel: `stream-chat:${streamId}` } }),
+    });
+    if (!res.ok) {
+      // Presence is a nice-to-have overlay, not core chat delivery — degrade
+      // to an empty list rather than break the watch page over it.
+      console.error(`[viewer-list] Centrifugo presence failed: ${res.status}`);
+      return { viewers: [], anonymousCount: 0 };
+    }
+    data = (await res.json()) as CentrifugoPresenceResult;
+  } catch (err) {
+    // Same degrade-not-break intent as the !res.ok branch above, but for a
+    // network-level failure (Centrifugo unreachable), which a bare fetch()
+    // throws before there's even a response to check — the comment above
+    // didn't actually cover this failure mode until this fix.
+    console.error(`[viewer-list] Centrifugo presence request failed:`, err);
     return { viewers: [], anonymousCount: 0 };
   }
-  const data = (await res.json()) as CentrifugoPresenceResult;
   const clients = Object.values(data.result?.presence ?? {});
 
   const userIds = new Set<string>();
