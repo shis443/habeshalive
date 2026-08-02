@@ -4,6 +4,7 @@ import { formatSantimAsBirr, subscribeResponseSchema, type SubscriptionTier } fr
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useDropdown } from "@/lib/useDropdown";
+import { openAuthModal } from "@/lib/useAuthModal";
 import { ChevronRightIcon } from "./icons";
 import styles from "./TierActionDropdown.module.css";
 
@@ -29,7 +30,7 @@ export function TierActionDropdown({
 
   async function handleSelectTier(tierId: string) {
     if (!isAuthed) {
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      openAuthModal();
       return;
     }
 

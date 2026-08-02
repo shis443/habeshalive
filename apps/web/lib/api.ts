@@ -1,4 +1,5 @@
 import {
+  accountDeletionStatusSchema,
   activeBoostSchema,
   adCampaignAdminItemSchema,
   adCreativeAdminItemSchema,
@@ -28,12 +29,16 @@ import {
   giftTypeSchema,
   ledgerReconciliationSchema,
   ledgerTransactionLookupSchema,
+  linkedSocialAccountSchema,
   liveStreamSchema,
   moderationActionRecordSchema,
   moderationFlagSchema,
+  myAccountSchema,
   myCreatorApplicationSchema,
   myGiftCardSchema,
   mySubscriptionSchema,
+  notificationPreferencesSchema,
+  notificationSchema,
   payoutHistoryItemSchema,
   payoutQueueItemSchema,
   platformConfigSchema,
@@ -50,9 +55,11 @@ import {
   subscriptionAdminItemSchema,
   subscriptionTierSchema,
   transactionSchema,
+  unreadCountSchema,
   userListItemSchema,
   vodSchema,
   walletBalanceSchema,
+  type AccountDeletionStatus,
   type ActiveBoost,
   type AdCampaignAdminItem,
   type AdCreativeAdminItem,
@@ -82,12 +89,16 @@ import {
   type GiftType,
   type LedgerReconciliation,
   type LedgerTransactionLookup,
+  type LinkedSocialAccount,
   type LiveStream,
   type ModerationActionRecord,
   type ModerationFlag,
+  type MyAccount,
   type MyCreatorApplication,
   type MyGiftCard,
   type MySubscription,
+  type Notification,
+  type NotificationPreferences,
   type PayoutHistoryItem,
   type PayoutQueueItem,
   type PlatformConfig,
@@ -712,4 +723,46 @@ export async function getAnnouncementsAdmin(): Promise<AnnouncementAdminItem[]> 
     return [];
   }
   return announcementAdminItemSchema.array().parse(await res.json());
+}
+
+// --- E: Account & Identity ---
+
+export async function getMyAccount(): Promise<MyAccount | null> {
+  const res = await fetchAuthed("/auth/account");
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    console.error(`Failed to load account (${res.status})`);
+    return null;
+  }
+  return myAccountSchema.parse(await res.json());
+}
+
+export async function getAccountDeletionStatus(): Promise<AccountDeletionStatus | null> {
+  const res = await fetchAuthed("/auth/account/deletion");
+  if (!res.ok) return null;
+  return accountDeletionStatusSchema.parse(await res.json());
+}
+
+export async function getLinkedSocialAccounts(): Promise<LinkedSocialAccount[]> {
+  const res = await fetchAuthed("/auth/social");
+  if (!res.ok) return [];
+  return linkedSocialAccountSchema.array().parse(await res.json());
+}
+
+export async function getNotifications(): Promise<Notification[]> {
+  const res = await fetchAuthed("/notifications");
+  if (!res.ok) return [];
+  return notificationSchema.array().parse(await res.json());
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  const res = await fetchAuthed("/notifications/unread-count");
+  if (!res.ok) return 0;
+  return unreadCountSchema.parse(await res.json()).count;
+}
+
+export async function getNotificationPreferences(): Promise<NotificationPreferences | null> {
+  const res = await fetchAuthed("/notifications/preferences");
+  if (!res.ok) return null;
+  return notificationPreferencesSchema.parse(await res.json());
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useDropdown } from "@/lib/useDropdown";
+import { openAuthModal } from "@/lib/useAuthModal";
 import { ReportModal } from "./ReportModal";
 import styles from "./ShareSheet.module.css";
 import { MoreIcon } from "./icons";
@@ -19,14 +19,13 @@ export function OverflowMenu({
   creatorId: string;
   isAuthed: boolean;
 }) {
-  const router = useRouter();
   const dropdown = useDropdown<HTMLDivElement>();
   const [reportTarget, setReportTarget] = useState<"stream" | "user" | null>(null);
 
   function openReport(target: "stream" | "user") {
     dropdown.setOpen(false);
     if (!isAuthed) {
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      openAuthModal();
       return;
     }
     setReportTarget(target);

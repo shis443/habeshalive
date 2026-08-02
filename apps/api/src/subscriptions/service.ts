@@ -10,6 +10,7 @@ import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
+import { notify } from "../notifications/service.js";
 
 export async function listTiers(): Promise<SubscriptionTier[]> {
   const { rows } = await pool.query<{ id: string; name: string; price_santim: number }>(
@@ -95,6 +96,18 @@ export async function subscribe(subscriberId: string, input: SubscribeInput): Pr
     );
 
     await client.query("COMMIT");
+
+    const { rows: subscriberRows } = await pool.query<{ display_name: string }>(
+      `SELECT display_name FROM users WHERE id = $1`,
+      [subscriberId]
+    );
+    await notify(
+      input.creatorId,
+      "subscription_new",
+      `${subscriberRows[0]?.display_name ?? "Someone"} subscribed`,
+      { body: tier.name, linkUrl: "/wallet" }
+    );
+
     return {
       id: subResult.rows[0]!.id,
       tierName: tier.name,
@@ -199,6 +212,9 @@ export async function renewSubscriptions(): Promise<void> {
           [ledgerTransactionId, row.id]
         );
         console.log(`[subscriptions] renewed ${row.id}`);
+        await notify(row.subscriber_id, "subscription_renewed", "Your subscription renewed", {
+          linkUrl: "/wallet",
+        });
       } else if (row.status === "active") {
         // First miss: start the grace period. expires_at is left as-is
         // (already in the past) so tomorrow's run picks this row up again.

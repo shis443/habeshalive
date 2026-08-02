@@ -5,12 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { openAuthModal } from "@/lib/useAuthModal";
 import { useDropdown } from "@/lib/useDropdown";
 import { UI_LANGUAGES, useLanguage } from "@/lib/useLanguage";
 import { useTheme } from "@/lib/useTheme";
 import {
   BackIcon,
-  BellIcon,
   CheckIcon,
   ChevronRightIcon,
   GearIcon,
@@ -18,6 +18,7 @@ import {
   ProfileIcon,
   SearchIcon,
 } from "./icons";
+import { NotificationBell } from "./NotificationBell";
 import styles from "./TopNav.module.css";
 
 type SettingsView = "main" | "language" | "labeled-content";
@@ -49,10 +50,6 @@ const MORE_LEGAL = [
   { labelKey: "allLegalDocs", href: "/legal" },
 ] as const;
 
-// No notifications backend exists yet — 0 is the honest count, not a fake
-// placeholder number. The dropdown below always shows an empty state.
-const UNREAD_COUNT = 0;
-
 export function TopNav({ isAuthed }: { isAuthed: boolean }) {
   const router = useRouter();
   const t = useTranslations("nav");
@@ -61,7 +58,6 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
   const [query, setQuery] = useState("");
 
   const more = useDropdown<HTMLDivElement>();
-  const notifications = useDropdown<HTMLDivElement>();
   const settings = useDropdown<HTMLDivElement>();
   const account = useDropdown<HTMLDivElement>();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -190,22 +186,7 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
       </form>
 
       <div className={styles.right}>
-        <div className={styles.dropdownWrap} ref={notifications.ref}>
-          <button
-            type="button"
-            className={`${styles.iconButton} ${styles.badgeWrap}`}
-            aria-label={t("notifications")}
-            onClick={() => notifications.setOpen((o) => !o)}
-          >
-            <BellIcon />
-            {UNREAD_COUNT > 0 && <span className={styles.badge}>{UNREAD_COUNT}</span>}
-          </button>
-          {notifications.open && (
-            <div className={styles.dropdown}>
-              <p className={styles.emptyState}>{t("noNotifications")}</p>
-            </div>
-          )}
-        </div>
+        <NotificationBell isAuthed={isAuthed} />
 
         <div className={styles.dropdownWrap} ref={settings.ref}>
           <button
@@ -241,6 +222,19 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                     <span className={styles.rowLabel}>{t("labeledContent")}</span>
                     <ChevronRightIcon />
                   </button>
+                  {isAuthed && (
+                    <>
+                      <div className={styles.divider} />
+                      <button
+                        type="button"
+                        className={styles.menuItem}
+                        onClick={handleLogout}
+                        disabled={loggingOut}
+                      >
+                        {loggingOut ? t("loggingOut") : t("logOut")}
+                      </button>
+                    </>
+                  )}
                 </>
               )}
 
@@ -326,32 +320,33 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
             </button>
             {account.open && (
               <div className={styles.dropdown}>
-                <Link href="/dashboard" className={styles.menuItem}>
-                  {t("dashboard")}
+                {/* E.1: Dashboard and Wallet were duplicating what's
+                    already in the primary nav (BottomNav) — this dropdown
+                    is just Account/Settings now. Log out and Switch
+                    account moved inside Settings, deliberately not one
+                    accidental click away from here. */}
+                <Link href="/account" className={styles.menuItem}>
+                  Account
                 </Link>
-                <Link href="/wallet" className={styles.menuItem}>
-                  {t("wallet")}
+                <Link href="/settings" className={styles.menuItem}>
+                  Settings
                 </Link>
-                <div className={styles.divider} />
-                <button
-                  type="button"
-                  className={styles.menuItem}
-                  onClick={handleLogout}
-                  disabled={loggingOut}
-                >
-                  {loggingOut ? t("loggingOut") : t("logOut")}
-                </button>
               </div>
             )}
           </div>
         ) : (
           <>
-            <Link href="/login" className={styles.loginLink}>
+            {/* E.4: opens the auth modal — /login stays reachable as a
+                direct-link fallback (deep links, redirects after a gated
+                action from a page that isn't client-rendered) but the nav
+                buttons no longer navigate away from wherever the visitor
+                already is. */}
+            <button type="button" className={styles.loginLink} onClick={() => openAuthModal("login")}>
               {t("logIn")}
-            </Link>
-            <Link href="/signup" className={styles.signupButton}>
+            </button>
+            <button type="button" className={styles.signupButton} onClick={() => openAuthModal("signup")}>
               {t("signUp")}
-            </Link>
+            </button>
           </>
         )}
       </div>

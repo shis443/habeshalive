@@ -1,4 +1,11 @@
-import type { AuthUser, VerifyEmailOtpInput, VerifyOtpInput } from "@habeshalive/shared";
+import type {
+  AuthUser,
+  ChangePasswordInput,
+  MyAccount,
+  UpdateProfileInput,
+  VerifyEmailOtpInput,
+  VerifyOtpInput,
+} from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { emailGateway } from "./email-gateway.js";
@@ -161,7 +168,10 @@ async function findOrCreateUser(
 // (and therefore whether this proves an existing account vs authorizes
 // creating a new one) differs, which is the caller's concern, not this
 // function's.
-async function consumeOtp(identity: { phoneNumber: string } | { email: string }, code: string): Promise<void> {
+// Exported for account-deletion-service.ts's re-authentication step,
+// which reuses this same phone/email-keyed OTP mechanism rather than
+// inventing a separate one — see that file's comment.
+export async function consumeOtp(identity: { phoneNumber: string } | { email: string }, code: string): Promise<void> {
   const { rows } =
     "phoneNumber" in identity
       ? await pool.query<{ id: string; code_hash: string; expires_at: string; consumed_at: string | null }>(
@@ -299,4 +309,177 @@ export async function resetPassword(identifier: string, code: string, newPasswor
   // consumeOtp alone can't catch that, since it only checks the OTP
   // itself, not whether an account exists for it.
   if (!rowCount) throw new AppError(404, "No account found for this identifier");
+}
+
+// --- E.1: account identity ---
+
+interface MyAccountRow {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  phone_number: string | null;
+  email: string | null;
+  pending_phone_number: string | null;
+  pending_email: string | null;
+  password_hash: string | null;
+  role: string;
+  is_verified: boolean;
+  deletion_requested_at: string | null;
+  created_at: string;
+}
+
+const MY_ACCOUNT_COLUMNS = `id, username, display_name, avatar_url, bio, phone_number, email,
+  pending_phone_number, pending_email, password_hash, role, is_verified, deletion_requested_at, created_at`;
+
+function toMyAccount(row: MyAccountRow): MyAccount {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    phoneNumber: row.phone_number,
+    email: row.email,
+    pendingPhoneNumber: row.pending_phone_number,
+    pendingEmail: row.pending_email,
+    hasPassword: row.password_hash !== null,
+    role: row.role as MyAccount["role"],
+    isVerified: row.is_verified,
+    deletionRequestedAt: row.deletion_requested_at,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getMyAccount(userId: string): Promise<MyAccount> {
+  const { rows } = await pool.query<MyAccountRow>(`SELECT ${MY_ACCOUNT_COLUMNS} FROM users WHERE id = $1`, [
+    userId,
+  ]);
+  const row = rows[0];
+  if (!row) throw new AppError(404, "User not found");
+  return toMyAccount(row);
+}
+
+export async function updateProfile(userId: string, input: UpdateProfileInput): Promise<MyAccount> {
+  const { rows } = await pool.query<MyAccountRow>(
+    `UPDATE users SET display_name = COALESCE($1, display_name), bio = COALESCE($2, bio), updated_at = now()
+     WHERE id = $3 RETURNING ${MY_ACCOUNT_COLUMNS}`,
+    [input.displayName ?? null, input.bio ?? null, userId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "User not found");
+  return toMyAccount(row);
+}
+
+const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60_000; // [CONFIRM] once per 30 days
+
+export async function changeUsername(userId: string, username: string): Promise<MyAccount> {
+  const { rows: existing } = await pool.query<{ username_changed_at: string | null }>(
+    `SELECT username_changed_at FROM users WHERE id = $1`,
+    [userId]
+  );
+  const lastChanged = existing[0]?.username_changed_at;
+  if (lastChanged && Date.now() - new Date(lastChanged).getTime() < USERNAME_CHANGE_COOLDOWN_MS) {
+    const nextAllowed = new Date(new Date(lastChanged).getTime() + USERNAME_CHANGE_COOLDOWN_MS);
+    throw new AppError(429, `You can change your username again on ${nextAllowed.toDateString()}`);
+  }
+
+  const { rows: taken } = await pool.query(`SELECT 1 FROM users WHERE username = $1 AND id != $2`, [
+    username,
+    userId,
+  ]);
+  if (taken.length > 0) throw new AppError(409, "That username is already taken");
+
+  const { rows } = await pool.query<MyAccountRow>(
+    `UPDATE users SET username = $1, username_changed_at = now(), updated_at = now()
+     WHERE id = $2 RETURNING ${MY_ACCOUNT_COLUMNS}`,
+    [username, userId]
+  );
+  return toMyAccount(rows[0]!);
+}
+
+// Phone/email change: request sends an OTP to the NEW value (reusing the
+// same otp_codes table/consumeOtp the login flow uses — the row doesn't
+// care why a code was requested, only that it matches and hasn't expired/
+// been used), staged in pending_phone_number/pending_email until
+// confirmed. Never swaps the live value off a bare, unverified request.
+export async function requestPhoneChange(userId: string, phoneNumber: string): Promise<void> {
+  const { rows: taken } = await pool.query(`SELECT 1 FROM users WHERE phone_number = $1 AND id != $2`, [
+    phoneNumber,
+    userId,
+  ]);
+  if (taken.length > 0) throw new AppError(409, "That phone number is already in use");
+
+  await pool.query(`UPDATE users SET pending_phone_number = $1 WHERE id = $2`, [phoneNumber, userId]);
+  await requestOtp(phoneNumber);
+}
+
+export async function confirmPhoneChange(userId: string, code: string): Promise<MyAccount> {
+  const { rows } = await pool.query<{ pending_phone_number: string | null }>(
+    `SELECT pending_phone_number FROM users WHERE id = $1`,
+    [userId]
+  );
+  const pending = rows[0]?.pending_phone_number;
+  if (!pending) throw new AppError(400, "No phone number change is pending");
+
+  await consumeOtp({ phoneNumber: pending }, code);
+
+  const { rows: updated } = await pool.query<MyAccountRow>(
+    `UPDATE users SET phone_number = $1, pending_phone_number = NULL, updated_at = now()
+     WHERE id = $2 RETURNING ${MY_ACCOUNT_COLUMNS}`,
+    [pending, userId]
+  );
+  return toMyAccount(updated[0]!);
+}
+
+export async function requestEmailChange(userId: string, email: string): Promise<void> {
+  const { rows: taken } = await pool.query(`SELECT 1 FROM users WHERE email = $1 AND id != $2`, [
+    email,
+    userId,
+  ]);
+  if (taken.length > 0) throw new AppError(409, "That email is already in use");
+
+  await pool.query(`UPDATE users SET pending_email = $1 WHERE id = $2`, [email, userId]);
+  await requestEmailOtp(email);
+}
+
+export async function confirmEmailChange(userId: string, code: string): Promise<MyAccount> {
+  const { rows } = await pool.query<{ pending_email: string | null }>(
+    `SELECT pending_email FROM users WHERE id = $1`,
+    [userId]
+  );
+  const pending = rows[0]?.pending_email;
+  if (!pending) throw new AppError(400, "No email change is pending");
+
+  await consumeOtp({ email: pending }, code);
+
+  const { rows: updated } = await pool.query<MyAccountRow>(
+    `UPDATE users SET email = $1, pending_email = NULL, updated_at = now()
+     WHERE id = $2 RETURNING ${MY_ACCOUNT_COLUMNS}`,
+    [pending, userId]
+  );
+  return toMyAccount(updated[0]!);
+}
+
+export async function changeMyPassword(userId: string, input: ChangePasswordInput): Promise<void> {
+  const { rows } = await pool.query<{ password_hash: string | null }>(
+    `SELECT password_hash FROM users WHERE id = $1`,
+    [userId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "User not found");
+
+  if (row.password_hash) {
+    if (!input.currentPassword) throw new AppError(400, "Current password is required");
+    if (!verifyPasswordHash(input.currentPassword, row.password_hash)) {
+      throw new AppError(401, "Current password is incorrect");
+    }
+  }
+
+  const passwordHash = hashPassword(input.newPassword);
+  await pool.query(`UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2`, [
+    passwordHash,
+    userId,
+  ]);
 }

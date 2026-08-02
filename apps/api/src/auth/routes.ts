@@ -1,22 +1,53 @@
 import {
+  changePasswordSchema,
+  changeUsernameSchema,
+  confirmEmailChangeSchema,
+  confirmPhoneChangeSchema,
   forgotPasswordSchema,
   loginSchema,
+  requestAccountDeletionSchema,
+  requestEmailChangeSchema,
   requestEmailOtpSchema,
   requestOtpSchema,
+  requestPhoneChangeSchema,
   resetPasswordSchema,
+  socialAuthSchema,
+  socialProviderSchema,
   updatePreferencesSchema,
+  updateProfileSchema,
   verifyEmailOtpSchema,
   verifyOtpSchema,
 } from "@habeshalive/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import {
+  linkSocialAccount,
+  listLinkedSocialAccounts,
+  socialAuth,
+  unlinkSocialAccount,
+} from "./social-service.js";
+import {
+  cancelAccountDeletion,
+  clearPendingDeletion,
+  getAccountDeletionStatus,
+  requestAccountDeletion,
+  requestAccountDeletionOtp,
+} from "./account-deletion-service.js";
+import {
+  changeMyPassword,
+  changeUsername,
+  confirmEmailChange,
+  confirmPhoneChange,
+  getMyAccount,
   getUserById,
   login,
+  requestEmailChange,
   requestEmailOtp,
   requestOtp,
   requestPasswordReset,
+  requestPhoneChange,
   resetPassword,
   updatePreferences,
+  updateProfile,
   verifyEmailOtp,
   verifyOtp,
 } from "./service.js";
@@ -84,6 +115,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const input = verifyOtpSchema.parse(req.body);
       const { user } = await verifyOtp(input);
+      await clearPendingDeletion(user.id);
       const token = await reply.jwtSign({ sub: user.id, role: user.role });
       reply.send({ token, user });
     }
@@ -125,6 +157,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const input = verifyEmailOtpSchema.parse(req.body);
       const { user } = await verifyEmailOtp(input);
+      await clearPendingDeletion(user.id);
       const token = await reply.jwtSign({ sub: user.id, role: user.role });
       reply.send({ token, user });
     }
@@ -152,6 +185,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const input = loginSchema.parse(req.body);
       const { user } = await login(input.identifier, input.password);
+      await clearPendingDeletion(user.id);
       const token = await reply.jwtSign({ sub: user.id, role: user.role });
       reply.send({ token, user });
     }
@@ -203,4 +237,101 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const input = updatePreferencesSchema.parse(req.body);
     return updatePreferences(req.user.sub, input.showSensitiveContent);
   });
+
+  // --- E.1: account identity ---
+
+  app.get("/account", { preHandler: app.authenticate }, async (req) => getMyAccount(req.user.sub));
+
+  app.patch("/account/profile", { preHandler: app.authenticate }, async (req) => {
+    const input = updateProfileSchema.parse(req.body);
+    return updateProfile(req.user.sub, input);
+  });
+
+  app.patch("/account/username", { preHandler: app.authenticate }, async (req) => {
+    const input = changeUsernameSchema.parse(req.body);
+    return changeUsername(req.user.sub, input.username);
+  });
+
+  app.post("/account/phone/request", { preHandler: app.authenticate }, async (req, reply) => {
+    const input = requestPhoneChangeSchema.parse(req.body);
+    await requestPhoneChange(req.user.sub, input.phoneNumber);
+    reply.send({ ok: true });
+  });
+
+  app.post("/account/phone/confirm", { preHandler: app.authenticate }, async (req) => {
+    const input = confirmPhoneChangeSchema.parse(req.body);
+    return confirmPhoneChange(req.user.sub, input.code);
+  });
+
+  app.post("/account/email/request", { preHandler: app.authenticate }, async (req, reply) => {
+    const input = requestEmailChangeSchema.parse(req.body);
+    await requestEmailChange(req.user.sub, input.email);
+    reply.send({ ok: true });
+  });
+
+  app.post("/account/email/confirm", { preHandler: app.authenticate }, async (req) => {
+    const input = confirmEmailChangeSchema.parse(req.body);
+    return confirmEmailChange(req.user.sub, input.code);
+  });
+
+  app.post("/account/password", { preHandler: app.authenticate }, async (req, reply) => {
+    const input = changePasswordSchema.parse(req.body);
+    await changeMyPassword(req.user.sub, input);
+    reply.send({ ok: true });
+  });
+
+  // --- E.8: account deletion ---
+
+  app.get("/account/deletion", { preHandler: app.authenticate }, async (req) =>
+    getAccountDeletionStatus(req.user.sub)
+  );
+
+  app.post("/account/deletion/request-otp", { preHandler: app.authenticate }, async (req, reply) => {
+    await requestAccountDeletionOtp(req.user.sub);
+    reply.send({ ok: true });
+  });
+
+  app.post("/account/deletion", { preHandler: app.authenticate }, async (req) => {
+    const input = requestAccountDeletionSchema.parse(req.body);
+    return requestAccountDeletion(req.user.sub, input);
+  });
+
+  app.delete("/account/deletion", { preHandler: app.authenticate }, async (req, reply) => {
+    await cancelAccountDeletion(req.user.sub);
+    reply.send({ ok: true });
+  });
+
+  // --- E.3: social auth ---
+
+  app.post<{ Params: { provider: string } }>("/social/:provider", async (req, reply) => {
+    const provider = socialProviderSchema.parse(req.params.provider);
+    const input = socialAuthSchema.parse(req.body);
+    const { user } = await socialAuth(provider, input.idToken, input.fullName);
+    await clearPendingDeletion(user.id);
+    const token = await reply.jwtSign({ sub: user.id, role: user.role });
+    reply.send({ token, user });
+  });
+
+  app.get("/social", { preHandler: app.authenticate }, async (req) => listLinkedSocialAccounts(req.user.sub));
+
+  app.post<{ Params: { provider: string } }>(
+    "/social/:provider/link",
+    { preHandler: app.authenticate },
+    async (req, reply) => {
+      const provider = socialProviderSchema.parse(req.params.provider);
+      const input = socialAuthSchema.parse(req.body);
+      await linkSocialAccount(req.user.sub, provider, input.idToken);
+      reply.send({ ok: true });
+    }
+  );
+
+  app.delete<{ Params: { provider: string } }>(
+    "/social/:provider",
+    { preHandler: app.authenticate },
+    async (req, reply) => {
+      const provider = socialProviderSchema.parse(req.params.provider);
+      await unlinkSocialAccount(req.user.sub, provider);
+      reply.send({ ok: true });
+    }
+  );
 };

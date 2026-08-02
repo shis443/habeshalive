@@ -23,6 +23,14 @@ const envSchema = z.object({
   // there's no real Chapa sandbox account behind this yet.
   CHAPA_SECRET_KEY: z.string().default(""),
   CHAPA_WEBHOOK_SECRET: z.string().default(""),
+  // Social auth (E.3): empty in dev on purpose, same switch pattern as
+  // Chapa above — auth/social-service.ts checks these before attempting
+  // ID-token verification and returns a clear "not configured" error
+  // rather than failing deep inside a JWKS lookup. No real Google Cloud /
+  // Apple Developer app has been registered yet — this is genuinely
+  // credential-blocked, not a code gap.
+  GOOGLE_CLIENT_ID: z.string().default(""),
+  APPLE_CLIENT_ID: z.string().default(""),
   API_PUBLIC_URL: z.string().min(1).default("http://localhost:4000"),
   WEB_PUBLIC_URL: z.string().min(1).default("http://localhost:3000"),
   // Email (Resend): same empty-by-default switch pattern as Chapa above —

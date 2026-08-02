@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Hanken_Grotesk, Inter } from "next/font/google";
 import type { ReactNode } from "react";
+import { AuthModalRoot } from "@/components/AuthModalRoot";
 import { IntlProvider } from "@/components/IntlProvider";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <IntlProvider>
           {children}
           <ServiceWorkerRegister />
+          <AuthModalRoot />
         </IntlProvider>
       </body>
     </html>

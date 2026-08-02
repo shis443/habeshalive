@@ -1,0 +1,129 @@
+.card {
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: 12px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.title {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--on-background);
+  margin: 0 0 var(--space-3);
+}
+
+.field {
+  margin-bottom: var(--space-3);
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  margin-bottom: var(--space-1);
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  padding: var(--space-2);
+  border-radius: 6px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.button {
+  padding: var(--space-2) var(--space-3);
+  border-radius: 6px;
+  border: none;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.button:disabled {
+  opacity: 0.6;
+}
+
+.buttonSecondary {
+  padding: var(--space-2) var(--space-3);
+  border-radius: 6px;
+  border: 1px solid var(--outline-variant);
+  background: transparent;
+  color: var(--on-background);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.buttonDanger {
+  padding: var(--space-2) var(--space-3);
+  border-radius: 6px;
+  border: 1px solid var(--error, #ffb4ab);
+  background: transparent;
+  color: var(--error, #ffb4ab);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin: var(--space-1) 0 0;
+}
+
+.error {
+  font-size: 13px;
+  color: var(--error, #ffb4ab);
+  margin: var(--space-2) 0 0;
+}
+
+.success {
+  font-size: 13px;
+  color: var(--done, #6cc394);
+  margin: var(--space-2) 0 0;
+}
+
+.currentValue {
+  font-size: 14px;
+  color: var(--on-background);
+  margin: 0 0 var(--space-2);
+}
+
+.pendingNote {
+  font-size: 12px;
+  color: var(--secondary);
+  margin: var(--space-1) 0 0;
+}

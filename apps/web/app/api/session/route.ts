@@ -1,12 +1,9 @@
 import { authResponseSchema, loginSchema, verifyEmailOtpSchema, verifyOtpSchema } from "@habeshalive/shared";
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
-import { SESSION_COOKIE } from "@/lib/session";
+import { clearSessionCookie, getSessionCookie, MAX_ACCOUNTS, writeSessionCookie } from "@/lib/session";
 
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days, matches typical JWT session length
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const rawBody = await req.json();
   // Three request shapes share this one endpoint — password login
   // (identifier field, checked first since it's the default returning-user
@@ -36,19 +33,44 @@ export async function POST(req: Request) {
 
   const { token, user } = authResponseSchema.parse(data);
 
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
+  // E.2: ?addAccount=true means "append to whoever's already signed in"
+  // (the account switcher's "Add another account" entry point) — anything
+  // else is a normal login, which replaces the whole cookie rather than
+  // silently appending to a stale session the visitor may not know is
+  // still there on a shared device.
+  const addAccount = req.nextUrl.searchParams.get("addAccount") === "true";
+  const existing = addAccount ? await getSessionCookie() : null;
+
+  const newEntry = { userId: user.id, username: user.username, token };
+  const withoutThisUser = (existing?.accounts ?? []).filter((a) => a.userId !== user.id);
+  const accounts = [...withoutThisUser, newEntry].slice(-MAX_ACCOUNTS);
+
+  await writeSessionCookie({ activeUserId: user.id, accounts });
 
   return NextResponse.json({ user });
 }
 
-export async function DELETE() {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
+export async function DELETE(req: NextRequest) {
+  // ?all=true: "Log out of all accounts." Otherwise: "Log out of [current
+  // account]" — removes just the active one and falls back to whichever
+  // account is next in the list, if any are left.
+  const logoutAll = req.nextUrl.searchParams.get("all") === "true";
+  if (logoutAll) {
+    await clearSessionCookie();
+    return NextResponse.json({ ok: true });
+  }
+
+  const session = await getSessionCookie();
+  if (!session) {
+    await clearSessionCookie();
+    return NextResponse.json({ ok: true });
+  }
+
+  const remaining = session.accounts.filter((a) => a.userId !== session.activeUserId);
+  if (remaining.length === 0) {
+    await clearSessionCookie();
+  } else {
+    await writeSessionCookie({ activeUserId: remaining[remaining.length - 1]!.userId, accounts: remaining });
+  }
   return NextResponse.json({ ok: true });
 }

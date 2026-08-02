@@ -18,6 +18,7 @@ import { httpRequestDuration, httpRequestsTotal, registry } from "./common/metri
 import { pool } from "./common/db.js";
 import { redis } from "./common/redis.js";
 import { moderationRoutes } from "./moderation/routes.js";
+import { notificationRoutes } from "./notifications/routes.js";
 import { searchRoutes } from "./search/routes.js";
 import { streamRoutes } from "./streams/routes.js";
 import { subscriptionRoutes } from "./subscriptions/routes.js";
@@ -173,6 +174,7 @@ export function buildApp() {
   app.register(streamRoutes, { prefix: "/streams" });
   app.register(walletRoutes, { prefix: "/wallet" });
   app.register(moderationRoutes, { prefix: "/moderation" });
+  app.register(notificationRoutes, { prefix: "/notifications" });
   app.register(searchRoutes, { prefix: "/search" });
   app.register(adminRoutes, { prefix: "/admin" });
   app.register(subscriptionRoutes, { prefix: "/subscriptions" });

@@ -15,17 +15,41 @@ type SignupStep = "identifier" | "code";
 // in" step).
 type LoginView = "password" | "forgot-identifier" | "forgot-code";
 
-async function postSession(body: Record<string, unknown>): Promise<Response> {
-  return fetch("/api/session", {
+async function postSession(body: Record<string, unknown>, addAccount: boolean): Promise<Response> {
+  return fetch(addAccount ? "/api/session?addAccount=true" : "/api/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-export function LoginForm({ mode = "login" }: { mode?: "login" | "signup" }) {
+export function LoginForm({
+  mode = "login",
+  onSuccess,
+  hideCrossLink,
+}: {
+  mode?: "login" | "signup";
+  // E.4: when provided (the auth modal's use case), a completed login/
+  // signup calls this instead of hard-navigating to `redirect` — the
+  // modal closes and whatever gated action triggered it resumes in
+  // place, which is the entire reason to use a modal here rather than
+  // just linking to /login with extra steps. The full-page /login and
+  // /signup routes still hard-navigate (no onSuccess passed), unchanged.
+  onSuccess?: () => void;
+  // The modal supplies its own cross-link (a mode toggle, not a page
+  // navigation) — suppresses this component's own Link-based one.
+  hideCrossLink?: boolean;
+}) {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") ?? "/dashboard";
+  // E.2: appends to whoever's already signed in on this device instead of
+  // replacing them — see app/api/session/route.ts's POST handler.
+  const addAccount = searchParams.get("addAccount") === "true";
+
+  function completeAuth() {
+    if (onSuccess) onSuccess();
+    else window.location.href = redirectTo;
+  }
 
   const [method, setMethod] = useState<Method>("phone");
   const [signupStep, setSignupStep] = useState<SignupStep>("identifier");
@@ -76,10 +100,10 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "signup" }) {
     setLoading(true);
     try {
       const identity = method === "phone" ? { phoneNumber } : { email };
-      const res = await postSession({ ...identity, code, username, displayName, password });
+      const res = await postSession({ ...identity, code, username, displayName, password }, addAccount);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to verify code");
-      window.location.href = redirectTo;
+      completeAuth();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -92,10 +116,10 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "signup" }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await postSession({ identifier, password });
+      const res = await postSession({ identifier, password }, addAccount);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to log in");
-      window.location.href = redirectTo;
+      completeAuth();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -139,10 +163,10 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "signup" }) {
       // Reset succeeded — log straight in with the new password rather
       // than sending someone back to a login screen right after they just
       // proved who they are.
-      const loginRes = await postSession({ identifier, password: newPassword });
+      const loginRes = await postSession({ identifier, password: newPassword }, addAccount);
       const loginData = await loginRes.json();
       if (!loginRes.ok) throw new Error(loginData.error ?? "Password reset, but login failed — try logging in");
-      window.location.href = redirectTo;
+      completeAuth();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -419,7 +443,7 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "signup" }) {
           </form>
         )}
 
-        {!showingForgotFlow && (
+        {!showingForgotFlow && !hideCrossLink && (
           <p className={styles.crossLink}>
             {mode === "signup" ? (
               <>

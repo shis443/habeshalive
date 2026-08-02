@@ -3,6 +3,7 @@
 import { formatSantimAsBirr } from "@habeshalive/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { openAuthModal } from "@/lib/useAuthModal";
 import styles from "./GiftCardPurchaseForm.module.css";
 
 export function GiftCardRedeemButton({ code, isAuthed, amountSantim }: { code: string; isAuthed: boolean; amountSantim: number }) {
@@ -13,7 +14,7 @@ export function GiftCardRedeemButton({ code, isAuthed, amountSantim }: { code: s
 
   async function redeem() {
     if (!isAuthed) {
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      openAuthModal();
       return;
     }
     setSubmitting(true);

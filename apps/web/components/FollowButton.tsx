@@ -1,8 +1,8 @@
 "use client";
 
 import { followStatusSchema } from "@habeshalive/shared";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { openAuthModal } from "@/lib/useAuthModal";
 import styles from "./FollowButton.module.css";
 
 export function FollowButton({
@@ -14,13 +14,12 @@ export function FollowButton({
   isAuthed: boolean;
   initialFollowing: boolean;
 }) {
-  const router = useRouter();
   const [following, setFollowing] = useState(initialFollowing);
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
     if (!isAuthed) {
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      openAuthModal();
       return;
     }
     setLoading(true);

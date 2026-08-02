@@ -19,6 +19,7 @@ import { AppError } from "../common/errors.js";
 import { env } from "../common/env.js";
 import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
 import { isApprovedCreator } from "../creator-applications/service.js";
+import { notifyFollowersCreatorLive } from "../notifications/service.js";
 import { linkTagsToStream } from "./tags-service.js";
 import { videoProvider } from "./video-provider.js";
 
@@ -455,7 +456,13 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   }
   await logStreamEvent(streamId, "started");
 
-  return getStreamById(streamId);
+  const stream = await getStreamById(streamId);
+  // Detached (no await) — see notifyFollowersCreatorLive's own comment on
+  // why a slow/large follower fan-out shouldn't delay this response.
+  notifyFollowersCreatorLive(userId, stream.creator.username, stream.creator.displayName).catch((err) => {
+    console.error("[streams] notifyFollowersCreatorLive failed:", err);
+  });
+  return stream;
 }
 
 export async function endStream(userId: string): Promise<void> {

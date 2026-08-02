@@ -2,6 +2,7 @@ import type { ModerationActionRecord } from "@habeshalive/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
+import { notify } from "../notifications/service.js";
 
 export async function banUser(actorId: string, targetUserId: string, reason?: string): Promise<void> {
   const client = await pool.connect();
@@ -21,6 +22,10 @@ export async function banUser(actorId: string, targetUserId: string, reason?: st
     );
     await logAdminAction(actorId, "user.ban", "user", targetUserId, { reason, client });
     await client.query("COMMIT");
+    await notify(targetUserId, "moderation_action", "Your account was banned", {
+      body: reason,
+      linkUrl: "/safety-center",
+    });
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -47,6 +52,9 @@ export async function unbanUser(actorId: string, targetUserId: string, reason?: 
     );
     await logAdminAction(actorId, "user.unban", "user", targetUserId, { reason, client });
     await client.query("COMMIT");
+    await notify(targetUserId, "moderation_action", "Your account was unbanned", {
+      body: reason,
+    });
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

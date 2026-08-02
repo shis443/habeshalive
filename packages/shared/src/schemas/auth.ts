@@ -93,3 +93,77 @@ export const authResponseSchema = z.object({
   user: authUserSchema,
 });
 export type AuthResponse = z.infer<typeof authResponseSchema>;
+
+// --- E.1: account identity ---
+
+export const myAccountSchema = z.object({
+  id: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  avatarUrl: z.string().nullable(),
+  bio: z.string().nullable(),
+  phoneNumber: z.string().nullable(),
+  email: z.string().nullable(),
+  pendingPhoneNumber: z.string().nullable(),
+  pendingEmail: z.string().nullable(),
+  hasPassword: z.boolean(),
+  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  isVerified: z.boolean(),
+  deletionRequestedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type MyAccount = z.infer<typeof myAccountSchema>;
+
+export const updateProfileSchema = z.object({
+  displayName: z.string().min(1).max(50).optional(),
+  bio: z.string().max(300).optional(),
+});
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+export const changeUsernameSchema = z.object({
+  username: usernameSchema,
+});
+export type ChangeUsernameInput = z.infer<typeof changeUsernameSchema>;
+
+export const requestPhoneChangeSchema = z.object({
+  phoneNumber: phoneNumberSchema,
+});
+export type RequestPhoneChangeInput = z.infer<typeof requestPhoneChangeSchema>;
+
+export const confirmPhoneChangeSchema = z.object({
+  code: z.string().length(6),
+});
+export type ConfirmPhoneChangeInput = z.infer<typeof confirmPhoneChangeSchema>;
+
+export const requestEmailChangeSchema = z.object({
+  email: z.string().email(),
+});
+export type RequestEmailChangeInput = z.infer<typeof requestEmailChangeSchema>;
+
+export const confirmEmailChangeSchema = z.object({
+  code: z.string().length(6),
+});
+export type ConfirmEmailChangeInput = z.infer<typeof confirmEmailChangeSchema>;
+
+// currentPassword is only actually required when the account already has
+// one — enforced in the service layer (a user who signed up via OTP and
+// never set a password can't supply a "current" one that doesn't exist).
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().optional(),
+  newPassword: passwordSchema,
+});
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+// --- E.8: account deletion ---
+
+export const requestAccountDeletionSchema = z.object({
+  password: z.string().optional(),
+  code: z.string().length(6).optional(),
+});
+export type RequestAccountDeletionInput = z.infer<typeof requestAccountDeletionSchema>;
+
+export const accountDeletionStatusSchema = z.object({
+  deletionRequestedAt: z.string().nullable(),
+  gracePeriodEndsAt: z.string().nullable(),
+});
+export type AccountDeletionStatus = z.infer<typeof accountDeletionStatusSchema>;

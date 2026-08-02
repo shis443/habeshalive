@@ -14,6 +14,7 @@ import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
+import { notify } from "../notifications/service.js";
 
 // Ambiguous characters (0/O, 1/I/L) excluded — this gets read aloud,
 // typed from a phone screenshot, etc.
@@ -237,6 +238,10 @@ export async function redeemGiftCard(userId: string, code: string): Promise<{ am
     );
 
     await client.query("COMMIT");
+    await notify(userId, "gift_card_received", "Gift card redeemed", {
+      body: `${(card.amount_santim / 100).toFixed(2)} birr added to your wallet`,
+      linkUrl: "/wallet",
+    });
     return { amountSantim: card.amount_santim };
   } catch (err) {
     await client.query("ROLLBACK");

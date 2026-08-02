@@ -2,9 +2,9 @@
 
 import type { ChatMessage, GifterBadgeTier, GiftType, PinnedMessage, StreamActivity } from "@habeshalive/shared";
 import { Centrifuge } from "centrifuge";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
+import { openAuthModal } from "@/lib/useAuthModal";
 import { formatViewerCount } from "@/lib/format";
 import { useChatSettings } from "@/lib/useChatSettings";
 import { usernameColor } from "@/lib/userColor";
@@ -99,7 +99,6 @@ export function ChatPanel({
   currentUserRole: "viewer" | "creator" | "moderator" | "admin" | null;
   activity: StreamActivity;
 }) {
-  const router = useRouter();
   const { settings, update: updateSettings } = useChatSettings();
   const [messages, setMessages] = useState<ChatEntry[]>([WELCOME_MESSAGE]);
   const [pinnedMessage, setPinnedMessage] = useState<PinnedMessage | null>(null);
@@ -223,7 +222,7 @@ export function ChatPanel({
     const body = input.trim();
     if (!body) return;
     if (!isAuthed) {
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      openAuthModal();
       return;
     }
     setSending(true);
@@ -263,7 +262,7 @@ export function ChatPanel({
 
   function handleGurshaClick() {
     if (!isAuthed) {
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      openAuthModal();
       return;
     }
     setGurshaModalOpen(true);

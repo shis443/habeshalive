@@ -4,6 +4,7 @@ import { formatSantimAsBirr, type GifterBadge, type GiftType } from "@habeshaliv
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useDropdown } from "@/lib/useDropdown";
+import { openAuthModal } from "@/lib/useAuthModal";
 import { CloseIcon } from "./icons";
 import styles from "./GurshaModal.module.css";
 
@@ -78,7 +79,7 @@ export function GurshaModal({
 
   async function handleSend() {
     if (!isAuthed) {
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      openAuthModal();
       return;
     }
     if (!selectedThemeId) return;

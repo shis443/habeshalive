@@ -26,6 +26,7 @@ import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { flagIfMatched } from "../moderation/service.js";
+import { notify } from "../notifications/service.js";
 import { chapaClient, chapaPayoutClient } from "./chapa-client.js";
 
 function channelForGiftAlerts(streamId: string): string {
@@ -403,6 +404,14 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
         badgeTier: badge.tier,
         createdAt: new Date().toISOString(),
       });
+
+      const isAnonymousForNotify = input.isAnonymous ?? false;
+      await notify(
+        stream.creator_id,
+        "gursha_received",
+        isAnonymousForNotify ? "You received a Gursha" : `${alertInfo.display_name} sent you a Gursha`,
+        { body: `${alertInfo.gift_name} x${input.quantity}`, linkUrl: "/wallet" }
+      );
     }
 
     return { id: ledgerTransactionId, badge };
@@ -733,6 +742,10 @@ export async function approvePayout(payoutId: string, adminUserId: string): Prom
     } finally {
       reverseClient.release();
     }
+    await notify(creatorId, "payout_failed", "Your payout failed", {
+      body: "It's been refunded to your wallet balance — check Wallet for details",
+      linkUrl: "/wallet",
+    });
     throw new AppError(502, "Payout transfer could not be started — the creator's balance was refunded");
   }
 }
@@ -772,6 +785,17 @@ export async function rejectPayout(payoutId: string, adminUserId: string, reason
   } finally {
     client.release();
   }
+
+  const { rows: notifyRows } = await pool.query<{ creator_id: string }>(
+    `SELECT creator_id FROM payouts WHERE id = $1`,
+    [payoutId]
+  );
+  if (notifyRows[0]) {
+    await notify(notifyRows[0].creator_id, "payout_failed", "Your payout was rejected", {
+      body: reason,
+      linkUrl: "/wallet",
+    });
+  }
 }
 
 export async function completePayoutFromWebhook(webhook: ChapaTransferWebhook): Promise<void> {
@@ -805,6 +829,18 @@ export async function completePayoutFromWebhook(webhook: ChapaTransferWebhook): 
     }
 
     await client.query("COMMIT");
+
+    await notify(
+      payout.creator_id,
+      isSuccess ? "payout_processed" : "payout_failed",
+      isSuccess ? "Your payout was sent" : "Your payout failed",
+      {
+        body: isSuccess
+          ? `${(payout.amount_santim / 100).toFixed(2)} birr is on its way`
+          : "It's been refunded to your wallet balance — check Wallet for details",
+        linkUrl: "/wallet",
+      }
+    );
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

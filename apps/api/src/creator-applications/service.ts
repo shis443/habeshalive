@@ -7,6 +7,7 @@ import type {
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
+import { notify } from "../notifications/service.js";
 
 interface ApplicationRow {
   id: string;
@@ -130,21 +131,31 @@ export async function approveApplication(adminId: string, applicationId: string)
     throw new AppError(400, `Approved creator cap (${cap}) reached — raise it in Settings before approving more.`);
   }
 
-  const { rowCount } = await pool.query(
+  const { rows } = await pool.query<{ applicant_id: string }>(
     `UPDATE creator_applications SET status = 'approved', reviewer_id = $1, reviewed_at = now()
-     WHERE id = $2 AND status = 'pending'`,
+     WHERE id = $2 AND status = 'pending'
+     RETURNING applicant_id`,
     [adminId, applicationId]
   );
-  if (!rowCount) throw new AppError(404, "Application not found or already reviewed");
+  if (!rows[0]) throw new AppError(404, "Application not found or already reviewed");
   await logAdminAction(adminId, "creator_application.approve", "creator_application", applicationId);
+  await notify(rows[0].applicant_id, "application_approved", "Your creator application was approved", {
+    body: "You can go live now.",
+    linkUrl: "/dashboard",
+  });
 }
 
 export async function rejectApplication(adminId: string, applicationId: string, reason?: string): Promise<void> {
-  const { rowCount } = await pool.query(
+  const { rows } = await pool.query<{ applicant_id: string }>(
     `UPDATE creator_applications SET status = 'rejected', reviewer_id = $1, reviewed_at = now()
-     WHERE id = $2 AND status = 'pending'`,
+     WHERE id = $2 AND status = 'pending'
+     RETURNING applicant_id`,
     [adminId, applicationId]
   );
-  if (!rowCount) throw new AppError(404, "Application not found or already reviewed");
+  if (!rows[0]) throw new AppError(404, "Application not found or already reviewed");
   await logAdminAction(adminId, "creator_application.reject", "creator_application", applicationId, { reason });
+  await notify(rows[0].applicant_id, "application_rejected", "Your creator application wasn't approved", {
+    body: reason,
+    linkUrl: "/apply-to-stream",
+  });
 }
