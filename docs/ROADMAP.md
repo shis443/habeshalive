@@ -113,8 +113,10 @@ to keep expanding.
   — **updated 2026-08-04: the payout workflow is now implemented in code**
   (`apps/api/src/wallet/temporal/`), gated behind `TEMPORAL_ADDRESS` (unset
   in production today — zero behavior change until a server exists) and
-  never run against a live Temporal instance. Still needs a vendor decision
-  (self-hosted vs. Temporal Cloud) before it can be deployed and verified.
+  never run against a live Temporal instance. **Vendor decided 2026-08-04:
+  Temporal Cloud** — waiting on a real account (namespace address + mTLS
+  client cert/key) before `TEMPORAL_ADDRESS`/`TEMPORAL_TLS_CLIENT_CERT`/
+  `TEMPORAL_TLS_CLIENT_KEY` can be set and this actually activates.
   Gift-card delivery and subscription renewal remain unimplemented.
 
 ## Known dependency vulnerability, tracked not silently ignored
