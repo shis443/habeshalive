@@ -110,9 +110,18 @@ export function buildApp() {
     }
   });
 
-  // role is embedded in the JWT at login (see auth/routes.ts's jwtSign) —
-  // no extra DB lookup needed, but it does mean a role change doesn't take
-  // effect until the user's next login/token refresh.
+  // role is embedded in the JWT at login (see auth/routes.ts's jwtSign),
+  // but authorization here re-checks the live DB value instead of trusting
+  // that claim — same live-lookup pattern as rejectIfBanned above, applied
+  // to the same class of problem: a JWT can outlive the privilege it was
+  // issued with. Without this, demoting an admin (or a moderator account
+  // getting compromised and promoted back down) wouldn't actually revoke
+  // access until that token's next expiry/refresh, which — since nothing
+  // in this codebase forces re-login on role change — could be an
+  // arbitrarily long window. Admin/mod routes are inherently low-traffic
+  // (a human clicking around a dashboard, not a hot read path), so the
+  // extra per-request query here isn't the tradeoff it would be on
+  // something like GET /streams/live.
   app.decorate("requireAdmin", async (req, reply) => {
     try {
       await req.jwtVerify();
@@ -120,7 +129,8 @@ export function buildApp() {
       reply.status(401).send({ error: "unauthorized" });
       return;
     }
-    if (req.user.role !== "admin") {
+    const { rows } = await pool.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [req.user.sub]);
+    if (rows[0]?.role !== "admin") {
       reply.status(403).send({ error: "forbidden" });
     }
   });

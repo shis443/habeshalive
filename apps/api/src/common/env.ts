@@ -61,10 +61,6 @@ const envSchema = z.object({
   VOD_S3_ACCESS_KEY_ID: z.string().default(""),
   VOD_S3_SECRET_ACCESS_KEY: z.string().default(""),
   VOD_S3_BUCKET: z.string().default("habeshalive-vods"),
-  // Public base URL for objects in that bucket once uploaded — R2 buckets
-  // need "Public Access" enabled (or a custom domain) to have one; there
-  // isn't one configured yet, hence the empty default.
-  VOD_S3_PUBLIC_URL: z.string().default(""),
   // Image moderation (AWS Rekognition's DetectModerationLabels) — same
   // empty-by-default stub switch as everywhere else in this file. Chosen
   // over Google Cloud Vision SafeSearch/Hive because it's the option this

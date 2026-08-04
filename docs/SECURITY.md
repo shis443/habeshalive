@@ -27,9 +27,15 @@ glossed over.
 - Passwords: scrypt salt:hash (`apps/api/src/auth/password.ts`), not
   bcrypt/argon2 — an existing, already-proven pattern in this codebase
   (also used for OTP codes), not a new dependency.
-- Session tokens are JWTs (`JWT_SECRET`), embedded with `role` at sign time
-  — **a role change doesn't take effect until the user's next login/token
-  refresh** (`apps/api/src/app.ts`'s `requireAdmin` comment).
+- Session tokens are JWTs (`JWT_SECRET`), embedded with `role` at sign time.
+  **Fixed 2026-08-04**: `app.requireAdmin` (`apps/api/src/app.ts`) used to
+  trust that embedded claim directly — a demoted admin/moderator kept
+  privileged access until their token's next expiry/refresh, which nothing
+  forces to happen promptly. It now re-queries `users.role` from the
+  database on every admin-gated request instead (same live-lookup pattern
+  `rejectIfBanned` already used for bans), so a demotion takes effect on
+  the very next admin request. Non-admin-gated routes still read `role`
+  off the JWT where it's used only for display, not authorization.
 - Multi-account sessions: the web app's session cookie holds up to 5
   accounts (`{activeUserId, accounts: [{userId, username, token}]}`,
   `apps/web/lib/session.ts`), never a token in localStorage/sessionStorage
@@ -74,6 +80,11 @@ and the real secret travels only as a `?key=` query param SRS forwards to
 - **Storage**: plaintext in `creator_profiles.stream_key`, not hashed —
   acceptable since it's a bearer credential compared server-side, same
   class as a session token, not a password.
+- **Comparison**: `markLiveByProviderStreamId`'s check of the incoming
+  `param`'s key against the stored `stream_key` was a plain `!==` — a
+  separate gap from the webhook-secret comparison above, since this is a
+  different comparison in `streams/service.ts`, not `streams/routes.ts`.
+  **Fixed 2026-08-04**: switched to `timingSafeEqual`, same pattern.
 - **Rotation**: `POST /streams/key/rotate`, user-initiated. No automatic
   rotation on suspicion of compromise.
 - **Suspension/ban enforcement at publish time**: `markLiveByProviderStreamId`
@@ -225,7 +236,14 @@ closed in this pass:
    the moment of rotation.
 4. **Egress/CDN protection** (bandwidth alerting, budget caps, hotlink
    protection, signed URLs) — an infrastructure/cost decision, not a
-   code-only fix; needs its own scoping conversation.
+   code-only fix; needs its own scoping conversation. **2026-08-04**: VOD
+   signed URLs are now implemented (`common/object-storage.ts`'s
+   `getSignedVodUrl`, 6-hour presigned R2 URLs, bucket needs no public
+   access). Live HLS's half of this has a full staged plan
+   (`docs/egress-protection-plan.md` — Cloudflare Tunnel + Worker token
+   validation + WAF rate limits) but is not yet executed; still needs a
+   human to provision the Cloudflare account and sign off before
+   deployment.
 5. **Webhook replay protection is idempotency-based, not timestamp-windowed**
    — accepted as sufficient for the current integration surface (Chapa
    only).

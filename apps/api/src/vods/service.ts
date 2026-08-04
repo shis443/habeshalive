@@ -1,7 +1,7 @@
 import type { Vod } from "@habeshalive/shared";
 import { getVodRetentionDays } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
-import { deleteObject, objectKeyFromPublicUrl, uploadObject } from "../common/object-storage.js";
+import { deleteObject, getSignedVodUrl, uploadObject } from "../common/object-storage.js";
 
 interface VodRow {
   id: string;
@@ -12,6 +12,10 @@ interface VodRow {
   created_at: string;
 }
 
+// stream_vods.playback_url stores the bucket key, not a URL — signed into
+// a real, short-lived URL here on every read (see
+// common/object-storage.ts's getSignedVodUrl) rather than once at write
+// time, so a link handed to one viewer can't be replayed indefinitely.
 export async function listVodsForCreator(username: string): Promise<Vod[]> {
   const { rows } = await pool.query<VodRow>(
     `SELECT v.id, s.title, s.thumbnail_url, v.playback_url, v.duration_seconds, v.created_at
@@ -22,14 +26,16 @@ export async function listVodsForCreator(username: string): Promise<Vod[]> {
      ORDER BY v.created_at DESC`,
     [username]
   );
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    thumbnailUrl: row.thumbnail_url,
-    playbackUrl: row.playback_url,
-    durationSeconds: row.duration_seconds,
-    createdAt: row.created_at,
-  }));
+  return Promise.all(
+    rows.map(async (row) => ({
+      id: row.id,
+      title: row.title,
+      thumbnailUrl: row.thumbnail_url,
+      playbackUrl: await getSignedVodUrl(row.playback_url),
+      durationSeconds: row.duration_seconds,
+      createdAt: row.created_at,
+    }))
+  );
 }
 
 // Called from the SRS on_dvr webhook once recording is actually wired up
@@ -54,7 +60,7 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
   const body = Buffer.from(await fileRes.arrayBuffer());
 
   const key = `${streamId}/${Date.now()}.mp4`;
-  const playbackUrl = await uploadObject(key, body, "video/mp4");
+  await uploadObject(key, body, "video/mp4");
 
   const retention = await getVodRetentionDays();
   const retentionDays = stream.is_anchor_creator ? retention.anchor : retention.default;
@@ -63,7 +69,7 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
     `INSERT INTO stream_vods (stream_id, playback_url, expires_at)
      VALUES ($1, $2, now() + interval '1 day' * $3)
      RETURNING id, created_at`,
-    [streamId, playbackUrl, retentionDays]
+    [streamId, key, retentionDays]
   );
 
   const titleResult = await pool.query<{ title: string; thumbnail_url: string | null }>(
@@ -75,7 +81,7 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
     id: rows[0]!.id,
     title: titleResult.rows[0]!.title,
     thumbnailUrl: titleResult.rows[0]!.thumbnail_url,
-    playbackUrl,
+    playbackUrl: await getSignedVodUrl(key),
     durationSeconds: null,
     createdAt: rows[0]!.created_at,
   };
@@ -91,8 +97,7 @@ export async function cleanupExpiredVods(): Promise<void> {
   );
   for (const row of rows) {
     try {
-      const key = objectKeyFromPublicUrl(row.playback_url);
-      if (key) await deleteObject(key);
+      await deleteObject(row.playback_url);
       await pool.query(`DELETE FROM stream_vods WHERE id = $1`, [row.id]);
       console.log(`[vods] cleaned up expired vod ${row.id}`);
     } catch (err) {

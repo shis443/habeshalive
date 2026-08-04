@@ -6,6 +6,13 @@ build in the repo for this piece. Everything below was checked against how
 this stack's origin (`infra/haproxy`, `infra/srs`) actually behaves, not
 assumed from Cloudflare's generic docs.
 
+**See also `docs/egress-protection-plan.md`** for the full staged plan this
+feeds into — origin lockdown via Cloudflare Tunnel, Worker-validated signed
+viewer tokens, and path-scoped WAF rate limiting on top of the cache rules
+below. That plan supersedes this file's Cache Rules section with one
+addition (manifests must be `no-store`, not just short-TTL, once they carry
+a per-viewer token) — the Segments rule below is unchanged.
+
 ## DNS topology — two records, proxied differently
 
 Cloudflare's standard proxy (the orange cloud) only proxies HTTP(S) and

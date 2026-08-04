@@ -11,6 +11,7 @@ import {
   type ViewerList,
   type ViewerListEntry,
 } from "@habeshalive/shared";
+import { timingSafeEqual } from "node:crypto";
 import { logAdminAction } from "../admin/audit.js";
 import { getBoostPricing, getDefaultRevenueShareBps } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
@@ -718,7 +719,16 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
   );
   const creatorId = profile.rows[0]?.user_id;
   if (!creatorId) throw new AppError(404, "Unknown provider stream id");
-  if (!providedKey || providedKey !== profile.rows[0]!.stream_key) {
+  // Constant-time compare, same reasoning as streams/routes.ts's
+  // assertWebhookSecret and wallet/routes.ts's Chapa signature check — a
+  // plain !== leaks timing information about how many leading characters
+  // of the real stream_key matched, in principle usable to brute-force it
+  // byte-by-byte. Length-checked first since timingSafeEqual throws on
+  // mismatched buffer lengths rather than returning false.
+  const realKey = profile.rows[0]!.stream_key;
+  const providedBuf = Buffer.from(providedKey ?? "");
+  const realBuf = Buffer.from(realKey);
+  if (providedBuf.length !== realBuf.length || !timingSafeEqual(providedBuf, realBuf)) {
     throw new AppError(401, "Invalid stream key");
   }
 
