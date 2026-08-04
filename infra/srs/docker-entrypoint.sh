@@ -52,4 +52,15 @@ if [ -n "$fly_global_ip" ]; then
   socat -T 120 UDP4-LISTEN:8000,bind="${fly_global_ip}",fork,reuseaddr UDP4:127.0.0.1:${webrtc_listen_port} &
 fi
 
+# Cloudflare Tunnel — connects this machine to stream.birq.live
+# (docs/egress-protection-plan.md §2), routing to SRS's own http_server on
+# localhost:8080 per the tunnel's ingress config (set via the Cloudflare
+# API, not baked in here). Same background-then-exec pattern as socat
+# above: started before the final exec, keeps running as an independent
+# process regardless of what exec does to this shell. Absent
+# (CLOUDFLARE_TUNNEL_TOKEN unset) in local dev — no Cloudflare setup there.
+if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+  cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
+fi
+
 exec /usr/local/srs/objs/srs -c /usr/local/srs/conf/srs.conf

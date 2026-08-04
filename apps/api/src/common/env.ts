@@ -17,6 +17,13 @@ const envSchema = z.object({
   // and a browser on an HTTPS page (apps/web on Vercel) would block a
   // plain http:// HLS fetch as mixed content otherwise.
   SRS_HTTP_SCHEME: z.enum(["http", "https"]).default("http"),
+  // HLS viewer-session token signing (docs/egress-protection-plan.md) —
+  // empty by default, same stub switch as everywhere else in this file.
+  // streams/hls-token.ts appends a signed token to playback URLs only
+  // when this is set; harmless before that (SRS's static file server
+  // ignores the extra query param), and does nothing until the
+  // Cloudflare Worker that actually validates it is deployed.
+  HLS_TOKEN_HMAC_SECRET: z.string().default(""),
   // Chapa (payments): empty in dev on purpose — that's the switch
   // wallet/chapa-client.ts uses to fall back to the stub implementation.
   // A real key looks like "CHASECK-..." (test) or "CHASECK_LIVE-...";

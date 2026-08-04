@@ -21,6 +21,7 @@ import { env } from "../common/env.js";
 import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
 import { isApprovedCreator } from "../creator-applications/service.js";
 import { notifyFollowersCreatorLive } from "../notifications/service.js";
+import { appendHlsToken } from "./hls-token.js";
 import { linkTagsToStream } from "./tags-service.js";
 import { videoProvider } from "./video-provider.js";
 
@@ -82,7 +83,13 @@ function toStreamDetail(row: StreamRow): StreamDetail {
     category: row.category,
     language: row.language,
     thumbnailUrl: row.thumbnail_url,
-    playbackUrl: row.playback_url,
+    // Signed fresh on every read, not baked into the stored playback_url
+    // column at go-live time — a stream can stay live for hours (up to
+    // the 12h reaper backstop), so a token generated once at go-live
+    // would expire while the stream is still live. Same reasoning as
+    // vods/service.ts's getSignedVodUrl being called at read time, not
+    // write time. No-op until HLS_TOKEN_HMAC_SECRET is configured.
+    playbackUrl: row.playback_url ? appendHlsToken(row.playback_url, row.creator_id) : row.playback_url,
     startedAt: row.started_at,
     status: row.status as StreamDetail["status"],
     viewerCount: row.peak_viewers,

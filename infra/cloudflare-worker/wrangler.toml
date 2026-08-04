@@ -1,0 +1,18 @@
+# HLS viewer-token gate Worker — see src/worker.ts and
+# docs/egress-protection-plan.md. Not deployed yet.
+#
+# HLS_TOKEN_HMAC_SECRET is a secret, not a var — set it with
+# `wrangler secret put HLS_TOKEN_HMAC_SECRET`, matching the value set as
+# apps/api's HLS_TOKEN_HMAC_SECRET Fly secret. Never committed here.
+
+name = "birq-hls-auth"
+main = "src/worker.ts"
+compatibility_date = "2026-08-01"
+
+# Intercepts every request under stream.birq.live/live/* — the DNS record
+# for stream.birq.live itself (proxied, pointing at the Cloudflare Tunnel
+# to the SRS origin) is a separate step, not something wrangler manages;
+# see docs/egress-protection-plan.md §1-2.
+[[routes]]
+pattern = "stream.birq.live/live/*"
+zone_name = "birq.live"

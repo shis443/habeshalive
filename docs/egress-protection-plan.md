@@ -1,12 +1,17 @@
 # Egress protection plan — anonymous public HLS/VOD viewing
 
-**Status: plan only, nothing provisioned or deployed.** No Cloudflare
-account/zone changes, no DNS changes, no Fly.io topology changes have been
-made as part of writing this. This scopes exactly what `docs/ROADMAP.md`'s
-"Deferred by deliberate choice" item (egress/CDN cost protection) and
-`docs/SECURITY.md`'s known-accepted-risk #4 call for: a real
-infrastructure/cost decision that needs a human to provision accounts and
-sign off on vendor/budget choice before anything here gets built.
+**Status, updated 2026-08-05: `birq.live` now exists on Cloudflare (Free
+plan, DNS Full setup) and R2 (`birq-vods-production`) — the account/domain
+blocker below is resolved.** Waiting on a scoped API token to actually
+execute §1-2/§4 (DNS records, Tunnel, WAF rules). §3 (viewer-session
+tokens) is **partially implemented in code already**: the API-side token
+minting (`apps/api/src/streams/hls-token.ts`) and the Worker itself
+(`infra/cloudflare-worker/`) are both written and typechecked — see those
+sections below for what's real vs. still needs a live deploy to verify.
+No DNS changes, no Tunnel, no Worker deploy, no WAF/rate-limit rules have
+been executed yet. This still scopes what `docs/ROADMAP.md`'s "Deferred by
+deliberate choice" item and `docs/SECURITY.md`'s known-accepted-risk #4
+call for — the vendor/account decision is now resolved, execution isn't.
 
 ## Why this replaces two narrower ideas already considered and rejected
 
@@ -120,47 +125,70 @@ once lockdown is complete; only requests through `stream.<domain>` succeed.
 
 ## 3. Anonymous viewer-session tokens (Cloudflare Worker)
 
-**Design choice — rewrite the manifest at the edge, don't rely on the
-player forwarding query strings.** SRS writes one shared, static
-`.m3u8`/`.ts`/`.key` file set per stream (not personalized per viewer), and
-this app's `VideoPlayer.tsx` falls back to Safari's *native* HLS engine for
-some clients — which has no hook for attaching a token to each derived
-segment request the way `hls.js`'s `xhrSetup` could. Relying on
-client-side propagation would mean two different, unverified code paths.
-Instead, the Worker does the propagation itself:
+**Implemented 2026-08-05, not yet deployed/verified live:**
+`apps/api/src/streams/hls-token.ts` (token minting) and
+`infra/cloudflare-worker/src/worker.ts` (token enforcement + manifest
+rewrite) — both typecheck clean. What's below is the design those
+implement; deployment steps are in
+`infra/cloudflare-worker/README.md`.
 
-1. `apps/api`'s `getPlaybackUrl` (currently
-   `streams/video-provider.ts:24-26`) appends a signed, short-lived token
-   query param to the top-level manifest URL it already returns —
-   `https://stream.<domain>/live/<userId>.m3u8?t=<token>`. Token = HS256
-   JWT-shaped payload `{ streamId, exp }`, signed with a **new** dedicated
-   secret (`HLS_TOKEN_HMAC_SECRET`), reusing the exact hand-rolled
-   HS256-signing pattern already proven in this codebase
+**Design choice — rewrite the manifest at the edge, don't rely on the
+player forwarding query strings.** SRS writes one shared, static `.m3u8`/
+`.ts` file set per stream (not personalized per viewer — this deployment
+doesn't have `hls_keys`/AES enabled, see `infra/srs/conf/srs.conf.template`,
+so there's no `.key` file to account for either), and this app's
+`VideoPlayer.tsx` falls back to Safari's *native* HLS engine for some
+clients — which has no hook for attaching a token to each derived segment
+request the way `hls.js`'s `xhrSetup` could. Relying on client-side
+propagation would mean two different, unverified code paths. Instead, the
+Worker does the propagation itself:
+
+1. `toStreamDetail` in `apps/api/src/streams/service.ts` — the single
+   shared mapping function every stream-detail read goes through
+   (`listLiveStreams`, `getStreamById`, `getLiveStreamByUsername`, the
+   admin listing) — calls `appendHlsToken(row.playback_url,
+   row.creator_id)` on every read. **Deliberately not** done inside
+   `videoProvider.getPlaybackUrl` (which only runs once, at go-live time,
+   to build the *stored* `streams.playback_url` value): a live stream can
+   run for hours, so a token baked in once at go-live would expire while
+   the stream is still live. Signing fresh on every read is the same
+   pattern `vods/service.ts`'s `getSignedVodUrl` already uses for VOD.
+   Token = HS256 JWT-shaped payload `{ streamId, exp }` (`streamId` is the
+   creator's userId — the same identifier already used in the URL path,
+   not the internal DB row id, so the Worker can cross-check the token
+   against the specific stream being requested), signed with a **new**
+   dedicated secret (`HLS_TOKEN_HMAC_SECRET`), reusing the exact
+   hand-rolled HS256-signing pattern already proven in this codebase
    (`chat/token.ts`'s `signHs256` — no new JWT library dependency). No
    `sub`/user binding, matching the already-decided anonymous/no-login
-   access model.
+   access model. No-op (URL unchanged) until `HLS_TOKEN_HMAC_SECRET` is
+   set — safe to have shipped ahead of the Worker, since SRS's static file
+   server ignores the extra query param.
 2. On every request under `/live/*`, the Worker:
-   - Validates `t` (signature + expiry) before touching the origin at all.
-     Invalid/missing/expired → `403`, origin never contacted.
-   - On a manifest (`.m3u8`) request: fetches the real manifest from origin
-     (via the Tunnel-routed origin binding), and rewrites every segment
-     and `EXT-X-KEY` line to append `?t=<same token>`, then returns the
-     rewritten text. This is why native Safari HLS and `hls.js` both work
-     with zero player-side changes — every URL the client ever sees already
-     has the token baked in by the Worker, not the player.
-   - On a segment/key request: same token validation, then proxy/cache as
-     normal (see Caching below).
-3. Token TTL: short enough to bound a leaked/scraped manifest URL's
-   usefulness, long enough to cover a full viewing session given
-   `VideoPlayer.tsx` fetches `playbackUrl` once per page load with no
-   refresh mechanism (same constraint already documented for VOD signing).
-   Recommend matching VOD's existing 6-hour TTL for consistency unless
+   - Validates `t` (signature + expiry + that its `streamId` claim matches
+     the requested path) before touching the origin at all.
+     Invalid/missing/expired/mismatched → `403`, origin never contacted.
+   - On a manifest (`.m3u8`) request: fetches the real manifest from
+     origin, rewrites every segment line to append `?t=<same token>`, sets
+     `cache-control: no-store` (a manifest is per-viewer now — must never
+     be cached), and returns the rewritten text. This is why native Safari
+     HLS and `hls.js` both work with zero player-side changes — every URL
+     the client ever sees already has the token baked in by the Worker,
+     not the player.
+   - On a segment request: same token validation, then pass through
+     unchanged so Cloudflare's Cache Rules (`docs/cdn.md`) still apply —
+     the Worker never buffers or rewrites segment bytes.
+3. Token TTL: 6 hours, matching VOD's `getSignedVodUrl` — long enough to
+   cover a full viewing session given `VideoPlayer.tsx` fetches
+   `playbackUrl` once per page load with no refresh mechanism, short
+   enough to bound a leaked/scraped manifest URL's usefulness. Revisit if
    staging load-testing suggests otherwise.
 
-**Acceptance criteria:** a manifest or segment/key request with a missing,
-expired, or tampered `t` gets `403` before any origin bytes are served; a
-valid token plays a real stream end-to-end through both `hls.js` and, if
-testable, Safari's native path.
+**Acceptance criteria (unverified — no live Cloudflare deploy yet):** a
+manifest or segment request with a missing, expired, or tampered `t` gets
+`403` before any origin bytes are served; a valid token plays a real
+stream end-to-end through both `hls.js` and, if testable, Safari's native
+path. See `infra/cloudflare-worker/README.md`'s verification steps.
 
 ## 4. WAF / rate limiting / bot protection (Cloudflare dashboard config, not code)
 
@@ -171,7 +199,7 @@ testable, Safari's native path.
     `hls_window`/`hls_fragment` in `infra/srs/conf/srs.conf.template`
     determine the real legitimate refresh cadence, check those values when
     tuning this number in staging).
-  - `*.ts` / `*.key` — looser threshold sized to a real viewer's segment
+  - `*.ts` — looser threshold sized to a real viewer's segment
     fetch rate (`hls_fragment 2` seconds as of 2026-08-04 → roughly one
     segment request per 2s per real viewer, plus normal buffering/seek
     bursts — tighter window means more requests/min per viewer than the
@@ -324,7 +352,7 @@ codebase already holds itself to elsewhere:
 
 - [ ] Direct requests to the Fly SRS origin for `/live/*` are rejected once
       Stage 4 lockdown completes.
-- [ ] Every manifest and segment/key request requires a valid,
+- [ ] Every manifest and segment request requires a valid,
       non-expired, correctly-signed token; invalid tokens get `403` before
       reaching origin.
 - [ ] Manifest responses are never cached at the edge (`no-store`/Bypass);
@@ -339,10 +367,22 @@ codebase already holds itself to elsewhere:
 - [ ] Cost/usage alerts exist for Workers request volume, R2 usage, and
       Fly egress before Stage 3 soak begins.
 
-## What this plan deliberately does not do yet
+## What's real vs. still pending, as of 2026-08-05
 
-Per the instruction this plan was written against: no Cloudflare
-account/zone was created, no DNS record was changed, no Worker or Tunnel
-was deployed, and no Fly.io configuration was modified. Everything above is
-ready to execute once a human provisions the Cloudflare account/domain and
-signs off on the Workers-paid-tier possibility called out in Cost alerting.
+**Real, deployed to production**: the Cloudflare account and `birq.live`
+domain exist (Free plan, proxied DNS), R2 bucket `birq-vods-production`
+exists and its credentials are already set as Fly secrets. `apps/api`'s
+HLS token minting (`streams/hls-token.ts`, wired into every stream-detail
+read) is deployed to production but dormant (`HLS_TOKEN_HMAC_SECRET`
+unset).
+
+**Real code, not yet deployed**: the Cloudflare Worker
+(`infra/cloudflare-worker/`) — written, typechecked, needs `wrangler
+deploy` against a real API token.
+
+**Not started**: no DNS record for `stream.<domain>`/`ingest.<domain>`
+exists yet (confirmed — still to do), no Tunnel, no WAF/rate-limit rules,
+no origin lockdown, no cost alerts. Waiting on a scoped Cloudflare API
+token (Zone:DNS:Edit, Zone:SSL and Certificates:Edit, Zone:Cache
+Rules:Edit, Zone:Firewall Services:Edit, Account:Cloudflare Tunnel:Edit,
+Account:Workers Scripts:Edit) to execute the rest of this plan.
