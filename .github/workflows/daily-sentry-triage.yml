@@ -1,0 +1,89 @@
+name: Daily Sentry triage
+
+# NOT YET ACTIVE: trigger is workflow_dispatch-only (manual) rather than a
+# cron schedule, and every step below fails fast with a clear message if
+# its required secret is unset. Flip the `schedule:` trigger back on only
+# after: (1) a real Sentry project exists and SENTRY_AUTH_TOKEN/SENTRY_ORG/
+# SENTRY_PROJECT are set as repo secrets (see docs/ROADMAP.md's Sentry
+# item), and (2) the Claude Code GitHub Action step below has been
+# confirmed against its current marketplace listing — its exact action
+# name/inputs were not re-verified against a live source in this session
+# (no network access when this was written), only pattern-matched against
+# the well-known anthropics/claude-code-action interface. Check
+# https://github.com/anthropics/claude-code-action before relying on this.
+#
+# What this does once active: pulls Sentry issues newly seen in the last
+# 24h, and for each one, asks Claude Code to investigate just the failing
+# module (matching docs/architecture.md's "Modular Codebases for Precise
+# AI Debugging" reasoning — a full-repo scan produces worse fixes than a
+# scoped one) and open a PR with an isolated fix, for human review before
+# merge. This never auto-merges anything.
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 6 * * *" # 06:00 UTC daily — uncomment once the secrets above exist
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch new Sentry issues (last 24h)
+        id: sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
+            echo "::error::SENTRY_AUTH_TOKEN/SENTRY_ORG/SENTRY_PROJECT not set — see this file's header comment."
+            exit 1
+          fi
+
+          # Sentry's issues API — query for unresolved issues first seen in
+          # the last 24h, sorted newest first. Verify this endpoint shape
+          # against https://docs.sentry.io/api/events/list-a-projects-issues/
+          # before relying on it; not re-checked live in this session.
+          response=$(curl -sf \
+            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/issues/?query=is:unresolved%20firstSeen:-24h&sort=freq&statsPeriod=24h")
+
+          echo "$response" > sentry-issues.json
+          count=$(echo "$response" | jq 'length')
+          echo "issue_count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Build triage prompt
+        if: steps.sentry.outputs.issue_count != '0'
+        run: |
+          {
+            echo "New Sentry issues from the last 24h (habeshalive production/staging):"
+            echo ""
+            jq -r '.[] | "- **\(.title)** (\(.count) events) — culprit: \(.culprit // "unknown") — \(.permalink)"' sentry-issues.json
+            echo ""
+            echo "For each issue: read only the module the culprit points to (not the whole repo — see docs/architecture.md's Modular Codebases section), identify the root cause, write an isolated fix, and open one PR per fix with a clear description of the crash and the fix. Do not fix things you can't reproduce or aren't confident about — flag those in the PR description as needing human investigation instead of guessing."
+          } > triage-prompt.txt
+
+      - name: Run Claude Code triage
+        if: steps.sentry.outputs.issue_count != '0'
+        # Placeholder step — replace with the actual current Claude Code
+        # GitHub Action once verified (see header comment). Left as a
+        # visible failure rather than a silently-wrong guessed action
+        # reference, consistent with this repo's own stance on not
+        # shipping unverified integrations as if they were confirmed
+        # working (see docs/architecture.md's Chapa/Resend sections for
+        # that same standard applied elsewhere).
+        run: |
+          echo "::error::Wire up the actual Claude Code Action here (see this file's header comment) — not yet verified/configured."
+          exit 1
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: No new issues
+        if: steps.sentry.outputs.issue_count == '0'
+        run: echo "No new Sentry issues in the last 24h — nothing to triage."

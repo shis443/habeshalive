@@ -28,6 +28,13 @@ import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } 
 import { flagIfMatched } from "../moderation/service.js";
 import { notify } from "../notifications/service.js";
 import { chapaClient, chapaPayoutClient } from "./chapa-client.js";
+import {
+  isTemporalConfigured,
+  signalApprove,
+  signalChapaTransferOutcome,
+  signalReject,
+  startPayoutWorkflow,
+} from "./temporal/client.js";
 
 function channelForGiftAlerts(streamId: string): string {
   // Mirrors chat/service.ts's channelForStream: same Centrifugo instance,
@@ -467,7 +474,55 @@ async function reversePayoutLedger(
   await applyBalanceDelta(client, platformWalletId, -amountSantim);
 }
 
-export async function requestPayout(
+// Dispatches to the Temporal-backed workflow when TEMPORAL_ADDRESS is
+// configured, otherwise falls back to requestPayoutLegacy below —
+// byte-for-byte the original implementation, unchanged, so behavior is
+// identical to before this migration until a real Temporal server exists
+// (see docs/temporal-migration-plan.md). Same dispatch pattern for
+// approvePayout/rejectPayout/completePayoutFromWebhook further down.
+export async function requestPayout(creatorId: string, input: RequestPayoutInput): Promise<PayoutResponse> {
+  if (!isTemporalConfigured) return requestPayoutLegacy(creatorId, input);
+
+  const { rows: userRows } = await pool.query<{ display_name: string; is_suspended: boolean }>(
+    `SELECT display_name, is_suspended FROM users WHERE id = $1`,
+    [creatorId]
+  );
+  if (userRows[0]?.is_suspended) throw new AppError(403, "Your payout privileges are currently suspended");
+  const displayName = userRows[0]?.display_name ?? "Birq Creator";
+
+  const reviewThreshold = await getPayoutManualReviewThreshold();
+  const requiresManualApproval = input.amountSantim >= reviewThreshold;
+  const payoutId = randomUUID();
+
+  // Fire-and-continue, not fire-and-wait: unlike the legacy path (which
+  // synchronously awaited the Chapa call and could return a 502 with the
+  // balance already refunded if it failed immediately), starting a
+  // workflow only waits for Temporal to accept and durably record the
+  // start — the actual transfer attempt happens in the background. A
+  // creator finds out about a failure via the existing notify() call
+  // inside the reverseFunds/markPaid activities, not synchronously in
+  // this HTTP response. This is a deliberate, real behavior change, not
+  // an oversight — see docs/temporal-migration-plan.md.
+  await startPayoutWorkflow({
+    payoutId,
+    creatorId,
+    amountSantim: input.amountSantim,
+    method: input.method,
+    destination: input.destination,
+    bankCode: input.method === "bank" ? input.bankCode! : "",
+    displayName,
+    requiresManualApproval,
+  });
+
+  return {
+    id: payoutId,
+    amountSantim: input.amountSantim,
+    status: requiresManualApproval ? "pending_review" : "processing",
+    requiresManualApproval,
+  };
+}
+
+async function requestPayoutLegacy(
   creatorId: string,
   input: RequestPayoutInput
 ): Promise<PayoutResponse> {
@@ -684,6 +739,24 @@ export async function getCreatorPayoutContext(creatorId: string): Promise<Creato
 }
 
 export async function approvePayout(payoutId: string, adminUserId: string): Promise<void> {
+  if (isTemporalConfigured) {
+    // Preserve the legacy path's guard: a workflow's approvePayoutSignal
+    // handler silently ignores a second/late signal (see workflow.ts) —
+    // fine internally, but the admin UI still needs the same 404/400 this
+    // endpoint always returned for a stale double-click or wrong ID,
+    // rather than a signal call quietly no-op'ing with a 200.
+    const { rows } = await pool.query<{ status: string }>(`SELECT status FROM payouts WHERE id = $1`, [payoutId]);
+    if (!rows[0]) throw new AppError(404, "Payout not found");
+    if (rows[0].status !== "pending_review") throw new AppError(400, "Payout is not awaiting review");
+
+    await signalApprove(payoutId, adminUserId);
+    await logAdminAction(adminUserId, "payout.approve", "payout", payoutId, {});
+    return;
+  }
+  return approvePayoutLegacy(payoutId, adminUserId);
+}
+
+async function approvePayoutLegacy(payoutId: string, adminUserId: string): Promise<void> {
   const client = await pool.connect();
   let creatorId!: string;
   let amountSantim!: number;
@@ -771,6 +844,25 @@ export async function approvePayout(payoutId: string, adminUserId: string): Prom
 // already uses for an automatic failure, since both answer the same
 // question ("why didn't this get paid") for whoever's looking at the row.
 export async function rejectPayout(payoutId: string, adminUserId: string, reason: string): Promise<void> {
+  if (isTemporalConfigured) {
+    const { rows } = await pool.query<{ status: string; creator_id: string; amount_santim: number }>(
+      `SELECT status, creator_id, amount_santim FROM payouts WHERE id = $1`,
+      [payoutId]
+    );
+    if (!rows[0]) throw new AppError(404, "Payout not found");
+    if (rows[0].status !== "pending_review") throw new AppError(400, "Payout is not awaiting review");
+
+    await signalReject(payoutId, adminUserId, reason);
+    await logAdminAction(adminUserId, "payout.reject", "payout", payoutId, {
+      reason,
+      metadata: { creatorId: rows[0].creator_id, amountSantim: rows[0].amount_santim },
+    });
+    return;
+  }
+  return rejectPayoutLegacy(payoutId, adminUserId, reason);
+}
+
+async function rejectPayoutLegacy(payoutId: string, adminUserId: string, reason: string): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -813,6 +905,31 @@ export async function rejectPayout(payoutId: string, adminUserId: string, reason
 }
 
 export async function completePayoutFromWebhook(webhook: ChapaTransferWebhook): Promise<void> {
+  if (isTemporalConfigured) {
+    const isSuccess = webhook.status.toLowerCase() === "success";
+    try {
+      await signalChapaTransferOutcome(webhook.reference, {
+        success: isSuccess,
+        reason: isSuccess ? undefined : `Chapa reported transfer status: ${webhook.status}`,
+      });
+    } catch (err) {
+      // The workflow may have already completed and closed (e.g. a
+      // duplicate/retried webhook delivery arriving after the first one
+      // was already processed) — Temporal can't signal a closed workflow
+      // execution. That's the same idempotent-no-op outcome the legacy
+      // path's explicit status check gave a retried webhook, just
+      // surfaced as a caught error here instead of a status comparison.
+      // Anything else (e.g. Temporal genuinely unreachable) should still
+      // propagate so Chapa's retry logic keeps trying.
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/not found|already completed|workflow execution/i.test(message)) throw err;
+    }
+    return;
+  }
+  return completePayoutFromWebhookLegacy(webhook);
+}
+
+async function completePayoutFromWebhookLegacy(webhook: ChapaTransferWebhook): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

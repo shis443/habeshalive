@@ -1,10 +1,17 @@
 import { buildApp } from "./app.js";
 import { settleAdRevenue } from "./ads/service.js";
 import { env } from "./common/env.js";
+import { captureUnexpectedError, initSentry } from "./common/sentry.js";
 import { sendScheduledGiftCards } from "./gift-cards/service.js";
 import { reapStaleStreams } from "./streams/service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
+
+// Before buildApp() — Sentry needs to be initialized before anything it
+// might need to capture can run, same reasoning as every Sentry SDK's own
+// setup docs (a request that fails during app construction should still be
+// reportable).
+initSentry();
 
 const app = buildApp();
 
@@ -34,30 +41,35 @@ const GIFT_CARD_DELIVERY_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 function runReaper(): void {
   reapStaleStreams().catch((err) => {
     app.log.error(err, "reapStaleStreams failed");
+    captureUnexpectedError(err);
   });
 }
 
 function runSubscriptionRenewal(): void {
   renewSubscriptions().catch((err) => {
     app.log.error(err, "renewSubscriptions failed");
+    captureUnexpectedError(err);
   });
 }
 
 function runVodCleanup(): void {
   cleanupExpiredVods().catch((err) => {
     app.log.error(err, "cleanupExpiredVods failed");
+    captureUnexpectedError(err);
   });
 }
 
 function runAdSettlement(): void {
   settleAdRevenue().catch((err) => {
     app.log.error(err, "settleAdRevenue failed");
+    captureUnexpectedError(err);
   });
 }
 
 function runGiftCardDelivery(): void {
   sendScheduledGiftCards().catch((err) => {
     app.log.error(err, "sendScheduledGiftCards failed");
+    captureUnexpectedError(err);
   });
 }
 

@@ -17,6 +17,7 @@ import { giftCardRoutes } from "./gift-cards/routes.js";
 import { httpRequestDuration, httpRequestsTotal, registry } from "./common/metrics.js";
 import { pool } from "./common/db.js";
 import { redis } from "./common/redis.js";
+import { captureUnexpectedError } from "./common/sentry.js";
 import { moderationRoutes } from "./moderation/routes.js";
 import { notificationRoutes } from "./notifications/routes.js";
 import { searchRoutes } from "./search/routes.js";
@@ -141,6 +142,7 @@ export function buildApp() {
       return;
     }
     if (err instanceof AppError) {
+      captureUnexpectedError(err);
       reply.status(err.statusCode).send({ error: err.message });
       return;
     }
@@ -159,6 +161,7 @@ export function buildApp() {
       return;
     }
     req.log.error(err);
+    captureUnexpectedError(err);
     reply.status(500).send({ error: "internal_server_error" });
   });
 

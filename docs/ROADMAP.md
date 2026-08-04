@@ -11,7 +11,17 @@ not chronologically.
 - **No error tracking or alerting in production** — no Sentry, no metrics
   consumer, no alerting on payment/ledger anomalies. See
   `docs/OPERATIONS.md`. Given real money moves through this platform, this
-  is the highest-priority operational gap.
+  is the highest-priority operational gap. **2026-08-04**: Sentry SDK
+  integration is now implemented in code on both `apps/api`
+  (`common/sentry.ts`, wired into the global error handler and every
+  background job's `.catch`) and `apps/web` (`@sentry/nextjs`,
+  `instrumentation.ts` + client/server/edge configs) — both stub-vs-real
+  gated on `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN`, unset today, so this
+  captures nothing until a real Sentry project exists. The daily
+  crash-triage automation from the BIRQ guidelines is scaffolded but
+  **not active** — `.github/workflows/daily-sentry-triage.yml`, manual
+  trigger only, needs `SENTRY_*` secrets and a verified Claude Code Action
+  wiring before its cron trigger can be enabled.
 - **Backups are unverified against production** — the real backup
   mechanism only runs in docker-compose; production relies entirely on
   unconfirmed Neon PITR, and no restore has ever been tested anywhere.
@@ -100,9 +110,12 @@ to keep expanding.
   renewal, by contrast, is already idempotent and self-healing on its
   6-hour retry and doesn't need this. Full risk audit, workflow/activity
   decomposition, and staged rollout plan: `docs/temporal-migration-plan.md`
-  — **2026-08-04, plan only, no Temporal dependency/cluster added yet**;
-  needs a vendor decision (self-hosted vs. Temporal Cloud) before
-  execution.
+  — **updated 2026-08-04: the payout workflow is now implemented in code**
+  (`apps/api/src/wallet/temporal/`), gated behind `TEMPORAL_ADDRESS` (unset
+  in production today — zero behavior change until a server exists) and
+  never run against a live Temporal instance. Still needs a vendor decision
+  (self-hosted vs. Temporal Cloud) before it can be deployed and verified.
+  Gift-card delivery and subscription renewal remain unimplemented.
 
 ## Known dependency vulnerability, tracked not silently ignored
 

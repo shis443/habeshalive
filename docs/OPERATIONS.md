@@ -99,11 +99,14 @@ immediately which mode production is actually running in).
 
 This is the single biggest operational gap. As of this audit:
 
-- **No error tracking.** No Sentry (or any APM/error-tracking service) is
-  integrated anywhere in `apps/api` or `apps/web` — confirmed by a repo-wide
-  search for `sentry`/`@sentry` (zero hits). A production exception is
-  visible only via `flyctl logs -a habeshalive`, which is not alerting,
-  just a stream you have to be actively watching.
+- **No error tracking** — was true as of this audit (2026-08-02), confirmed
+  by a repo-wide search for `sentry`/`@sentry` returning zero hits then. **As
+  of 2026-08-04, the Sentry SDK is integrated** in both `apps/api`
+  (`common/sentry.ts`) and `apps/web` (`@sentry/nextjs`), but captures
+  nothing in production yet — both are gated on `SENTRY_DSN`/
+  `NEXT_PUBLIC_SENTRY_DSN`, which remain unset (no real Sentry project
+  exists). Until those are set, a production exception is still visible
+  only via `flyctl logs -a habeshalive`, same limitation as before.
 - **No metrics/dashboards in production.** `apps/api` does expose
   `/metrics` (Prometheus format, `prom-client`), but nothing in
   production scrapes it — Prometheus and Grafana are docker-compose-only

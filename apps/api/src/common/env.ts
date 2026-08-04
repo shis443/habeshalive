@@ -75,6 +75,32 @@ const envSchema = z.object({
   AWS_REKOGNITION_ACCESS_KEY_ID: z.string().default(""),
   AWS_REKOGNITION_SECRET_ACCESS_KEY: z.string().default(""),
   AWS_REKOGNITION_REGION: z.string().default("us-east-1"),
+  // Error tracking (Sentry) — same empty-by-default stub switch as
+  // everywhere else in this file; common/sentry.ts no-ops when unset. No
+  // real Sentry project exists yet (see docs/ROADMAP.md's top blocking
+  // gap: "no error tracking or alerting in production").
+  SENTRY_DSN: z.string().default(""),
+  // Durable execution (Temporal) for payout disbursement — see
+  // docs/temporal-migration-plan.md. Empty by default, same stub switch as
+  // everywhere else in this file: wallet/service.ts's isTemporalConfigured
+  // falls back to the original inline requestPayout/approvePayout logic
+  // when unset, so this is safe to merge and deploy with zero behavior
+  // change until a real Temporal server (self-hosted or Temporal Cloud —
+  // still an open vendor decision, see that doc) actually exists.
+  // TEMPORAL_ADDRESS looks like "namespace.acctid.tmprl.cloud:7233" for
+  // Temporal Cloud, or "localhost:7233" self-hosted.
+  TEMPORAL_ADDRESS: z.string().default(""),
+  TEMPORAL_NAMESPACE: z.string().default("default"),
+  // Temporal Cloud requires mTLS, not just an address — empty/unused for a
+  // self-hosted server with no auth configured (local dev).
+  TEMPORAL_TLS_CLIENT_CERT: z.string().default(""),
+  TEMPORAL_TLS_CLIENT_KEY: z.string().default(""),
+  TEMPORAL_TASK_QUEUE: z.string().default("payouts"),
+  // Fly.io sets FLY_IMAGE_REF automatically at runtime (the deployed
+  // image's digest/tag) — used as the Sentry release identifier with zero
+  // extra CI wiring needed. Empty locally (not running on Fly), which
+  // common/sentry.ts treats as "dev".
+  SENTRY_ENVIRONMENT: z.string().default("development"),
 });
 
 export const env = envSchema.parse(process.env);

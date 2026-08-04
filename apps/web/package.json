@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@habeshalive/shared": "*",
+    "@sentry/nextjs": "^10.69.0",
     "centrifuge": "^5.2.4",
     "hls.js": "^1.5.20",
     "next": "^16.2.11",

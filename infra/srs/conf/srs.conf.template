@@ -46,8 +46,15 @@ vhost __defaultVhost__ {
     hls {
         enabled         on;
         hls_path        ./objs/nginx/html;
-        hls_fragment    4;
-        hls_window      30;
+        # 2s fragments / 10s window (was 4s/30s) — shortens end-to-end HLS
+        # glass-to-glass latency; smaller segments mean more frequent
+        # manifest polling and more total HTTP requests per viewer, which
+        # is the tradeoff against the old wider window. See BIRQ
+        # guidelines' latency section: this alone won't get under ~5s
+        # (inherent to segmented HLS), WHEP/WebRTC playback is the real
+        # path there if that's ever needed — not attempted here.
+        hls_fragment    2;
+        hls_window      10;
     }
 
     # rtc_to_rtmp must be on for a WHIP-published (WebRTC) stream to reach

@@ -172,8 +172,11 @@ testable, Safari's native path.
     determine the real legitimate refresh cadence, check those values when
     tuning this number in staging).
   - `*.ts` / `*.key` — looser threshold sized to a real viewer's segment
-    fetch rate (`hls_fragment 4` seconds today → roughly one segment
-    request per 4s per real viewer, plus normal buffering/seek bursts).
+    fetch rate (`hls_fragment 2` seconds as of 2026-08-04 → roughly one
+    segment request per 2s per real viewer, plus normal buffering/seek
+    bursts — tighter window means more requests/min per viewer than the
+    original 4s figure this section was scoped against, size the
+    threshold accordingly).
 - Cloudflare's standard bot-management heuristics (available on Free/Pro)
   applied to the `stream.<domain>` zone.
 - These are Cloudflare dashboard/Terraform config, not application code —

@@ -50,9 +50,10 @@ explicit Cache Rules are required, not optional:
    - Cache eligibility: Eligible for cache
    - Edge TTL: override origin, short — a rule of thumb is roughly half the
      HLS fragment duration so viewers don't lag behind live. This repo's
-     `hls_fragment` is `4` (seconds; see
-     `infra/srs/conf/srs.conf.template`), so **2s** is the matching value —
-     if that directive is ever changed, update this TTL too.
+     `hls_fragment` is `2` (seconds; see
+     `infra/srs/conf/srs.conf.template`, reduced from 4s on 2026-08-04 for
+     lower glass-to-glass latency), so **1s** is the matching value — if
+     that directive is ever changed, update this TTL too.
    - Browser TTL: bypass (viewers should always re-check).
 
 3. Everything else under `/live/*` not matching the above two (SRS also

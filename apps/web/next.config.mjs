@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import createNextIntlPlugin from "next-intl/plugin";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
@@ -40,17 +41,37 @@ const srsWhipOrigin = new URL(
   process.env.NEXT_PUBLIC_SRS_WHIP_URL ?? "http://localhost:8443/rtc/v1/whip/"
 ).origin;
 
-// VOD playback (Section 4 — see apps/api's VOD_S3_PUBLIC_URL): empty until
-// a real R2 bucket exists, so this contributes nothing to media-src yet.
+// VOD playback: empty until a real R2 bucket exists, so this contributes
+// nothing to media-src yet. Since 2026-08-04, apps/api's VOD playback URLs
+// are short-lived presigned R2 GetObject URLs (common/object-storage.ts's
+// getSignedVodUrl) rather than a permanently public base URL — there's no
+// more "VOD_S3_PUBLIC_URL" to mirror. NEXT_PUBLIC_VOD_PUBLIC_URL here
+// should be set to the R2 endpoint's own origin (same host as apps/api's
+// VOD_S3_ENDPOINT) — CSP only needs the origin, not a full object URL, so
+// this doesn't leak anything a signed-URL scheme wouldn't already require.
 // Found the hard way via a *different* bug (a stale API_PUBLIC_URL secret
 // pointing stream thumbnails at localhost) that media-src silently blocks
-// any origin not listed here — set NEXT_PUBLIC_VOD_PUBLIC_URL on Vercel
-// the same day VOD_S3_PUBLIC_URL is set on Fly, or playback breaks with
-// no visible error beyond the browser console.
+// any origin not listed here — set this on Vercel the same day VOD_S3_*
+// is set on Fly, or playback breaks with no visible error beyond the
+// browser console.
 const vodOrigin = process.env.NEXT_PUBLIC_VOD_PUBLIC_URL ? new URL(process.env.NEXT_PUBLIC_VOD_PUBLIC_URL).origin : "";
+
+// Sentry's browser SDK reports errors via a fetch/XHR call to the DSN's own
+// ingest host — without this in connect-src, that report is silently
+// CSP-blocked, same failure shape as every other origin comment in this
+// file. Empty (contributes nothing) until NEXT_PUBLIC_SENTRY_DSN is set.
+const sentryOrigin = process.env.NEXT_PUBLIC_SENTRY_DSN ? new URL(process.env.NEXT_PUBLIC_SENTRY_DSN).origin : "";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Next.js only inlines env vars actually named NEXT_PUBLIC_* into the
+  // client bundle — VERCEL_GIT_COMMIT_SHA (Vercel's own build-time var) is
+  // not one of those, so this re-exposes it under a name that is, giving
+  // sentry.client.config.ts real release/version context instead of
+  // silently evaluating to undefined in the browser.
+  env: {
+    NEXT_PUBLIC_SENTRY_RELEASE: process.env.VERCEL_GIT_COMMIT_SHA ?? "",
+  },
   turbopack: {
     root: path.join(__dirname, "..", ".."),
   },
@@ -85,7 +106,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               `img-src 'self' data: ${apiOrigin}`,
-              `connect-src 'self' ${apiOrigin} ${srsOrigin} ${centrifugoOrigin} ${srsWhipOrigin}`,
+              `connect-src 'self' ${apiOrigin} ${srsOrigin} ${centrifugoOrigin} ${srsWhipOrigin}${sentryOrigin ? ` ${sentryOrigin}` : ""}`,
               // hls.js plays back via MediaSource, which loads segments
               // through a blob: URL — default-src alone doesn't cover
               // blob:, so without this the <video> element's own playback
@@ -136,7 +157,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               `img-src 'self' data: ${apiOrigin}`,
-              `connect-src 'self' ${apiOrigin} ${srsOrigin} ${centrifugoOrigin} ${srsWhipOrigin}`,
+              `connect-src 'self' ${apiOrigin} ${srsOrigin} ${centrifugoOrigin} ${srsWhipOrigin}${sentryOrigin ? ` ${sentryOrigin}` : ""}`,
               `media-src 'self' blob: ${srsOrigin}${vodOrigin ? ` ${vodOrigin}` : ""}`,
               "font-src 'self' data:",
               "frame-ancestors *",
@@ -151,4 +172,21 @@ const nextConfig = {
   },
 };
 
-export default withNextIntl(nextConfig);
+// Wraps the build with Sentry's webpack plugin (source map generation +
+// upload). Safe to leave active even without a real Sentry project: the
+// plugin only attempts the actual upload when SENTRY_AUTH_TOKEN is set —
+// otherwise it logs a warning and skips it rather than failing the build
+// (verified against @sentry/nextjs's own docs, not assumed). org/project
+// are undefined until a real Sentry project exists; the plugin tolerates
+// that the same way.
+export default withSentryConfig(withNextIntl(nextConfig), {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  disableLogger: true,
+  // No server-side tunneling route through this app — not needed at
+  // current scale, and it'd be one more thing to keep in sync with the
+  // CSP's connect-src sentryOrigin allowance above.
+  tunnelRoute: undefined,
+});
