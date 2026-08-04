@@ -58,10 +58,52 @@ change for any caller relying on the old synchronous-failure behavior.
 
 - Not run against a real Temporal server — every acceptance criterion
   below is still unverified.
-- No Temporal server/cluster provisioned (self-hosted vs. Temporal Cloud
-  is still an open vendor decision).
-- Gift-card delivery and subscription renewal workflows: still plan-only,
-  see their sections below — not implemented.
+- No Temporal server/cluster provisioned — **vendor decided 2026-08-04:
+  Temporal Cloud**, waiting on account creation.
+- Subscription renewal workflow: still plan-only, see its section below —
+  not implemented (deprioritized, already self-healing).
+
+## Gift-card delivery — implemented 2026-08-04
+
+Also now real code, not just plan, following the same pattern as payouts:
+
+- `apps/api/src/gift-cards/temporal/{types,activities,workflow,client}.ts`
+  — `GiftCardDeliveryWorkflow` is deliberately simpler than
+  `PayoutWorkflow`: two steps (`sendGiftCardDelivery` →
+  `markDelivered`), no external money movement or manual-review wait.
+  `sendGiftCardDelivery` is idempotent by checking
+  `gift_cards.scheduled_delivery_at` first — already-`NULL` means already
+  delivered, skip — which is the actual fix for the duplicate-send bug
+  identified in this doc's original risk audit below (a crash between a
+  successful send and the DB write that marked it sent).
+- `gift-cards/service.ts`'s `sendScheduledGiftCards` now dispatches to
+  `sendScheduledGiftCardsViaTemporal` (starts one workflow per due card,
+  fire-and-continue, not awaited to completion — one slow/failing
+  delivery can't block the rest of the batch) or falls back to the
+  original `sendScheduledGiftCardsLegacy` — same `isTemporalConfigured`
+  gate, same zero-behavior-change-until-configured guarantee as payouts.
+- **Infra consolidated, not duplicated**: the Temporal connection
+  singleton moved to `apps/api/src/common/temporal-client.ts`, shared by
+  both payout and gift-card workflows. One worker process now handles
+  both (`apps/api/src/temporal/worker.ts`, using barrel modules
+  `workflows.ts`/`activities.ts` to register everything on a single task
+  queue, `TEMPORAL_TASK_QUEUE` default renamed `payouts` →
+  `birq-workflows` to reflect that). Deploying `npm run worker -w
+  apps/api` once covers every Temporal-backed feature in this app — not
+  a separate worker per workflow, appropriate for current scale.
+
+**One correction to this doc's original risk audit below**: it claimed
+`sendScheduledGiftCards`' `for` loop had "no per-row error isolation" for
+delivery failures specifically. Re-reading the code while implementing
+this: `deliverGiftCard` already wrapped the actual send calls in its own
+try/catch that only logs, not rethrows — so an email/SMS gateway failure
+specifically was already isolated per-row, pre-Temporal. What *was*
+correct, and remains the real bug closed above: a **crash** (not a caught
+exception) between a successful send and the `UPDATE ... SET
+scheduled_delivery_at = NULL` still causes a duplicate send on the next
+tick, and a genuine DB error on that `UPDATE` would still abort the rest
+of that tick's batch (self-heals on the next 15-minute tick, same as
+before).
 
 ---
 
@@ -147,11 +189,15 @@ missing. Recommend deferring this one, not skipping it forever.
 
 ## Recommended sequencing
 
-1. **Payouts** — real correctness gap, real money, do first.
+1. **Payouts** — real correctness gap, real money, do first. **Implemented
+   2026-08-04.**
 2. **Gift-card delivery** — real duplicate-send bug, do second.
+   **Implemented 2026-08-04.**
 3. **Subscription renewal** — already self-healing; revisit once 1 and 2
-   are live and the operational pattern (worker deployment, monitoring) is
-   proven, purely for observability rather than a correctness fix.
+   are live *in production* (not just in code — both are still dormant,
+   waiting on the Temporal Cloud account) and the operational pattern
+   (worker deployment, monitoring) is proven, purely for observability
+   rather than a correctness fix. **Not started.**
 4. **Everything else** (`reapStaleStreams`, `cleanupExpiredVods`,
    `settleAdRevenue`) — not part of this scope. None of them move money or
    have an external-API-call-in-the-middle shape; `setInterval` + idempotent

@@ -95,7 +95,11 @@ const envSchema = z.object({
   // self-hosted server with no auth configured (local dev).
   TEMPORAL_TLS_CLIENT_CERT: z.string().default(""),
   TEMPORAL_TLS_CLIENT_KEY: z.string().default(""),
-  TEMPORAL_TASK_QUEUE: z.string().default("payouts"),
+  // One task queue for every Temporal-backed workflow in this app
+  // (payouts, gift-card delivery, ...) — see apps/api/src/temporal/
+  // worker.ts's comment for why one consolidated worker process is the
+  // right amount of operational surface at this app's current scale.
+  TEMPORAL_TASK_QUEUE: z.string().default("birq-workflows"),
   // Fly.io sets FLY_IMAGE_REF automatically at runtime (the deployed
   // image's digest/tag) — used as the Sentry release identifier with zero
   // extra CI wiring needed. Empty locally (not running on Fly), which

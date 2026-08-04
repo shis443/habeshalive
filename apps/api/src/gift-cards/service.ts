@@ -15,6 +15,8 @@ import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { notify } from "../notifications/service.js";
+import { isTemporalConfigured } from "../common/temporal-client.js";
+import { startGiftCardDeliveryWorkflow } from "./temporal/client.js";
 
 // Ambiguous characters (0/O, 1/I/L) excluded — this gets read aloud,
 // typed from a phone screenshot, etc.
@@ -27,7 +29,9 @@ function generateCode(): string {
   return groups.join("-");
 }
 
-function redemptionUrl(code: string): string {
+// Exported for gift-cards/temporal/activities.ts to reuse — kept as one
+// definition rather than a second copy that could silently drift.
+export function redemptionUrl(code: string): string {
   return `${env.WEB_PUBLIC_URL}/gift-cards/redeem?code=${encodeURIComponent(code)}`;
 }
 
@@ -146,6 +150,55 @@ async function deliverGiftCard(
 // scheduled_delivery_at being cleared once actually sent, so a re-run
 // after a crash can't double-send).
 export async function sendScheduledGiftCards(): Promise<void> {
+  if (isTemporalConfigured) return sendScheduledGiftCardsViaTemporal();
+  return sendScheduledGiftCardsLegacy();
+}
+
+// Starts one durable workflow per due card instead of delivering inline —
+// see gift-cards/temporal/workflow.ts. Starting is fire-and-continue (not
+// awaited to completion) so one slow/failing delivery can't block the
+// rest of this tick's batch the way a thrown error from the old inline
+// loop could (see docs/temporal-migration-plan.md's audit of the
+// pre-Temporal version). Each workflow's own crash-recovery and
+// idempotent activities handle the rest.
+async function sendScheduledGiftCardsViaTemporal(): Promise<void> {
+  const { rows } = await pool.query<{
+    id: string;
+    code: string;
+    amount_santim: number;
+    personal_message: string | null;
+    recipient_email: string | null;
+    recipient_phone: string | null;
+  }>(
+    `SELECT id, code, amount_santim, personal_message, recipient_email, recipient_phone
+     FROM gift_cards
+     WHERE status = 'issued' AND scheduled_delivery_at IS NOT NULL AND scheduled_delivery_at <= now()`
+  );
+  for (const row of rows) {
+    const deliveryMethod = row.recipient_email ? "email" : row.recipient_phone ? "sms" : "link";
+    try {
+      await startGiftCardDeliveryWorkflow({
+        giftCardId: row.id,
+        code: row.code,
+        amountSantim: row.amount_santim,
+        personalMessage: row.personal_message ?? undefined,
+        deliveryMethod,
+        recipientEmail: row.recipient_email ?? undefined,
+        recipientPhone: row.recipient_phone ?? undefined,
+      });
+    } catch (err) {
+      // Workflow ID already exists (a prior tick already started this
+      // card's delivery, still in flight or already done) — expected and
+      // fine, not every other row in this batch should abort over it.
+      // Anything else logs and moves on, same "one bad row can't stop the
+      // sweep" reasoning as reapStaleStreams/cleanupExpiredVods in
+      // server.ts.
+      console.error(`[gift-cards] failed to start delivery workflow for ${row.id}:`, err);
+    }
+  }
+}
+
+async function sendScheduledGiftCardsLegacy(): Promise<void> {
   const { rows } = await pool.query<{
     id: string;
     code: string;

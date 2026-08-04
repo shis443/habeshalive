@@ -117,7 +117,14 @@ to keep expanding.
   Temporal Cloud** — waiting on a real account (namespace address + mTLS
   client cert/key) before `TEMPORAL_ADDRESS`/`TEMPORAL_TLS_CLIENT_CERT`/
   `TEMPORAL_TLS_CLIENT_KEY` can be set and this actually activates.
-  Gift-card delivery and subscription renewal remain unimplemented.
+  **2026-08-04: gift-card delivery is now implemented too**
+  (`apps/api/src/gift-cards/temporal/`), same dormant-until-configured
+  pattern. The Temporal client/worker infra is now shared
+  (`common/temporal-client.ts`, `apps/api/src/temporal/{worker,
+  workflows,activities}.ts`) across both workflows on one task queue —
+  one worker process is the right amount of operational surface at this
+  app's current scale, not a separate deployable per workflow. Subscription
+  renewal remains unimplemented (deprioritized — already self-healing).
 
 ## Known dependency vulnerability, tracked not silently ignored
 
