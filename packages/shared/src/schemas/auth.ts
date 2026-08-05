@@ -80,7 +80,11 @@ export const authUserSchema = z.object({
   avatarUrl: z.string().nullable(),
   // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
   // 'super_admin', 'finance_auditor' added as a new, narrower tier.
-  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
+  // "admin" stays permanently — see admin.ts's identical schema for the
+  // full reasoning (getCurrentUser() runtime-validates against this via
+  // .parse(), so it must accept every value the DB can legitimately hold
+  // during the deploy window, not just the post-migration set).
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor", "admin"]),
   showSensitiveContent: z.boolean(),
 });
 export type AuthUser = z.infer<typeof authUserSchema>;
@@ -111,7 +115,11 @@ export const myAccountSchema = z.object({
   hasPassword: z.boolean(),
   // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
   // 'super_admin', 'finance_auditor' added as a new, narrower tier.
-  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
+  // "admin" stays permanently — see admin.ts's identical schema for the
+  // full reasoning (getCurrentUser() runtime-validates against this via
+  // .parse(), so it must accept every value the DB can legitimately hold
+  // during the deploy window, not just the post-migration set).
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor", "admin"]),
   isVerified: z.boolean(),
   deletionRequestedAt: z.string().nullable(),
   createdAt: z.string(),

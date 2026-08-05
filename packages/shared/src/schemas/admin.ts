@@ -183,7 +183,17 @@ export const userListItemSchema = z.object({
   email: z.string().nullable(),
   // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
   // 'super_admin', 'finance_auditor' added as a new, narrower tier.
-  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
+  // "admin" (the pre-0026 value) stays in this union permanently, not as
+  // a temporary shim — apps/web/lib/api.ts's getCurrentUser() runtime-
+  // validates against this schema via .parse(), so if it only listed the
+  // post-migration roles, any account whose row still legitimately says
+  // "admin" during the code-before-migration deploy window (see
+  // apps/api/src/app.ts's requireAdmin comment for why that's the safer
+  // order) would throw here — not just fail an admin-only check, but
+  // crash getCurrentUser() outright, which is called on nearly every
+  // page. Cheap, permanent insurance against that, same reasoning as the
+  // backend's dual-role auth checks.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor", "admin"]),
   isBanned: z.boolean(),
   createdAt: z.string(),
   walletBalanceSantim: z.number().int(),
@@ -195,7 +205,17 @@ export type UserListItem = z.infer<typeof userListItemSchema>;
 export const updateUserRoleSchema = z.object({
   // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
   // 'super_admin', 'finance_auditor' added as a new, narrower tier.
-  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
+  // "admin" (the pre-0026 value) stays in this union permanently, not as
+  // a temporary shim — apps/web/lib/api.ts's getCurrentUser() runtime-
+  // validates against this schema via .parse(), so if it only listed the
+  // post-migration roles, any account whose row still legitimately says
+  // "admin" during the code-before-migration deploy window (see
+  // apps/api/src/app.ts's requireAdmin comment for why that's the safer
+  // order) would throw here — not just fail an admin-only check, but
+  // crash getCurrentUser() outright, which is called on nearly every
+  // page. Cheap, permanent insurance against that, same reasoning as the
+  // backend's dual-role auth checks.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor", "admin"]),
 });
 export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
 

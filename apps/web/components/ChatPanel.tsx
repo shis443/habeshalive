@@ -36,6 +36,10 @@ const ROLE_EMOJI: Record<ChatMessage["senderRole"], string> = {
   // Read-only financial access, not a chat-relevant distinction — no
   // badge, same as viewer/creator.
   finance_auditor: "",
+  // Legacy value, still possible at runtime during the deploy window —
+  // see packages/shared/src/schemas/admin.ts's identical schema comment.
+  // Same crown as super_admin, its direct successor.
+  admin: "👑",
 };
 
 // Platform-wide Rank, distinct from BADGE_EMOJI above (per-creator gifter
@@ -123,8 +127,12 @@ export function ChatPanel({
   currentUserId: string | null;
   // db/migrations/0026_rbac_role_isolation.sql renamed 'admin' to
   // 'super_admin' and added 'finance_auditor' (not a chat-moderation
-  // grant, deliberately excluded from canModerate below).
-  currentUserRole: "viewer" | "creator" | "moderator" | "super_admin" | "finance_auditor" | null;
+  // grant, deliberately excluded from canModerate below). Legacy 'admin'
+  // stays in this union permanently — see
+  // packages/shared/src/schemas/admin.ts's identical schema comment for
+  // why this must reflect every value the DB can legitimately hold
+  // during the deploy window, not just the post-migration set.
+  currentUserRole: "viewer" | "creator" | "moderator" | "super_admin" | "finance_auditor" | "admin" | null;
   activity: StreamActivity;
 }) {
   const { settings, update: updateSettings } = useChatSettings();
@@ -139,7 +147,12 @@ export function ChatPanel({
   const canModerate =
     isAuthed &&
     !!currentUserId &&
-    (currentUserId === creatorId || currentUserRole === "moderator" || currentUserRole === "super_admin");
+    (currentUserId === creatorId ||
+      currentUserRole === "moderator" ||
+      currentUserRole === "super_admin" ||
+      // Legacy value, still possible at runtime during the deploy window
+      // — see the currentUserRole prop's own comment above.
+      currentUserRole === "admin");
 
   // Real chatters to target with "Gursha a specific viewer" — drawn from
   // who's actually spoken in this session rather than a separate

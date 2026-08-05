@@ -44,7 +44,9 @@ export const viewerListEntrySchema = z.object({
   avatarUrl: z.string().nullable(),
   // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
   // 'super_admin', 'finance_auditor' added as a new, narrower tier.
-  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
+  // "admin" stays permanently — see schemas/admin.ts's identical schema
+  // for the full reasoning.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor", "admin"]),
   gifterBadgeTier: z.enum(["none", "bronze", "silver", "gold", "platinum"]),
 });
 export type ViewerListEntry = z.infer<typeof viewerListEntrySchema>;

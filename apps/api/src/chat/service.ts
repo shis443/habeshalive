@@ -176,11 +176,12 @@ async function assertCanModerateStream(actorId: string, streamId: string): Promi
   const row = rows[0];
   if (!row) throw new AppError(404, "Stream not found");
   const isOwner = row.creator_id === actorId;
-  // db/migrations/0026_rbac_role_isolation.sql renamed the old flat
-  // 'admin' role to 'super_admin' — finance_auditor is deliberately
-  // excluded here (read-only financial access, not a content-moderation
-  // grant).
-  const isStaff = row.role === "moderator" || row.role === "super_admin";
+  // db/migrations/0026_rbac_role_isolation.sql renames the old flat
+  // 'admin' role to 'super_admin' — legacy 'admin' accepted permanently
+  // alongside it, same deploy-ordering-safety reasoning as app.ts's
+  // requireAdmin. finance_auditor is deliberately excluded here
+  // (read-only financial access, not a content-moderation grant).
+  const isStaff = row.role === "moderator" || row.role === "super_admin" || row.role === "admin";
   if (!isOwner && !isStaff) throw new AppError(403, "Only the creator or a moderator can do this");
 }
 

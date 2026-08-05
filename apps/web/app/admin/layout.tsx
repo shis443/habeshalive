@@ -9,17 +9,21 @@ import styles from "./layout.module.css";
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/admin");
-  // db/migrations/0026_rbac_role_isolation.sql renamed 'admin' to
-  // 'super_admin'. Deliberately still super_admin-only, not widened to
-  // also admit the new moderator/finance_auditor roles here: every admin
-  // API route this shell's pages call still requires app.requireAdmin
-  // (also super_admin-only, see apps/api/src/app.ts) — none have been
-  // retrofitted to the new fine-grained app.requirePermission checks yet,
-  // so granting those roles access to this shell today would show a UI
-  // that then 403s on every actual data fetch. Widening this gate is
-  // future work, done together with retrofitting the routes it would
-  // actually unlock.
-  if (user.role !== "super_admin") redirect("/");
+  // db/migrations/0026_rbac_role_isolation.sql renames 'admin' to
+  // 'super_admin'. Legacy 'admin' is accepted permanently alongside it —
+  // this web app (Vercel) and the API (Fly) deploy independently and
+  // don't restart in the same instant a migration commits, so code that
+  // checked only "super_admin" could reject every real admin depending on
+  // exact deploy timing relative to the migration. Same reasoning and
+  // same permanent-not-temporary intent as apps/api/src/app.ts's
+  // requireAdmin/requireRole. Still deliberately NOT widened to admit the
+  // new moderator/finance_auditor roles here: only the routes explicitly
+  // retrofitted in db/migrations/0027_permission_grants.sql's rollout
+  // (apps/api/src/moderation/routes.ts, parts of admin/routes.ts) accept
+  // those roles — most of this shell's pages still call routes that
+  // require full admin access, so granting broader roles entry to the
+  // shell itself would show a UI that 403s on most of what it renders.
+  if (user.role !== "super_admin" && user.role !== "admin") redirect("/");
 
   return (
     <>

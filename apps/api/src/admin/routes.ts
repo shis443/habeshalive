@@ -77,7 +77,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get("/anchor-program/creators", { preHandler: app.requireAdmin }, async () => listAnchorCreators());
   app.get("/anchor-program/candidates", { preHandler: app.requireAdmin }, async () => listAnchorCandidates());
 
-  app.get("/streams/live", { preHandler: app.requireAdmin }, async () => listAllLiveStreamsForAdmin());
+  // Viewing live streams and force-ending one are the direct precursor
+  // and the action itself for the same "publisher kick" workflow — both
+  // db/migrations/0027_permission_grants.sql's 'stream:kick' permission,
+  // not the general admin gate, so a moderator etc. isn't required to
+  // hold full super_admin just to shut down an actively-abusive stream.
+  app.get("/streams/live", { preHandler: app.requirePermission("stream:kick") }, async () => listAllLiveStreamsForAdmin());
 
   app.get<{ Querystring: { creator?: string } }>(
     "/streams/archive",
@@ -85,22 +90,36 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     async (req) => listStreamArchive({ creatorUsername: req.query.creator })
   );
 
-  app.post<{ Params: { id: string } }>("/streams/:id/force-end", { preHandler: app.requireAdmin }, async (req) => {
-    const input = forceEndStreamSchema.parse(req.body);
-    await forceEndStream(req.params.id, req.user.sub, input.reason);
-    return { ok: true };
-  });
+  app.post<{ Params: { id: string } }>(
+    "/streams/:id/force-end",
+    { preHandler: app.requirePermission("stream:kick") },
+    async (req) => {
+      const input = forceEndStreamSchema.parse(req.body);
+      await forceEndStream(req.params.id, req.user.sub, input.reason);
+      return { ok: true };
+    }
+  );
 
-  app.get("/ledger/reconciliation", { preHandler: app.requireAdmin }, async () => getLedgerReconciliation());
+  // Read-only financial visibility — db/migrations/0027_permission_grants.sql's
+  // 'finance:audit' permission, granted to finance_auditor as well as
+  // super_admin.
+  app.get("/ledger/reconciliation", { preHandler: app.requirePermission("finance:audit") }, async () => getLedgerReconciliation());
 
-  app.get("/ledger/platform-wallet", { preHandler: app.requireAdmin }, async () => getPlatformWalletSummary());
+  app.get("/ledger/platform-wallet", { preHandler: app.requirePermission("finance:audit") }, async () => getPlatformWalletSummary());
 
   app.get<{ Querystring: { q?: string } }>(
     "/ledger/lookup",
-    { preHandler: app.requireAdmin },
+    { preHandler: app.requirePermission("finance:audit") },
     async (req) => searchLedgerTransaction(req.query.q ?? "")
   );
 
+  // Deliberately still requireAdmin (super_admin only), NOT
+  // requirePermission("finance:audit") — this creates a real ledger
+  // entry, not just reads one. Granting write access under the same
+  // permission name as read-only "audit" would be a real privilege
+  // escalation hiding behind an audit-sounding label — see
+  // 0027_permission_grants.sql's own header for why finance_auditor is
+  // deliberately never granted this.
   app.post("/ledger/adjustment", { preHandler: app.requireAdmin }, async (req) => {
     const input = manualAdjustmentSchema.parse(req.body);
     return performManualAdjustment(req.user.sub, input);
@@ -136,23 +155,35 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     listUsers(req.query.q)
   );
 
-  app.patch<{ Params: { id: string } }>("/users/:id/role", { preHandler: app.requireAdmin }, async (req) => {
-    const input = updateUserRoleSchema.parse(req.body);
-    return updateUserRole(req.user.sub, req.params.id, input);
-  });
+  // Role management — explicitly requireRole(["super_admin"]) rather
+  // than the general requireAdmin (they're currently equivalent, both
+  // dual-compat with legacy 'admin' — see app.ts), because who is
+  // allowed to grant/revoke roles is exactly the kind of check worth
+  // being visibly explicit about at its own call site rather than
+  // folded into the same generic gate used everywhere else in this file.
+  app.patch<{ Params: { id: string } }>(
+    "/users/:id/role",
+    { preHandler: app.requireRole(["super_admin"]) },
+    async (req) => {
+      const input = updateUserRoleSchema.parse(req.body);
+      return updateUserRole(req.user.sub, req.params.id, input);
+    }
+  );
 
   // --- Boosts ---
 
-  app.get("/boosts/revenue", { preHandler: app.requireAdmin }, async () => listBoostRevenueByCreator());
+  app.get("/boosts/revenue", { preHandler: app.requirePermission("finance:audit") }, async () => listBoostRevenueByCreator());
 
   app.post<{ Params: { id: string } }>("/boosts/:id/cancel", { preHandler: app.requireAdmin }, async (req) => {
     await cancelBoost(req.user.sub, req.params.id);
     return { ok: true };
   });
 
-  app.get("/config", { preHandler: app.requireAdmin }, async () => getPlatformConfig());
+  // System-wide settings — same explicit-requireRole reasoning as
+  // /users/:id/role above.
+  app.get("/config", { preHandler: app.requireRole(["super_admin"]) }, async () => getPlatformConfig());
 
-  app.patch("/config", { preHandler: app.requireAdmin }, async (req) => {
+  app.patch("/config", { preHandler: app.requireRole(["super_admin"]) }, async (req) => {
     const input = updatePlatformConfigSchema.parse(req.body);
     return updatePlatformConfig(req.user.sub, input);
   });
@@ -261,7 +292,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true };
   });
 
-  app.get("/ad-revenue", { preHandler: app.requireAdmin }, async () => getAdRevenueByCreator());
+  app.get("/ad-revenue", { preHandler: app.requirePermission("finance:audit") }, async () => getAdRevenueByCreator());
 
   // --- Gift cards (B.3) ---
 
@@ -271,7 +302,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     async (req) => listGiftCardsAdmin(req.query.status)
   );
 
-  app.get("/gift-cards/suspicious", { preHandler: app.requireAdmin }, async () => listSuspiciousGiftCardPurchasers());
+  // Fraud/financial oversight — finance:audit, same reasoning as the
+  // ledger/revenue routes above. gift-cards/:id/cancel below stays
+  // requireAdmin: it's a mutation (voids a purchase), not a read.
+  app.get(
+    "/gift-cards/suspicious",
+    { preHandler: app.requirePermission("finance:audit") },
+    async () => listSuspiciousGiftCardPurchasers()
+  );
 
   app.post<{ Params: { id: string } }>("/gift-cards/:id/cancel", { preHandler: app.requireAdmin }, async (req) => {
     await cancelGiftCard(req.user.sub, req.params.id);

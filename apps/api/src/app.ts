@@ -20,7 +20,7 @@ import { redis } from "./common/redis.js";
 import { captureUnexpectedError } from "./common/sentry.js";
 import { moderationRoutes } from "./moderation/routes.js";
 import { notificationRoutes } from "./notifications/routes.js";
-import { getRolePermissions, type PermissionKey } from "./common/rbac.js";
+import { roleHasPermission, type PermissionKey } from "./common/rbac.js";
 import { searchRoutes } from "./search/routes.js";
 import { streamRoutes } from "./streams/routes.js";
 import { whepRoutes } from "./streams/whep-routes.js";
@@ -146,16 +146,26 @@ export function buildApp() {
     return rows[0]?.role ?? null;
   }
 
-  // db/migrations/0026_rbac_role_isolation.sql renamed the old flat
-  // 'admin' role to 'super_admin' as part of introducing
-  // moderator/finance_auditor as real, narrower tiers alongside it (see
-  // that migration's own adversarial-reasoning header for the full
-  // rationale, including why this is enforced here — application-level,
-  // re-checked live — rather than via Postgres RLS).
+  // db/migrations/0026_rbac_role_isolation.sql renames the old flat
+  // 'admin' role to 'super_admin'. This app is deployed as two separate
+  // processes (habeshalive on Fly, web on Vercel) that don't restart in
+  // the same instant a migration commits, and the migration renames data
+  // in place rather than adding 'super_admin' alongside a still-valid
+  // 'admin' — so a version of this code that checked ONLY "super_admin"
+  // would, deployed even slightly before the migration lands, correctly
+  // reject every currently-real admin (their row still says 'admin'), and
+  // deployed slightly after, would work. Rather than rely on getting that
+  // race exactly right, both legacy 'admin' and the new 'super_admin' are
+  // accepted here permanently — cheap, permanent insurance against this
+  // exact class of deploy-ordering bug, not a temporary shim meant to be
+  // deleted later. See docs/rbac-and-moderation-testing.md for how this
+  // was verified.
+  const SUPER_ADMIN_ROLES = ["super_admin", "admin"];
+
   app.decorate("requireAdmin", async (req, reply) => {
     const role = await authenticateAndGetRole(req, reply);
     if (role === null) return;
-    if (role !== "super_admin") {
+    if (!SUPER_ADMIN_ROLES.includes(role)) {
       reply.status(403).send({ error: "forbidden" });
     }
   });
@@ -164,33 +174,43 @@ export function buildApp() {
   // more than one specific role (e.g. both super_admin and moderator) but
   // still not everyone. A factory, not a fixed preHandler, since which
   // roles are allowed varies per route: use as
-  // `preHandler: app.requireRole(["super_admin", "moderator"])`.
+  // `preHandler: app.requireRole(["super_admin", "moderator"])`. If
+  // "super_admin" is in the allowed list, legacy "admin" is silently
+  // accepted too — same reasoning as requireAdmin above.
   app.decorate("requireRole", (allowedRoles: string[]) => {
+    const normalized = allowedRoles.includes("super_admin")
+      ? [...allowedRoles, "admin"]
+      : allowedRoles;
     return async (req: import("fastify").FastifyRequest, reply: import("fastify").FastifyReply) => {
       const role = await authenticateAndGetRole(req, reply);
       if (role === null) return;
-      if (!allowedRoles.includes(role)) {
+      if (!normalized.includes(role)) {
         reply.status(403).send({ error: "forbidden" });
       }
     };
   });
 
-  // The genuinely fine-grained check: gates on a specific *capability*
-  // (db/migrations/0026_rbac_role_isolation.sql's role_permissions table)
-  // rather than an explicit role list, so a route asking "can this caller
-  // view financial data" doesn't need to know or maintain which roles
-  // currently happen to grant that — e.g.
-  // `preHandler: app.requirePermission("can_view_financials")` admits
-  // both finance_auditor and super_admin today without either being named
-  // at the route, and stays correct if the permission set for a role ever
-  // changes (a role_permissions data change, not a code change at every
-  // call site).
+  // The genuinely fine-grained check: gates on a specific, namespaced
+  // *capability* (db/migrations/0027_permission_grants.sql's
+  // role_permission_grants table) rather than an explicit role list, so
+  // a route asking "can this caller audit financial data" doesn't need
+  // to know or maintain which roles currently happen to grant that —
+  // e.g. `preHandler: app.requirePermission("finance:audit")` admits
+  // both finance_auditor and super_admin today without either being
+  // named at the route, and stays correct if the grant set for a role
+  // ever changes (a role_permission_grants data change, not a code
+  // change at every call site). No legacy-'admin' role-name fallback
+  // needed here the way requireAdmin/requireRole have one —
+  // role_permission_grants is seeded with 'super_admin' from the start,
+  // not 'admin'. What this DOES need to tolerate is the table not
+  // existing yet in the brief window between this code deploying and
+  // migration 0027 landing — see rbac.ts's roleHasPermission for the
+  // fail-closed handling of that.
   app.decorate("requirePermission", (permission: PermissionKey) => {
     return async (req: import("fastify").FastifyRequest, reply: import("fastify").FastifyReply) => {
       const role = await authenticateAndGetRole(req, reply);
       if (role === null) return;
-      const permissions = await getRolePermissions(role);
-      if (!permissions || !permissions[permission]) {
+      if (!(await roleHasPermission(role, permission))) {
         reply.status(403).send({ error: "forbidden" });
       }
     };

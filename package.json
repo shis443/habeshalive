@@ -9,7 +9,7 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npm run dev --workspace=apps/api",
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p scripts/tsconfig.json",
     "test": "npm run test --workspaces --if-present",
     "db:migrate": "node --env-file=.env db/migrate.mjs",
     "verify:production": "tsx --env-file=.env scripts/verify-production-readiness.ts"

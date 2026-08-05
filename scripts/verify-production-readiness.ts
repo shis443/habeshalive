@@ -53,9 +53,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 // apps/api/src/app.ts's requireAdmin/requireRole/requirePermission).
 // What this section verifies instead is the real, functioning
 // equivalent: the schema-level constraint that bounds which role values
-// can ever exist, and that the role_permissions capability table
-// (which nothing in the API ever writes to at runtime — grepped, zero
-// write call sites outside the migration's own seed data) still holds
+// can ever exist, and that the role_permission_grants capability table
+// (0027_permission_grants.sql — which nothing in the API ever writes to
+// at runtime, grepped, zero write call sites outside the migration's own
+// seed data) still holds
 // exactly the expected, reviewed capability set.
 async function verifyDatabaseRoleIsolation(client: pg.Client): Promise<void> {
   const EXPECTED_ROLES = ["viewer", "creator", "moderator", "super_admin", "finance_auditor"].sort();
@@ -96,48 +97,63 @@ async function verifyDatabaseRoleIsolation(client: pg.Client): Promise<void> {
     record("No users hold an out-of-set role value", "pass", "every users.role value is within the allowed set");
   }
 
-  const rolePermissionsResult = await client.query<{
-    role: string;
-    can_manage_users: boolean;
-    can_moderate_content: boolean;
-    can_view_financials: boolean;
-    can_manage_admin_config: boolean;
-  }>(`SELECT role, can_manage_users, can_moderate_content, can_view_financials, can_manage_admin_config FROM role_permissions`);
+  // db/migrations/0027_permission_grants.sql replaced the fixed
+  // four-boolean-column role_permissions table (0026) with a proper
+  // many-to-many role_permission_grants table — see that migration's own
+  // header for why. This section checks the table that's actually live
+  // in production today, not the superseded one.
+  const EXPECTED_GRANTS: Record<string, string[]> = {
+    viewer: [],
+    creator: [],
+    moderator: ["chat:moderate"],
+    finance_auditor: ["finance:audit"],
+    super_admin: ["chat:moderate", "stream:kick", "finance:audit", "admin:manage_settings", "admin:manage_users"],
+  };
 
-  const byRole = new Map(rolePermissionsResult.rows.map((row) => [row.role, row]));
-  const missingFromTable = EXPECTED_ROLES.filter((role) => !byRole.has(role));
-  if (missingFromTable.length > 0) {
-    record("role_permissions has one row per role", "fail", `missing rows for: ${missingFromTable.join(", ")}`);
-  } else {
-    record("role_permissions has one row per role", "pass", `all ${EXPECTED_ROLES.length} roles present`);
+  const grantsResult = await client.query<{ role: string; permission: string }>(
+    `SELECT role, permission FROM role_permission_grants ORDER BY role, permission`
+  );
+  const grantsByRole = new Map<string, Set<string>>();
+  for (const row of grantsResult.rows) {
+    if (!grantsByRole.has(row.role)) grantsByRole.set(row.role, new Set());
+    grantsByRole.get(row.role)!.add(row.permission);
   }
 
-  // super_admin must hold every capability, and no lower tier should
-  // accidentally have been seeded with super_admin-equivalent access —
-  // the actual privilege-escalation-prevention property this table
-  // exists to guarantee.
-  const superAdmin = byRole.get("super_admin");
-  const superAdminHasEverything =
-    !!superAdmin &&
-    superAdmin.can_manage_users &&
-    superAdmin.can_moderate_content &&
-    superAdmin.can_view_financials &&
-    superAdmin.can_manage_admin_config;
-  record(
-    "super_admin holds every capability",
-    superAdminHasEverything ? "pass" : "fail",
-    superAdmin ? JSON.stringify(superAdmin) : "no super_admin row found"
-  );
+  for (const [role, expectedPermissions] of Object.entries(EXPECTED_GRANTS)) {
+    const actual = grantsByRole.get(role) ?? new Set<string>();
+    const missing = expectedPermissions.filter((p) => !actual.has(p));
+    const unexpected = [...actual].filter((p) => !expectedPermissions.includes(p));
+    if (missing.length > 0 || unexpected.length > 0) {
+      record(
+        `role_permission_grants for '${role}' matches the reviewed set`,
+        "fail",
+        `missing=[${missing.join(", ")}] unexpected=[${unexpected.join(", ")}]`
+      );
+    } else {
+      record(
+        `role_permission_grants for '${role}' matches the reviewed set`,
+        "pass",
+        expectedPermissions.length > 0 ? expectedPermissions.join(", ") : "(no grants, as expected)"
+      );
+    }
+  }
 
-  const viewer = byRole.get("viewer");
-  const creator = byRole.get("creator");
-  const viewerCreatorHaveNothing = [viewer, creator].every(
-    (row) => !!row && !row.can_manage_users && !row.can_moderate_content && !row.can_view_financials && !row.can_manage_admin_config
-  );
+  // The one privilege-escalation-sensitive check worth calling out on
+  // its own, not just folded into the loop above: finance_auditor must
+  // never hold chat:moderate or any admin:* grant — "auditor" implies
+  // read-only financial inspection, and any of those would be a real
+  // escalation hiding behind an audit-sounding role name (see
+  // 0027_permission_grants.sql's own header).
+  const financeAuditorGrants = grantsByRole.get("finance_auditor") ?? new Set<string>();
+  const financeAuditorIsScopedCorrectly =
+    !financeAuditorGrants.has("chat:moderate") &&
+    !financeAuditorGrants.has("stream:kick") &&
+    !financeAuditorGrants.has("admin:manage_settings") &&
+    !financeAuditorGrants.has("admin:manage_users");
   record(
-    "viewer/creator hold zero admin-tier capabilities",
-    viewerCreatorHaveNothing ? "pass" : "fail",
-    `viewer=${JSON.stringify(viewer)}, creator=${JSON.stringify(creator)}`
+    "finance_auditor holds no moderation/admin/settings grants",
+    financeAuditorIsScopedCorrectly ? "pass" : "fail",
+    `grants=[${[...financeAuditorGrants].join(", ")}]`
   );
 }
 
