@@ -15,6 +15,25 @@ srs_log_tank        console;
 
 http_api {
     enabled         on;
+    # KNOWN GAP, not yet fixed — see docs/rbac-and-moderation-testing.md's
+    # "SRS admin API is IPv4-only" note. SRS only ever binds this to IPv4
+    # (confirmed live via /proc/net/tcp[6] on the real machine — only an
+    # IPv4 entry ever appears), while Fly's private 6PN network
+    # (SRS_ADMIN_API_BASE = http://habeshalive-srs.internal:1985, see
+    # apps/api/src/common/env.ts) resolves *.internal hostnames to
+    # IPv6-only addresses. Practical effect: every server-to-server call
+    # apps/api makes to this admin API over the private network
+    # (moderation/actions-service.ts's killActiveRtmpPublishers,
+    # streams/whep-routes.ts's WHEP broker) currently gets ECONNREFUSED,
+    # silently swallowed by their own fail-open error handling — not a
+    # crash, just quietly not working. A dual-stack `listen 1985
+    # [::]:1985;` was tried live and did NOT work — SRS's own startup log
+    # only ever showed one "HTTP-API listen at tcp://0.0.0.0:1985" line,
+    # never attempting the second address, despite parsing the directive
+    # without error. Reverted to the simple, known-good single-address
+    # form rather than ship an ineffective "fix" with a misleading
+    # comment. Needs real investigation (SRS source, or a proxy-based
+    # workaround) before attempting again — not a same-day fix.
     listen          1985;
 }
 

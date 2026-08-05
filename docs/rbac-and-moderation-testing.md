@@ -1,5 +1,36 @@
 # RBAC and moderation manual testing checklist
 
+## Known gap: SRS admin API is IPv4-only, Fly's private network is IPv6-only
+
+Discovered live during the production deploy of this RBAC pass, via
+`scripts/verify-production-readiness.ts`'s internal-SRS check actually
+being run from inside Fly's private network for the first time (not
+assumed): `apps/api/src/common/env.ts`'s `SRS_ADMIN_API_BASE`
+(`http://habeshalive-srs.internal:1985`) resolves to an IPv6-only address
+(Fly's `*.internal` 6PN hostnames), but SRS's `http_api` only ever binds
+IPv4 (`0.0.0.0:1985` — confirmed via `/proc/net/tcp6` on the real machine
+showing no entry for port 1985 at all). Every server-to-server call
+`apps/api` makes to this admin API over the private network —
+`moderation/actions-service.ts`'s `killActiveRtmpPublishers` (the RTMP
+publisher kill-on-ban from this same session) and `streams/whep-routes.ts`'s
+WHEP broker (currently inert, `WHEP_ENABLED` unset) — currently gets
+`ECONNREFUSED`, silently swallowed by their own fail-open/best-effort
+error handling. Not a crash, just quietly not working: **a ban still
+correctly sets `is_banned` and blocks all future publish/chat/WHEP
+actions — the actual security boundary — but the "kill an
+already-broadcasting session immediately" half of §1 below is not
+currently effective in production.**
+
+A dual-stack fix (`listen 1985 [::]:1985;` in
+`infra/srs/conf/srs.conf.template`) was attempted live and reverted — SRS
+accepted the directive without a config-parse error, but its own startup
+log only ever showed one `HTTP-API listen at tcp://0.0.0.0:1985` line,
+never attempting the second address. Needs real investigation (SRS's own
+source, or fronting it with a small dual-stack proxy — the same category
+of fix already used for the public-facing WHIP port, see
+`infra/srs/conf/whip-proxy.nginx.conf`) before trying again, not a
+same-session fix. Track this as its own follow-up.
+
 **Why this exists as a manual checklist, not automated:** two things here
 genuinely can't be produced by an agent without human hardware — a real
 OBS broadcast connected to production SRS, and a real second browser
@@ -12,6 +43,11 @@ checklist is what's left: the parts that need a human, a camera, and a
 second account.
 
 ## 1. Live OBS RTMP publisher kill-on-ban
+
+**Currently expected to fail in production** — see the known-gap section
+above; this test will still be useful to confirm the fix once that's
+resolved, and is written as if the connectivity gap didn't exist so it
+doesn't need rewriting later.
 
 Verifies `apps/api/src/moderation/actions-service.ts`'s
 `killActiveRtmpPublishers` — the part of `banUser` that force-disconnects
