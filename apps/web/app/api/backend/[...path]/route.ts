@@ -7,11 +7,20 @@ import { getSessionToken } from "@/lib/session";
 // through here, which attaches the JWT server-side before forwarding.
 // Runs server-side, so it needs API_INTERNAL_URL (see config.ts) — not the
 // browser-facing API_BASE_URL.
+//
+// Forwards without an Authorization header (rather than hard-401ing) when
+// there's no session — the backend route itself decides whether that's
+// fine: app.authenticate rejects with its own 401 (same shape this used to
+// fabricate locally, so no behavior change for any of the existing
+// mutation-only callers below), app.tryAuthenticate proceeds anonymously.
+// Needed for streams/whep-routes.ts's POST/DELETE :id/whep — a client
+// component (VideoPlayer.tsx) has no other way to reach an
+// authenticate-when-present-but-not-required backend route, since it can't
+// read the httpOnly cookie itself to call apps/api directly the way
+// anonymous-friendly Server Component reads (getLiveStreamByUsername etc.)
+// do.
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   const token = await getSessionToken();
-  if (!token) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
 
   // req.nextUrl.search carries the leading "?" (empty string when there's
   // no query at all) — appending it directly is correct either way.
@@ -25,7 +34,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   const res = await fetch(targetUrl, {
     method: req.method,
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       // Fastify's JSON parser rejects an empty body sent with this header
       // (e.g. a bodyless POST like key rotation), so only set it when there
       // is actually a body to parse.

@@ -46,3 +46,13 @@ export const SRS_WHIP_URL = process.env.NEXT_PUBLIC_SRS_WHIP_URL ?? "http://loca
 // internal-only port, not the real public one a client can reach. `eip`
 // supports "ip:port" for exactly this reason.
 export const SRS_WEBRTC_PUBLIC_IP = process.env.NEXT_PUBLIC_SRS_WEBRTC_IP ?? "127.0.0.1:8000";
+
+// Default-off kill switch for WHEP (WebRTC) playback, mirrored on the
+// server side by apps/api's own WHEP_ENABLED (common/env.ts) — both must
+// be on for VideoPlayer.tsx to ever attempt the WHEP engine before falling
+// back to hls.js/native HLS. Two independent gates, not one: even if this
+// were somehow left on, apps/api's route still refuses every broker
+// request until its own flag is set, and vice versa. Off by default for
+// the same reason as that flag's own comment — real end-to-end WebRTC/
+// ICE/media behavior can't be verified in this environment.
+export const WHEP_ENABLED = process.env.NEXT_PUBLIC_WHEP_ENABLED === "true";

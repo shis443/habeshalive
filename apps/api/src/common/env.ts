@@ -17,6 +17,38 @@ const envSchema = z.object({
   // and a browser on an HTTPS page (apps/web on Vercel) would block a
   // plain http:// HLS fetch as mixed content otherwise.
   SRS_HTTP_SCHEME: z.enum(["http", "https"]).default("http"),
+  // SRS's http_api (WHEP playback signaling + the admin client-kick
+  // endpoint), reached server-to-server — deliberately NOT the public
+  // SRS_HTTP_HOST/8443 WHIP URL above. In production this is Fly's private
+  // 6PN hostname (http://habeshalive-srs.internal:1985), set via
+  // `flyctl secrets set` on the habeshalive app (see docs/architecture.md).
+  // SRS's admin API (/api/v1/*) has no auth of its own and shares its port
+  // with WHIP publish signaling, so it's never exposed publicly (see
+  // infra/srs/conf/whip-proxy.nginx.conf) — this base URL is how
+  // whep-routes.ts and moderation/actions-service.ts's ban-teardown reach
+  // it instead. Defaults to localhost:1985 for local dev, matching
+  // SRS_HTTP_HOST's own default (docker-compose's haproxy publishes SRS's
+  // http_api on the host's 1985 directly, same as every other SRS_*_HOST
+  // default in this file).
+  SRS_ADMIN_API_BASE: z.string().min(1).default("http://localhost:1985"),
+  // Default-off kill switch for the WHEP (WebRTC playback) broker — see
+  // streams/whep-routes.ts. Same empty-by-default stub switch as
+  // everywhere else in this file: real end-to-end WebRTC/ICE/media
+  // behavior can't be verified in this environment (no real browser or
+  // network path to test against, unlike the Postgres-backed features
+  // elsewhere in this codebase), so this ships disabled until someone can
+  // actually watch a real stream over it before flipping it on in
+  // production. The frontend has its own independent gate
+  // (NEXT_PUBLIC_WHEP_ENABLED, see apps/web/lib/config.ts) — both must be
+  // on for a viewer to ever attempt WHEP; this one alone still protects
+  // the route even if a client POSTs to it directly.
+  WHEP_ENABLED: z.string().default(""),
+  // Global cap on concurrent WHEP playback sessions — each one is a real
+  // WebRTC session on the single srs machine (CPU for SRTP encryption +
+  // bandwidth per viewer, unlike HLS which is just static file serving
+  // fanned out by SRS's http_server), so this is a backstop against
+  // exhausting that one machine, not a per-user/per-stream limit.
+  WHEP_MAX_CONCURRENT_SESSIONS: z.coerce.number().int().positive().default(200),
   // HLS viewer-session token signing (docs/egress-protection-plan.md) —
   // empty by default, same stub switch as everywhere else in this file.
   // streams/hls-token.ts appends a signed token to playback URLs only

@@ -4,6 +4,8 @@ import { disconnectUserRealtime } from "../chat/token.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { notify } from "../notifications/service.js";
+import { listWhepSessionsForUser, removeWhepSession } from "../streams/whep-session-registry.js";
+import { teardownWhepSession } from "../streams/whep-routes.js";
 
 export async function banUser(actorId: string, targetUserId: string, reason?: string): Promise<void> {
   const client = await pool.connect();
@@ -34,6 +36,32 @@ export async function banUser(actorId: string, targetUserId: string, reason?: st
     disconnectUserRealtime(targetUserId, reason ?? "Account banned").catch((err) => {
       console.error("[moderation] disconnectUserRealtime failed:", err);
     });
+    // Same reasoning as disconnectUserRealtime above, extended to WHEP
+    // (WebRTC) playback: a ban previously only stopped a banned user from
+    // opening a *new* WHEP session (whep-routes.ts's live is_banned
+    // check) — an already-open one kept streaming media until the viewer
+    // closed the tab, since WebRTC has no token-expiry mechanism the way
+    // Centrifugo's connection tokens do. Detached (no await) — a media-
+    // server blip here shouldn't fail the ban action itself. Every
+    // session for this user across any stream is torn down, not just one,
+    // since a ban isn't scoped to "whatever they happened to be watching."
+    listWhepSessionsForUser(targetUserId)
+      .then((sessions) =>
+        Promise.all(
+          sessions.map(async (session) => {
+            // Registry cleanup first, same ordering as the viewer-initiated
+            // DELETE route (whep-routes.ts) — so the concurrency ceiling
+            // (whep-session-registry.ts's countActiveWhepSessions) reflects
+            // this session as gone immediately, not just after the SRS
+            // round-trip below completes.
+            await removeWhepSession(session.sessionId);
+            await teardownWhepSession(session);
+          })
+        )
+      )
+      .catch((err) => {
+        console.error("[moderation] WHEP teardown failed:", err);
+      });
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

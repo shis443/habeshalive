@@ -118,6 +118,7 @@ services:
       VIDEO_WEBHOOK_SECRET: ${VIDEO_WEBHOOK_SECRET:-dev-only-change-me}
       SRS_RTMP_HOST: ${SRS_RTMP_HOST:-localhost:1935}
       SRS_HTTP_HOST: ${SRS_HTTP_HOST:-localhost:8080}
+      SRS_ADMIN_API_BASE: ${SRS_ADMIN_API_BASE:-http://localhost:1985}
       # Empty by default (no real Chapa account) — wallet/chapa-client.ts
       # falls back to a stub, and the webhook route refuses with 501
       # rather than silently accept unauthenticated wallet credits.

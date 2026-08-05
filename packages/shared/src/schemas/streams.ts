@@ -138,6 +138,41 @@ export const srsCallbackSchema = z.object({
 });
 export type SrsCallback = z.infer<typeof srsCallbackSchema>;
 
+// WHEP (WebRTC-HTTP Egress Protocol) playback broker — apps/api/src/
+// streams/whep-routes.ts. Unlike WHIP publish (a browser POSTs its SDP
+// offer straight to SRS's public /rtc/v1/whip/, see GoLivePanel.tsx), WHEP
+// signaling is brokered: the browser POSTs its offer here (authenticated,
+// rate-limited, ban-checked), apps/api relays it to SRS over Fly's private
+// network and returns SRS's answer back. This isn't a raw passthrough of
+// WHEP's own wire format (Content-Type: application/sdp, a Location
+// header) because it travels through apps/web's /api/backend/[...path]
+// proxy first, which forces every request/response through JSON (see that
+// route's own comment on why) — so the SDP travels as a JSON string field
+// in both directions instead of a raw SDP body.
+export const whepBrokerRequestSchema = z.object({
+  offerSdp: z.string().min(1).max(20_000),
+});
+export type WhepBrokerRequest = z.infer<typeof whepBrokerRequestSchema>;
+
+// sessionId is an opaque bearer capability the client holds onto (same
+// trust model as WHIP's own resource-URL token, or this app's VOD/HLS
+// signed URLs — a 122-bit random UUID, unguessable) and echoes back on
+// teardown (whepTeardownRequestSchema below). Not identity-based lookup:
+// an anonymous viewer's DELETE request has no way to re-prove "I'm the
+// same anonymous viewer who POSTed a minute ago" the way an authenticated
+// request can via req.user.sub, so the session id itself has to be what
+// authorizes teardown.
+export const whepBrokerResponseSchema = z.object({
+  answerSdp: z.string().min(1),
+  sessionId: z.string().uuid(),
+});
+export type WhepBrokerResponse = z.infer<typeof whepBrokerResponseSchema>;
+
+export const whepTeardownRequestSchema = z.object({
+  sessionId: z.string().uuid(),
+});
+export type WhepTeardownRequest = z.infer<typeof whepTeardownRequestSchema>;
+
 // SRS's on_dvr callback — fires when a recorded segment finishes writing.
 // Not wired up on the SRS side yet (no dvr{} block/on_dvr hook in
 // infra/srs/conf/srs.conf.template), so this route exists but has never

@@ -76,6 +76,27 @@ primary_region = "ams"
   [[services.ports]]
     port = 8000
 
+# WebRTC-over-TCP fallback (rtc_server.tcp in srs.conf.template) — for
+# viewers/publishers on a network that blocks or mangles UDP. Unlike the
+# UDP media port above, this needs no socat relay: TCP is connection-
+# oriented, so Fly's normal proxying to a 0.0.0.0-bound internal_port works
+# correctly without the wildcard-bind-reply-source-IP workaround UDP needs
+# here (same as the RTMP/http_api ports elsewhere in this file). Targets
+# 18000 directly (SRS's real Fly-internal WebRTC listen port — see
+# docker-entrypoint.sh's fly_global_ip check), not 8000, since there's no
+# relay process translating a public port for TCP the way socat does for
+# UDP. Same public port number as the UDP block above — Fly treats TCP and
+# UDP as separate namespaces, so both binding "8000" is not a conflict.
+[[services]]
+  internal_port = 18000
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 8000
+
 # HLS playback — needs real TLS: apps/web is deployed on Vercel over
 # HTTPS, and a browser loading an https:// page will block a plain
 # http:// HLS fetch as mixed content. Fly's http_service (unlike a raw

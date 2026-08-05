@@ -58,7 +58,7 @@ export default async function WatchPage({ params }: { params: Promise<{ username
       <LiveChannelsSidebar streams={sidebarStreams} defaultCollapsed />
       <main className={styles.main}>
         <div className={styles.playerColumn}>
-          <VideoPlayer src={stream.playbackUrl} />
+          <VideoPlayer src={stream.playbackUrl} streamId={stream.id} />
           <div className={styles.body}>
             <AdDisplayBanner ad={displayAd} />
             <StreamMeta stream={stream} />

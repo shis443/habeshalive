@@ -22,6 +22,7 @@ import { moderationRoutes } from "./moderation/routes.js";
 import { notificationRoutes } from "./notifications/routes.js";
 import { searchRoutes } from "./search/routes.js";
 import { streamRoutes } from "./streams/routes.js";
+import { whepRoutes } from "./streams/whep-routes.js";
 import { subscriptionRoutes } from "./subscriptions/routes.js";
 import { vodRoutes } from "./vods/routes.js";
 import { walletRoutes } from "./wallet/routes.js";
@@ -190,6 +191,7 @@ export function buildApp() {
   app.register(adRoutes, { prefix: "/ads" });
   app.register(giftCardRoutes, { prefix: "/gift-cards" });
   app.register(streamRoutes, { prefix: "/streams" });
+  app.register(whepRoutes, { prefix: "/streams" });
   app.register(walletRoutes, { prefix: "/wallet" });
   app.register(moderationRoutes, { prefix: "/moderation" });
   app.register(notificationRoutes, { prefix: "/notifications" });

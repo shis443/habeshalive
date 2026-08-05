@@ -25,13 +25,42 @@ http_server {
 }
 
 # WHIP (WebRTC-HTTP Ingestion Protocol) — lets a browser publish directly
-# via getUserMedia + RTCPeerConnection, no OBS/RTMP client needed.
+# via getUserMedia + RTCPeerConnection, no OBS/RTMP client needed. Also the
+# WebRTC listener WHEP (playback) rides — see the vhost's rtc{} block below
+# for where playback is actually enabled.
 # __SRS_WEBRTC_CANDIDATE__ is substituted by docker-entrypoint.sh — see its
 # own comment for why `*` (auto-detect all interfaces) is wrong on Fly.
 rtc_server {
     enabled         on;
     listen          __SRS_WEBRTC_LISTEN__;
     candidate       __SRS_WEBRTC_CANDIDATE__;
+
+    # WebRTC-over-TCP fallback, for viewers/publishers on a network that
+    # blocks or mangles UDP (some corporate and mobile-carrier NATs) — SRS
+    # has no TURN-server integration of its own (TURN is purely a browser
+    # RTCPeerConnection.iceServers concept), this is its native
+    # alternative. Reuses the same listen port as the UDP listener above
+    # (SRS's own convention — "TCP/8000 corresponding to UDP/8000", see
+    # vendor/trunk/conf/full.conf) rather than a second templated port:
+    # unlike the UDP listener, this doesn't need the fly-global-services/
+    # socat workaround in docker-entrypoint.sh (that's specifically a
+    # UDP wildcard-bind-reply-source-IP quirk fly-proxy doesn't handle —
+    # TCP is connection-oriented and proxies through Fly normally, same as
+    # the RTMP/http_api ports elsewhere in this file). See fly.toml's own
+    # TCP [[services]] block for the matching public port mapping.
+    tcp {
+        enabled     on;
+        listen      __SRS_WEBRTC_LISTEN__;
+    }
+
+    # SRS's own default is `udp` — enabling rtc_server.tcp above without
+    # this would leave it accepting connections but never actually
+    # *offered* as a candidate in the SDP answer (per SRS's own config
+    # docs: "tcp: Fail if rtc_server.tcp is disabled" implies protocol
+    # selection and the tcp{} listener are two independent switches, not
+    # one). `all` generates both UDP and TCP candidates so a client whose
+    # network blocks UDP actually has a TCP candidate to fall back to.
+    protocol        all;
 }
 
 # Native Prometheus exporter, shipped in SRS itself since v5.0.67 (verified
@@ -63,11 +92,19 @@ vhost __defaultVhost__ {
     # succeeds (media reaches SRS fine) but produces no .m3u8/.ts output —
     # any viewer just gets a 404 forever. Confirmed live: this was off,
     # browser-published streams connected but were never actually watchable.
-    # rtmp_to_rtc stays off — nothing here plays a stream back out as
-    # WebRTC, only HLS, so there's no need to bridge in that direction.
+    #
+    # rtmp_to_rtc on: the WHEP (WebRTC playback) path — bridges the
+    # RTMP-style internal source (fed by either an RTMP encoder or a WHIP
+    # publish, either way) back out as WebRTC for sub-2s playback. Unlike
+    # WHIP publish signaling (public, browser-to-SRS directly), WHEP
+    # signaling is brokered server-to-server by apps/api
+    # (streams/whep-routes.ts) over Fly's private network — SRS's own
+    # /rtc/v1/whep/ endpoint is never exposed to the public internet, see
+    # infra/srs/conf/whip-proxy.nginx.conf and fly.toml's comment on the
+    # WHIP [[services]] block for why.
     rtc {
         enabled         on;
-        rtmp_to_rtc     off;
+        rtmp_to_rtc     on;
         rtc_to_rtmp     on;
     }
 

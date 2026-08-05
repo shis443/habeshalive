@@ -2,6 +2,8 @@
 
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
+import { WHEP_ENABLED } from "@/lib/config";
+import { connectWhep, type WhepConnection } from "@/lib/whep-client";
 import styles from "./VideoPlayer.module.css";
 import {
   ExitFullscreenIcon,
@@ -16,6 +18,17 @@ import {
 
 type PlaybackState = "connecting" | "playing" | "waiting" | "error";
 
+// Which delivery mechanism is currently attempting/holding playback.
+// "whep" is only ever the starting engine (gated by WHEP_ENABLED and a
+// streamId being available) — the fallback to "hls" is one-directional:
+// once WHEP has failed or timed out for this mount, it's never retried,
+// same as the design spec's "one-directional fallback" requirement. This
+// intentionally does NOT attempt to fall back the other way (hls -> whep)
+// if hls.js itself errors — hls.js's own retry loop (RETRY_INTERVAL_MS
+// below) already handles the "stream not up yet" case that's the actual
+// common failure mode here.
+type Engine = "whep" | "hls";
+
 // How often to retry after the manifest isn't found yet — expected right
 // after a creator clicks "Go live" in the dashboard, since that marks the
 // stream live in the DB immediately, before their encoder has necessarily
@@ -26,10 +39,20 @@ type PlaybackState = "connecting" | "playing" | "waiting" | "error";
 // behavior, not hypothetical.
 const RETRY_INTERVAL_MS = 5000;
 
-export function VideoPlayer({ src }: { src: string | null }) {
+// Hard bound on the WHEP attempt before giving up and falling back to
+// HLS — deliberately short (this is meant to be the *fast* path; a viewer
+// should never wait longer for WHEP to fail than HLS would've taken to
+// just start working). ICE reaching "failed" fires the fallback
+// immediately, without waiting for this timeout at all — this only
+// covers the "never resolves either way" case (e.g. a network that
+// silently drops every UDP/TCP candidate rather than cleanly rejecting).
+const WHEP_CONNECT_TIMEOUT_MS = 3000;
+
+export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: string | null }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<PlaybackState>("connecting");
+  const [engine, setEngine] = useState<Engine>(WHEP_ENABLED && streamId ? "whep" : "hls");
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(true);
   const [volume, setVolume] = useState(1);
@@ -49,9 +72,96 @@ export function VideoPlayer({ src }: { src: string | null }) {
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
+  // Re-picks the starting engine whenever the stream itself changes (a
+  // fresh mount for a new src should always get a fresh WHEP attempt, not
+  // inherit a previous stream's fallback-to-hls decision).
+  useEffect(() => {
+    setEngine(WHEP_ENABLED && streamId ? "whep" : "hls");
+  }, [src, streamId]);
+
+  // WHEP (WebRTC) attempt — sub-2s playback path. Only runs while
+  // engine === "whep"; falling back flips engine to "hls" and this effect
+  // never runs again for the current src/streamId (the effect below,
+  // gated on engine === "hls", picks up from there using the exact same
+  // hls.js/native-HLS logic this app already had before WHEP existed).
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !src) return;
+    if (!video || !src || !streamId || engine !== "whep") return;
+    setState("connecting");
+
+    let cancelled = false;
+    let connection: WhepConnection | null = null;
+    let iceConnected = false;
+    let firstFrameSeen = false;
+    let hardTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    function maybeMarkPlaying() {
+      if (iceConnected && firstFrameSeen && !cancelled) setState("playing");
+    }
+
+    function fallbackToHls() {
+      if (cancelled) return;
+      cancelled = true;
+      if (hardTimeout) clearTimeout(hardTimeout);
+      video!.removeEventListener("loadeddata", onFirstFrame);
+      // Clears the WHEP MediaStream before the hls.js effect below assigns
+      // video.src — leaving a stale srcObject set is undefined behavior
+      // for which source actually drives the element.
+      video!.srcObject = null;
+      connection?.close().catch(() => {});
+      setEngine("hls");
+    }
+
+    function onFirstFrame() {
+      firstFrameSeen = true;
+      maybeMarkPlaying();
+    }
+
+    video.addEventListener("loadeddata", onFirstFrame);
+    hardTimeout = setTimeout(fallbackToHls, WHEP_CONNECT_TIMEOUT_MS);
+
+    connectWhep(streamId, video)
+      .then((conn) => {
+        if (cancelled) {
+          conn.close().catch(() => {});
+          return;
+        }
+        connection = conn;
+        conn.pc.addEventListener("iceconnectionstatechange", () => {
+          const iceState = conn.pc.iceConnectionState;
+          if (iceState === "connected" || iceState === "completed") {
+            iceConnected = true;
+            if (hardTimeout) clearTimeout(hardTimeout);
+            maybeMarkPlaying();
+          } else if (iceState === "failed") {
+            // Instant fallback — don't wait for WHEP_CONNECT_TIMEOUT_MS
+            // once ICE has definitively failed rather than merely not
+            // having resolved yet.
+            fallbackToHls();
+          }
+        });
+      })
+      .catch(() => {
+        // connectWhep's own WhepConnectError covers every failure before/
+        // during the broker exchange (network, non-2xx, bad answer) —
+        // same fallback as an ICE failure or the hard timeout.
+        fallbackToHls();
+      });
+
+    return () => {
+      cancelled = true;
+      if (hardTimeout) clearTimeout(hardTimeout);
+      video.removeEventListener("loadeddata", onFirstFrame);
+      connection?.close().catch(() => {});
+    };
+  }, [src, streamId, engine]);
+
+  // HLS (hls.js / native Safari HLS) — unchanged from before WHEP existed,
+  // just gated on engine === "hls" so it never runs while a WHEP attempt
+  // is still in flight above.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src || engine !== "hls") return;
     setState("connecting");
 
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -105,7 +215,38 @@ export function VideoPlayer({ src }: { src: string | null }) {
     // time. Trimming to 2 segments trades a bit of rebuffer risk on a rough
     // network for meaningfully lower glass-to-glass delay — real, measured
     // latency was reported as ~10s at the default of 3.
-    const hls = new Hls({ liveSyncDurationCount: 2 });
+    const hls = new Hls({
+      // Inert today, not decorative — the SRS version this app runs
+      // (verified against the actual server source, not assumed) has no
+      // #EXT-X-PART/blocking-reload support, so this manifest never
+      // triggers hls.js's LL-HLS code path; it just falls back to normal
+      // segment-based playback. Left on for forward compatibility only,
+      // in case that ever changes — see docs/hls-latency-testing.md for
+      // why 1-3s glass-to-glass isn't reachable via HLS at all regardless
+      // of this flag, on this server or any other — WHEP above is the
+      // real sub-2s path now, this is strictly the fallback engine.
+      lowLatencyMode: true,
+      // Demux/remux off the main thread — real perf win (fewer dropped
+      // frames / stall-inducing jank), not latency-specific on its own.
+      enableWorker: true,
+      // Trimmed further from 2 (see comment above) to 1 — the most
+      // aggressive value before rebuffer risk rises sharply on a rough
+      // connection. Unlike the "2" value above, this hasn't been verified
+      // against a real stream yet — check docs/hls-latency-testing.md's
+      // rebuffer-count metric specifically after this change, don't
+      // assume it's a clean win.
+      liveSyncDurationCount: 1,
+      // Default is 30s of forward buffer — pure added latency risk on a
+      // live stream if the player ever falls behind and fills it. Capped
+      // to roughly 2-3 segments' worth instead. Also unverified live yet.
+      maxBufferLength: 10,
+      // When the player falls behind the live edge (past liveSyncDuration)
+      // hls.js nudges playback rate up to this multiplier to catch back up
+      // smoothly, then returns to 1x — real automatic catch-up, not just a
+      // buffer-size tweak. (hls.js >=1.5, confirmed against this repo's
+      // installed version in apps/web/package.json.)
+      maxLiveSyncPlaybackRate: 1.2,
+    });
 
     function attach() {
       hls.loadSource(src!);
@@ -147,7 +288,7 @@ export function VideoPlayer({ src }: { src: string | null }) {
       if (retryTimer) clearTimeout(retryTimer);
       hls.destroy();
     };
-  }, [src]);
+  }, [src, engine]);
 
   function togglePlay() {
     const video = videoRef.current;
@@ -223,7 +364,9 @@ export function VideoPlayer({ src }: { src: string | null }) {
           this isn't a preference, it's the only combination that starts
           playback without requiring a click. Native `controls` is gone in
           favor of the custom bar below (D.1) — onClick still toggles
-          play/pause the same way clicking a native player does. */}
+          play/pause the same way clicking a native player does. Works
+          identically for both engines: WHEP assigns video.srcObject, HLS
+          assigns video.src, but it's the same <video> element either way. */}
       <video
         ref={videoRef}
         className={styles.video}

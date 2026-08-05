@@ -19,7 +19,7 @@ export default async function EmbedPage({ params }: { params: Promise<{ username
 
   return (
     <div className={styles.wrap}>
-      <VideoPlayer src={stream.playbackUrl} />
+      <VideoPlayer src={stream.playbackUrl} streamId={stream.id} />
     </div>
   );
 }
