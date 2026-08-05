@@ -10,8 +10,27 @@ a human (you, or whoever's available) to run.
 `infra/srs/conf/srs.conf.template` — `hls_fragment` 4s→2s, `hls_window`
 30s→10s. Verified live: `habeshalive-srs` Fly app redeployed and healthy,
 no stream was interrupted (checked `/streams/live` was empty before
-restarting). This checklist verifies the *effect* of that change, which
-hasn't been measured yet.
+restarting).
+
+**What changed, already deployed to production** (2026-08-05 — shipped
+bundled into the WHEP commit `a9e7784` since that same refactor touched
+this file; not its own deploy, but live regardless):
+`apps/web/components/VideoPlayer.tsx`'s hls.js config —
+`liveSyncDurationCount` 2→1, `maxBufferLength` capped to 10s (was
+unset/default 30s), `enableWorker: true`, `maxLiveSyncPlaybackRate: 1.2`
+(auto-speeds-up playback to catch up when behind the live edge).
+`lowLatencyMode: true` is also set but confirmed inert — this SRS version
+has no `#EXT-X-PART`/partial-segment support (checked the actual server
+source, not assumed), so true LL-HLS isn't achievable on this stack
+regardless of player config. **Unlike the `hls_fragment`/`liveSyncDurationCount:
+2` change above, none of this new batch has been measured against a real
+stream yet** — the `liveSyncDurationCount: 1` and `maxBufferLength: 10`
+values specifically trade rebuffer risk for latency and could make
+playback worse on a rough connection; verify rebuffer count (§2's table)
+before treating them as a clean win.
+
+This checklist verifies the effect of both batches, neither of which has
+been measured yet.
 
 ## 1. Set OBS's keyframe interval to 2s first
 
