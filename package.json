@@ -11,10 +11,14 @@
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "db:migrate": "node --env-file=.env db/migrate.mjs"
+    "db:migrate": "node --env-file=.env db/migrate.mjs",
+    "verify:production": "tsx --env-file=.env scripts/verify-production-readiness.ts"
   },
   "dependencies": {
     "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
   },
   "overrides": {
     "postcss": "^8.5.10"
