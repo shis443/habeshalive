@@ -50,6 +50,15 @@ export async function getAdForStream(
     );
     // Subscriber ad-free viewing — a genuine, concrete subscribe incentive.
     if (subResult.rows[0]) return null;
+
+    // Platform-wide sliding-scale subscription (0025_gursha_gift_economy.sql)
+    // exempts every creator's stream, not just one — separate check since
+    // it's a different table with no creator_id to match against.
+    const platformSubResult = await pool.query(
+      `SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1 AND status = 'active'`,
+      [viewerId]
+    );
+    if (platformSubResult.rows[0]) return null;
   }
 
   const { frequencyCapPerHour } = await getAdConfig();
@@ -110,12 +119,27 @@ export async function getAdForStream(
 // one creator's stream — architecturally distinct from creator-bought
 // Boosts per the spec ("different buyer, different table, different admin
 // view"), so unlike getAdForStream() above this has no ads_enabled gate
-// and no subscriber-ad-free exemption (there's no specific creator to be
-// subscribed to). Records an impression with stream_id/creator_id both
-// null, so it never enters a creator's ad-revenue settlement — a
-// sponsored card's revenue stays fully platform-side, the advertiser paid
-// for directory placement, not a creator's audience.
-export async function getSponsoredCard(category: string | null, language: string | null): Promise<ServedAd | null> {
+// and no PER-CREATOR subscriber-ad-free exemption (there's no specific
+// creator to be subscribed to). It does still honor the PLATFORM-wide
+// subscription (0025_gursha_gift_economy.sql) below, since that one is
+// explicitly platform-wide by design, not tied to any creator either.
+// Records an impression with stream_id/creator_id both null, so it never
+// enters a creator's ad-revenue settlement — a sponsored card's revenue
+// stays fully platform-side, the advertiser paid for directory placement,
+// not a creator's audience.
+export async function getSponsoredCard(
+  category: string | null,
+  language: string | null,
+  viewerId: string | null
+): Promise<ServedAd | null> {
+  if (viewerId) {
+    const platformSubResult = await pool.query(
+      `SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1 AND status = 'active'`,
+      [viewerId]
+    );
+    if (platformSubResult.rows[0]) return null;
+  }
+
   const { rows } = await pool.query<{
     id: string;
     campaign_id: string;

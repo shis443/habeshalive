@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChatMessage, GifterBadgeTier, GiftType, PinnedMessage, StreamActivity } from "@habeshalive/shared";
+import type { ChatMessage, GifterBadgeTier, GiftTier, PinnedMessage, Rank, StreamActivity } from "@habeshalive/shared";
 import { Centrifuge } from "centrifuge";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
@@ -33,6 +33,22 @@ const ROLE_EMOJI: Record<ChatMessage["senderRole"], string> = {
   admin: "👑",
 };
 
+// Platform-wide Rank, distinct from BADGE_EMOJI above (per-creator gifter
+// tier) — named after historical Ethiopian military/administrative titles,
+// see db/migrations/0025_gursha_gift_economy.sql. "newari" (the default)
+// renders nothing, same "none means never rendered" convention as
+// BADGE_EMOJI.none.
+const RANK_EMOJI: Record<Rank, string> = {
+  newari: "",
+  asir_aleka: "🔹",
+  meto_aleka: "🔶",
+  shi_aleka: "🎖️",
+  dejazmach: "⚜️",
+};
+// Distinct from ROLE_EMOJI.moderator's 🛡️ (a different concept: platform
+// role vs. an active paid subscription) despite both being "shield-ish."
+const SUB_SHIELD_EMOJI = "🔰";
+
 type ChatEntry =
   | { id: string; kind: "system"; text: string }
   | {
@@ -44,6 +60,8 @@ type ChatEntry =
       gifterBadgeTier: GifterBadgeTier;
       senderRole: ChatMessage["senderRole"];
       subscriberMonths: number | null;
+      rank: Rank;
+      hasSubShield: boolean;
       createdAt: string;
     };
 
@@ -63,6 +81,8 @@ function toEntry(m: ChatMessage): ChatEntry {
     gifterBadgeTier: m.gifterBadgeTier,
     senderRole: m.senderRole,
     subscriberMonths: m.subscriberMonths,
+    rank: m.rank,
+    hasSubShield: m.hasSubShield,
     createdAt: m.createdAt,
   };
 }
@@ -82,7 +102,7 @@ export function ChatPanel({
   streamId,
   creatorId,
   viewerCount,
-  giftTypes,
+  giftTiers,
   isAuthed,
   currentUsername,
   currentUserId,
@@ -92,7 +112,7 @@ export function ChatPanel({
   streamId: string;
   creatorId: string;
   viewerCount: number;
-  giftTypes: GiftType[];
+  giftTiers: GiftTier[];
   isAuthed: boolean;
   currentUsername: string | null;
   currentUserId: string | null;
@@ -341,6 +361,16 @@ export function ChatPanel({
                   {ROLE_EMOJI[entry.senderRole]}{" "}
                 </span>
               )}
+              {entry.hasSubShield && (
+                <span className={settings.largeEmoji ? styles.badgeLarge : styles.badge} title="Birq+ subscriber">
+                  {SUB_SHIELD_EMOJI}{" "}
+                </span>
+              )}
+              {RANK_EMOJI[entry.rank] && (
+                <span className={settings.largeEmoji ? styles.badgeLarge : styles.badge} title={`Rank: ${entry.rank}`}>
+                  {RANK_EMOJI[entry.rank]}{" "}
+                </span>
+              )}
               {entry.subscriberMonths !== null && (
                 <span className={styles.subBadge} title={`Subscribed ${entry.subscriberMonths}mo`}>
                   ⭐{entry.subscriberMonths}mo{" "}
@@ -413,7 +443,7 @@ export function ChatPanel({
         <GurshaModal
           streamId={streamId}
           creatorId={creatorId}
-          giftTypes={giftTypes}
+          giftTiers={giftTiers}
           isAuthed={isAuthed}
           recentChatters={recentChatters}
           onClose={() => setGurshaModalOpen(false)}

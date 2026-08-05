@@ -4,6 +4,7 @@ import { env } from "./common/env.js";
 import { captureUnexpectedError, initSentry } from "./common/sentry.js";
 import { sendScheduledGiftCards } from "./gift-cards/service.js";
 import { reapStaleStreams } from "./streams/service.js";
+import { renewPlatformSubscriptions } from "./subscriptions/platform-service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
 
@@ -52,6 +53,13 @@ function runSubscriptionRenewal(): void {
   });
 }
 
+function runPlatformSubscriptionRenewal(): void {
+  renewPlatformSubscriptions().catch((err) => {
+    app.log.error(err, "renewPlatformSubscriptions failed");
+    captureUnexpectedError(err);
+  });
+}
+
 function runVodCleanup(): void {
   cleanupExpiredVods().catch((err) => {
     app.log.error(err, "cleanupExpiredVods failed");
@@ -80,6 +88,8 @@ app
     setInterval(runReaper, REAP_INTERVAL_MS);
     runSubscriptionRenewal();
     setInterval(runSubscriptionRenewal, SUBSCRIPTION_RENEWAL_INTERVAL_MS);
+    runPlatformSubscriptionRenewal();
+    setInterval(runPlatformSubscriptionRenewal, SUBSCRIPTION_RENEWAL_INTERVAL_MS);
     runVodCleanup();
     setInterval(runVodCleanup, VOD_CLEANUP_INTERVAL_MS);
     runAdSettlement();

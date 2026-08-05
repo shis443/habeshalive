@@ -6,6 +6,27 @@ around that date and `docs/SECURITY.md`/`docs/OPERATIONS.md` for the
 evidence behind each line). Organized by how much it blocks a real launch,
 not chronologically.
 
+## Shipped 2026-08-05, not yet tested end-to-end
+
+**Gursha Gift Economy** (`db/migrations/0025_gursha_gift_economy.sql`):
+priced gift tiers (Mulmul/Buna/Tej/Kurt, replacing the old flat-25-ETB
+catalog), a platform-wide prestige Rank (Newari through Dejazmach,
+cumulative Gursha spend, distinct from the existing per-creator
+`gifter_badges`), and a sliding-scale platform-wide ad-free subscription
+(`platform_subscriptions`, 100% platform revenue, no creator to split
+with). Full design rationale and open decisions:
+`docs/temporal-migration-plan.md`-style writeup wasn't produced for this
+one — the schema/component-tree proposal that was reviewed and approved
+lives in this session's transcript, not a separate doc file. Backend is
+real (typechecks clean, wired into `sendGift`/chat/ads-ad-free-check), one
+existing unit test (`wallet/service.test.ts`'s rounding-leakage case) was
+adapted since every new gift price is now a clean multiple of 10,000
+santim and can no longer exercise real truncation the way the old 2,500-
+santim pricing did. **Not run against a live database or a real browser**
+— migration untested against production, frontend (`GurshaModal.tsx`
+extended with tier selection, Rank progress, and the platform-sub toggle)
+unverified in an actual browser.
+
 ## Blocks launching to real creators/audiences
 
 - **No error tracking or alerting in production** — no Sentry, no metrics

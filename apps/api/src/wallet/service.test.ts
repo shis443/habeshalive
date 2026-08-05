@@ -7,10 +7,12 @@ import {
   createTestCreator,
   createTestViewer,
   getGiftTypeId,
+  getSubscriptionTierId,
   getWalletBalance,
   type TestCreator,
   type TestUser,
 } from "../test/fixtures.js";
+import { subscribe } from "../subscriptions/service.js";
 import {
   completeTopupFromWebhook,
   getBalance,
@@ -117,25 +119,27 @@ describe("gift split", () => {
 
   it("splits the gift amount between creator and platform per revenue_share_bps", async () => {
     const viewer = await trackUser(await createTestViewer());
-    await fundWallet(viewer.id, 50_000);
+    await fundWallet(viewer.id, 100_000);
 
     const platformWalletId = await getPlatformWalletId();
     const platformBefore = await getWalletBalance(platformWalletId);
     const creatorBefore = await getWalletBalance(creator.walletId);
 
-    const giftTypeId = await getGiftTypeId("Classic Mulmul"); // 2,500 santim
+    // Classic Mulmul is 10,000 santim as of 0025_gursha_gift_economy.sql
+    // (was 2,500 pre-Gursha-gift-economy repricing).
+    const giftTypeId = await getGiftTypeId("Classic Mulmul");
     const { id: ledgerTransactionId } = await sendGift(viewer.id, {
       streamId: creator.streamId,
       giftTypeId,
-      quantity: 8, // total 20,000 santim
+      quantity: 8, // total 80,000 santim
       message: "Keep it up!",
     });
 
     await assertTransactionBalanced(ledgerTransactionId);
 
-    expect(await getWalletBalance(viewer.walletId)).toBe(50_000 - 20_000);
-    expect(await getWalletBalance(creator.walletId)).toBe(creatorBefore + 16_000); // 80% of 20,000
-    expect(await getWalletBalance(platformWalletId)).toBe(platformBefore + 4_000); // 20% of 20,000
+    expect(await getWalletBalance(viewer.walletId)).toBe(100_000 - 80_000);
+    expect(await getWalletBalance(creator.walletId)).toBe(creatorBefore + 64_000); // 80% of 80,000
+    expect(await getWalletBalance(platformWalletId)).toBe(platformBefore + 16_000); // 20% of 80,000
   });
 
   it("rejects a gift when the sender has insufficient balance", async () => {
@@ -154,12 +158,23 @@ describe("gift split", () => {
     const viewer = await trackUser(await createTestViewer());
     await fundWallet(viewer.id, 100_000);
 
-    const giftTypeId = await getGiftTypeId("Golden Mulmul"); // 2,500 santim
-    const { id: ledgerTransactionId } = await sendGift(viewer.id, {
-      streamId: oddCreator.streamId,
-      giftTypeId,
-      quantity: 1, // total 2,500 santim — doesn't divide evenly by 3333bps
-    });
+    // Uses a subscription charge, not a Gursha gift, deliberately: every
+    // gift price as of 0025_gursha_gift_economy.sql (10,000/20,000/50,000/
+    // 100,000 santim) is now an exact multiple of 10,000, which makes
+    // Math.trunc((total * bps) / 10_000) always land on a whole number
+    // with no remainder to truncate — structurally incapable of
+    // exercising real rounding leakage anymore, no matter which bps or
+    // quantity is chosen (k * 10_000 * bps / 10_000 = k * bps exactly,
+    // for any integers k/bps). Tier 2 (25,000 santim) isn't a multiple of
+    // 10,000, so it still genuinely tests truncation the same way "Golden
+    // Mulmul" (2,500 santim, now retired) originally did.
+    const tierId = await getSubscriptionTierId("Tier 2");
+    const sub = await subscribe(viewer.id, { creatorId: oddCreator.id, tierId });
+    const { rows: subRows } = await pool.query<{ ledger_transaction_id: string }>(
+      `SELECT ledger_transaction_id FROM subscriptions WHERE id = $1`,
+      [sub.id]
+    );
+    const ledgerTransactionId = subRows[0]!.ledger_transaction_id;
 
     await assertTransactionBalanced(ledgerTransactionId);
 
@@ -168,7 +183,7 @@ describe("gift split", () => {
     // — assertTransactionBalanced above is the real check; this just confirms
     // the creator's share is a genuine partial amount, not 0 or the full total.
     expect(creatorBalance).toBeGreaterThan(0);
-    expect(creatorBalance).toBeLessThan(2_500);
+    expect(creatorBalance).toBeLessThan(25_000); // Tier 2's price — see comment above
   });
 });
 

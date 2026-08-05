@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { gifterBadgeTierSchema } from "./wallet.js";
+import { gifterBadgeTierSchema, rankSchema } from "./wallet.js";
 
 export const sendChatMessageSchema = z.object({
   body: z.string().min(1).max(500),
@@ -26,6 +26,14 @@ export const chatMessageSchema = z.object({
   // Whole months since subscriptions.started_at for an active subscription
   // to THIS stream's creator specifically; null if not subscribed.
   subscriberMonths: z.number().int().nullable(),
+  // Platform-wide, unlike gifterBadgeTier/subscriberMonths above — the
+  // sender's Rank (cumulative Gursha spend across every creator, see
+  // user_ranks in 0025_gursha_gift_economy.sql) and whether they currently
+  // hold an active platform-wide ad-free subscription. "newari" is the
+  // default rank (never means "no rank system"), same non-null-default
+  // convention gifterBadgeTier's "none" already uses.
+  rank: rankSchema,
+  hasSubShield: z.boolean(),
   createdAt: z.string(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

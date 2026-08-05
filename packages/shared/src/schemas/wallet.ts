@@ -1,12 +1,28 @@
 import { z } from "zod";
 
+// Gursha gift tiers (db/migrations/0025_gursha_gift_economy.sql) — each
+// tier groups one or more themed gift_types at that tier's price. Kurt's
+// "1000+ ETB" is reached via the existing quantity cap (see
+// sendGiftSchema below), not a variable per-send amount.
+export const giftTierKeySchema = z.enum(["mulmul", "buna", "tej", "kurt"]);
+export type GiftTierKey = z.infer<typeof giftTierKeySchema>;
+
 export const giftTypeSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   priceSantim: z.number().int().positive(),
   animationKey: z.string(),
+  tierKey: giftTierKeySchema,
 });
 export type GiftType = z.infer<typeof giftTypeSchema>;
+
+export const giftTierSchema = z.object({
+  key: giftTierKeySchema,
+  displayName: z.string(),
+  basePriceSantim: z.number().int().positive(),
+  giftTypes: z.array(giftTypeSchema),
+});
+export type GiftTier = z.infer<typeof giftTierSchema>;
 
 // quantity caps at 100, not 999 — the "custom quantity, maximum cap" the
 // Gursha modal asks for. At the 2500 santim (25 ETB) base unit price (see
@@ -40,9 +56,26 @@ export const gifterBadgeSchema = z.object({
 });
 export type GifterBadge = z.infer<typeof gifterBadgeSchema>;
 
+// Platform-wide prestige rank, distinct from gifterBadgeTier above
+// (per-creator) — tracks cumulative Gursha spend across every creator.
+// Named after historical Ethiopian military/administrative titles, low to
+// high: Newari (default) -> Asir Aleka -> Meto Aleka -> Shi Aleka ->
+// Dejazmach. See 0025_gursha_gift_economy.sql for the exact santim
+// thresholds each one requires.
+export const rankSchema = z.enum(["newari", "asir_aleka", "meto_aleka", "shi_aleka", "dejazmach"]);
+export type Rank = z.infer<typeof rankSchema>;
+
+export const userRankSchema = z.object({
+  rank: rankSchema,
+  totalGiftSpendSantim: z.number().int(),
+  nextRankThresholdSantim: z.number().int().nullable(),
+});
+export type UserRank = z.infer<typeof userRankSchema>;
+
 export const sendGiftResponseSchema = z.object({
   id: z.string().uuid(),
   badge: gifterBadgeSchema,
+  rank: userRankSchema,
 });
 export type SendGiftResponse = z.infer<typeof sendGiftResponseSchema>;
 
@@ -137,6 +170,29 @@ export const topupResponseSchema = z.object({
 });
 export type TopupResponse = z.infer<typeof topupResponseSchema>;
 
+// Platform-wide sliding-scale ad-free subscription — distinct from the
+// existing per-creator `subscriptions` (subscriptionTierSchema-adjacent
+// code elsewhere): no creator_id, no revenue split, 100% platform
+// revenue, same money shape as stream boosts.
+export const platformSubscriptionStatusSchema = z.enum(["active", "cancelled", "expired", "payment_failed"]);
+export type PlatformSubscriptionStatus = z.infer<typeof platformSubscriptionStatusSchema>;
+
+// 150 ETB floor per the spec ("sliding scale... minimum 150 ETB/month,
+// scaling up to 5,000+ ETB/month") — no ceiling enforced, matching "+".
+export const PLATFORM_SUBSCRIPTION_MIN_SANTIM = 15000;
+
+export const subscribeToPlatformSchema = z.object({
+  amountSantim: z.coerce.number().int().min(PLATFORM_SUBSCRIPTION_MIN_SANTIM),
+});
+export type SubscribeToPlatformInput = z.infer<typeof subscribeToPlatformSchema>;
+
+export const platformSubscriptionSchema = z.object({
+  amountSantim: z.number().int(),
+  status: platformSubscriptionStatusSchema,
+  expiresAt: z.string(),
+});
+export type PlatformSubscription = z.infer<typeof platformSubscriptionSchema>;
+
 export const walletBalanceSchema = z.object({
   balanceSantim: z.coerce.number().int(),
   weeklyDeltaSantim: z.coerce.number().int(),
@@ -165,6 +221,7 @@ export const ledgerTransactionTypeSchema = z.enum([
   "adjustment",
   "subscription",
   "boost",
+  "platform_subscription",
 ]);
 
 export const transactionSchema = z.object({

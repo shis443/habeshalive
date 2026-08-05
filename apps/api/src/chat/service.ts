@@ -1,4 +1,4 @@
-import type { ChatMessage, GifterBadgeTier, PinnedMessage, RecentGifter } from "@habeshalive/shared";
+import type { ChatMessage, GifterBadgeTier, PinnedMessage, Rank, RecentGifter } from "@habeshalive/shared";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
@@ -15,6 +15,8 @@ interface ChatMessageRow {
   gifter_badge_tier: GifterBadgeTier | null;
   sender_role: ChatMessage["senderRole"];
   subscriber_months: number | null;
+  rank: Rank | null;
+  has_sub_shield: boolean;
   created_at: string;
 }
 
@@ -30,6 +32,8 @@ function toChatMessage(row: ChatMessageRow): ChatMessage {
     gifterBadgeTier: row.gifter_badge_tier ?? "none",
     senderRole: row.sender_role,
     subscriberMonths: row.subscriber_months,
+    rank: row.rank ?? "newari",
+    hasSubShield: row.has_sub_shield,
     createdAt: row.created_at,
   };
 }
@@ -52,12 +56,16 @@ const CHAT_SENDER_JOIN_COLUMNS = `
   u.username, u.display_name, u.avatar_url, u.role AS sender_role,
   gb.tier AS gifter_badge_tier,
   (EXTRACT(YEAR FROM age(now(), sub.started_at)) * 12
-   + EXTRACT(MONTH FROM age(now(), sub.started_at)))::int AS subscriber_months
+   + EXTRACT(MONTH FROM age(now(), sub.started_at)))::int AS subscriber_months,
+  ur.rank,
+  (psub.id IS NOT NULL) AS has_sub_shield
 `;
 const CHAT_SENDER_JOINS = `
   JOIN users u ON u.id = cm.user_id
   LEFT JOIN gifter_badges gb ON gb.user_id = cm.user_id AND gb.creator_id = s.creator_id
   LEFT JOIN subscriptions sub ON sub.subscriber_id = cm.user_id AND sub.creator_id = s.creator_id AND sub.status = 'active'
+  LEFT JOIN user_ranks ur ON ur.user_id = cm.user_id
+  LEFT JOIN platform_subscriptions psub ON psub.subscriber_id = cm.user_id AND psub.status = 'active'
 `;
 
 // sendChatMessage's RETURNING clause can't use the JOIN form above (it has
@@ -72,7 +80,9 @@ const SENDER_ROLE_AND_TENURE_RETURNING_SQL = `
            + EXTRACT(MONTH FROM age(now(), sub.started_at)))::int
    FROM subscriptions sub
    JOIN streams s ON s.id = $1 AND s.creator_id = sub.creator_id
-   WHERE sub.subscriber_id = $2 AND sub.status = 'active') AS subscriber_months
+   WHERE sub.subscriber_id = $2 AND sub.status = 'active') AS subscriber_months,
+  (SELECT rank FROM user_ranks WHERE user_id = $2) AS rank,
+  EXISTS (SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $2 AND status = 'active') AS has_sub_shield
 `;
 
 // Server-mediated publish (not direct client->Centrifugo publish): lets

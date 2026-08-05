@@ -29,8 +29,13 @@ export const adRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.get<{ Querystring: { category?: string; language?: string } }>("/sponsored-card", async (req) =>
-    getSponsoredCard(req.query.category ?? null, req.query.language ?? null)
+  // tryAuthenticate added so a logged-in viewer's platform-wide
+  // subscription (0025_gursha_gift_economy.sql) exempts them here too —
+  // same pattern as /serve above.
+  app.get<{ Querystring: { category?: string; language?: string } }>(
+    "/sponsored-card",
+    { preHandler: app.tryAuthenticate },
+    async (req) => getSponsoredCard(req.query.category ?? null, req.query.language ?? null, req.user?.sub ?? null)
   );
 
   app.post<{ Params: { impressionId: string } }>("/:impressionId/click", async (req) => {

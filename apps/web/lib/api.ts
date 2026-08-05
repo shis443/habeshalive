@@ -26,6 +26,7 @@ import {
   followStatusSchema,
   giftCardAdminItemSchema,
   giftCardPreviewSchema,
+  giftTierSchema,
   giftTypeSchema,
   ledgerReconciliationSchema,
   ledgerTransactionLookupSchema,
@@ -42,6 +43,7 @@ import {
   payoutHistoryItemSchema,
   payoutQueueItemSchema,
   platformConfigSchema,
+  platformSubscriptionSchema,
   platformWalletSummarySchema,
   reportSchema,
   searchResultsSchema,
@@ -57,6 +59,7 @@ import {
   transactionSchema,
   unreadCountSchema,
   userListItemSchema,
+  userRankSchema,
   vodSchema,
   walletBalanceSchema,
   type AccountDeletionStatus,
@@ -86,6 +89,7 @@ import {
   type FollowStatus,
   type GiftCardAdminItem,
   type GiftCardPreview,
+  type GiftTier,
   type GiftType,
   type LedgerReconciliation,
   type LedgerTransactionLookup,
@@ -102,6 +106,7 @@ import {
   type PayoutHistoryItem,
   type PayoutQueueItem,
   type PlatformConfig,
+  type PlatformSubscription,
   type PlatformWalletSummary,
   type Report,
   type SearchResults,
@@ -116,6 +121,7 @@ import {
   type SubscriptionTier,
   type Transaction,
   type UserListItem,
+  type UserRank,
   type Vod,
   type WalletBalance,
 } from "@habeshalive/shared";
@@ -202,6 +208,17 @@ export async function getGiftTypes(): Promise<GiftType[]> {
     return [];
   }
   return giftTypeSchema.array().parse(await res.json());
+}
+
+// Grouped-by-tier shape for GurshaModal's tier-then-theme selector — see
+// apps/api/src/wallet/service.ts's listGiftTiers.
+export async function getGiftTiers(): Promise<GiftTier[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/wallet/gift-tiers`, { cache: "no-store" });
+  if (!res.ok) {
+    console.error(`Failed to load gift tiers (${res.status})`);
+    return [];
+  }
+  return giftTierSchema.array().parse(await res.json());
 }
 
 export async function getSubscriptionTiers(): Promise<SubscriptionTier[]> {
@@ -318,6 +335,29 @@ export async function getMySubscriptions(): Promise<MySubscription[] | null> {
     return null;
   }
   return mySubscriptionSchema.array().parse(await res.json());
+}
+
+// Platform-wide Rank (cumulative Gursha spend) — distinct from the
+// per-creator gifter badge above.
+export async function getMyRank(): Promise<UserRank | null> {
+  const res = await fetchAuthed("/wallet/rank");
+  if (res.status === 401) return null;
+  if (!res.ok) {
+    console.error(`Failed to load rank (${res.status})`);
+    return null;
+  }
+  return userRankSchema.parse(await res.json());
+}
+
+// null both when unauthenticated and when the user simply has no active
+// platform subscription — callers don't need to distinguish those cases,
+// both render the same "not subscribed" UI state.
+export async function getMyPlatformSubscription(): Promise<PlatformSubscription | null> {
+  const res = await fetchAuthed("/subscriptions/platform/mine");
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data) return null;
+  return platformSubscriptionSchema.parse(data);
 }
 
 // Public: follower count is visible to anonymous viewers, and "following"

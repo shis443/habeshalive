@@ -6,15 +6,19 @@ import type {
   GiftAlert,
   GifterBadge,
   GifterBadgeTier,
+  GiftTier,
+  GiftTierKey,
   GiftType,
   PayoutHistoryItem,
   PayoutQueueItem,
   PayoutResponse,
+  Rank,
   RequestPayoutInput,
   SendGiftInput,
   SendGiftResponse,
   Transaction,
   TopupResponse,
+  UserRank,
   WalletBalance,
 } from "@habeshalive/shared";
 import type { PoolClient } from "pg";
@@ -145,18 +149,107 @@ async function upsertGifterBadge(
   return { creatorId, totalGurshaSantim: total, tier, nextTierThresholdSantim: nextTierThreshold(tier) };
 }
 
+interface GiftTypeRow {
+  id: string;
+  name: string;
+  price_santim: number;
+  animation_key: string;
+  tier_key: GiftTierKey;
+}
+
+// Platform-wide Rank — cumulative Gursha spend across every creator, NOT
+// scoped to one like gifter_badges/BADGE_TIER_THRESHOLDS above. Named
+// after historical Ethiopian military/administrative titles (see
+// db/migrations/0025_gursha_gift_economy.sql for the design rationale).
+// Same descending-array-with-fallback pattern as BADGE_TIER_THRESHOLDS.
+const RANK_THRESHOLDS: { rank: Rank; thresholdSantim: number }[] = [
+  { rank: "dejazmach", thresholdSantim: 10_000_000 }, // 100,000+ ETB
+  { rank: "shi_aleka", thresholdSantim: 5_000_000 }, //   50,000 ETB
+  { rank: "meto_aleka", thresholdSantim: 1_000_000 }, //  10,000 ETB
+  { rank: "asir_aleka", thresholdSantim: 500_000 }, //     5,000 ETB
+];
+
+function rankForTotal(totalSantim: number): Rank {
+  for (const { rank, thresholdSantim } of RANK_THRESHOLDS) {
+    if (totalSantim >= thresholdSantim) return rank;
+  }
+  return "newari";
+}
+
+function nextRankThreshold(rank: Rank): number | null {
+  const currentIndex = RANK_THRESHOLDS.findIndex((r) => r.rank === rank);
+  // currentIndex === -1 means rank is "newari" — next is the lowest real
+  // rank, the last entry in the descending-order array above. Highest
+  // rank (dejazmach, index 0) has no next threshold.
+  if (currentIndex === 0) return null;
+  const nextIndex = currentIndex === -1 ? RANK_THRESHOLDS.length - 1 : currentIndex - 1;
+  return RANK_THRESHOLDS[nextIndex]?.thresholdSantim ?? null;
+}
+
+export async function getUserRank(userId: string): Promise<UserRank> {
+  const { rows } = await pool.query<{ total_gift_spend_santim: number; rank: Rank }>(
+    `SELECT total_gift_spend_santim, rank FROM user_ranks WHERE user_id = $1`,
+    [userId]
+  );
+  const row = rows[0];
+  const rank = row?.rank ?? "newari";
+  return {
+    rank,
+    totalGiftSpendSantim: row?.total_gift_spend_santim ?? 0,
+    nextRankThresholdSantim: nextRankThreshold(rank),
+  };
+}
+
+// Called inside sendGift()'s transaction, same atomicity reasoning as
+// upsertGifterBadge below — the rank update is part of the same unit as
+// the money movement, not a best-effort side effect.
+async function upsertUserRank(client: PoolClient, userId: string, addedSantim: number): Promise<UserRank> {
+  const { rows } = await client.query<{ total_gift_spend_santim: number }>(
+    `INSERT INTO user_ranks (user_id, total_gift_spend_santim, rank)
+     VALUES ($1, $2, 'newari')
+     ON CONFLICT (user_id) DO UPDATE
+       SET total_gift_spend_santim = user_ranks.total_gift_spend_santim + $2, updated_at = now()
+     RETURNING total_gift_spend_santim`,
+    [userId, addedSantim]
+  );
+  const total = rows[0]!.total_gift_spend_santim;
+  const rank = rankForTotal(total);
+  await client.query(`UPDATE user_ranks SET rank = $1 WHERE user_id = $2`, [rank, userId]);
+  return { rank, totalGiftSpendSantim: total, nextRankThresholdSantim: nextRankThreshold(rank) };
+}
+
 export async function listGiftTypes(): Promise<GiftType[]> {
-  const { rows } = await pool.query<{
-    id: string;
-    name: string;
-    price_santim: number;
-    animation_key: string;
-  }>(`SELECT id, name, price_santim, animation_key FROM gift_types WHERE is_active = TRUE ORDER BY price_santim ASC`);
+  const { rows } = await pool.query<GiftTypeRow>(
+    `SELECT gt.id, gt.name, gt.price_santim, gt.animation_key, gtier.key AS tier_key
+     FROM gift_types gt JOIN gift_tiers gtier ON gtier.id = gt.gift_tier_id
+     WHERE gt.is_active = TRUE ORDER BY gt.price_santim ASC`
+  );
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
     priceSantim: row.price_santim,
     animationKey: row.animation_key,
+    tierKey: row.tier_key,
+  }));
+}
+
+// Grouped-by-tier shape for the Send Gursha modal's tier-then-theme
+// selector — same underlying rows as listGiftTypes above, just organized
+// for that specific UI instead of making the frontend re-group a flat
+// list client-side.
+export async function listGiftTiers(): Promise<GiftTier[]> {
+  const { rows } = await pool.query<{
+    key: GiftTierKey;
+    display_name: string;
+    base_price_santim: number;
+    sort_order: number;
+  }>(`SELECT key, display_name, base_price_santim, sort_order FROM gift_tiers WHERE is_active = TRUE ORDER BY sort_order ASC`);
+  const giftTypes = await listGiftTypes();
+  return rows.map((tier) => ({
+    key: tier.key,
+    displayName: tier.display_name,
+    basePriceSantim: tier.base_price_santim,
+    giftTypes: giftTypes.filter((gt) => gt.tierKey === tier.key),
   }));
 }
 
@@ -385,6 +478,7 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
     );
 
     const badge = await upsertGifterBadge(client, senderId, stream.creator_id, totalAmount);
+    const rank = await upsertUserRank(client, senderId, totalAmount);
 
     await client.query("COMMIT");
 
@@ -435,7 +529,7 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
       );
     }
 
-    return { id: ledgerTransactionId, badge };
+    return { id: ledgerTransactionId, badge, rank };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -1014,6 +1108,7 @@ function buildTransactionTitle(row: TransactionRow): string {
   if (row.type === "topup") return "Added funds via Chapa";
   if (row.type === "refund") return "Refund";
   if (row.type === "boost") return row.direction === "debit" ? "Boosted your stream" : "Stream boost revenue";
+  if (row.type === "platform_subscription") return "Birq ad-free subscription";
   return "Balance adjustment";
 }
 

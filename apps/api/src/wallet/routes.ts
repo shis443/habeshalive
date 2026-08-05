@@ -18,8 +18,10 @@ import {
   getCreatorPayoutContext,
   getEarningsThisMonth,
   getGifterBadge,
+  getUserRank,
   initiateTopup,
   listAllPayouts,
+  listGiftTiers,
   listGiftTypes,
   listPendingPayouts,
   listTransactions,
@@ -80,6 +82,14 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/gift-types", async () => listGiftTypes());
+
+  // Grouped-by-tier shape for the Send Gursha modal's tier-then-theme
+  // selector — see wallet/service.ts's listGiftTiers.
+  app.get("/gift-tiers", async () => listGiftTiers());
+
+  // Platform-wide Rank (cumulative Gursha spend across every creator) —
+  // distinct from /gifter-badge/:creatorId below, which is per-creator.
+  app.get("/rank", { preHandler: app.authenticate }, async (req) => getUserRank(req.user.sub));
 
   app.get("/balance", { preHandler: app.authenticate }, async (req) => getBalance(req.user.sub));
 

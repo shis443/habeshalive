@@ -11,7 +11,7 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import {
   getCurrentUser,
   getFollowStatus,
-  getGiftTypes,
+  getGiftTiers,
   getLiveStreamByUsername,
   getLiveStreams,
   getServedAd,
@@ -44,8 +44,8 @@ export default async function WatchPage({ params }: { params: Promise<{ username
     );
   }
 
-  const [giftTypes, tiers, activity, followStatus, displayAd] = await Promise.all([
-    getGiftTypes(),
+  const [giftTiers, tiers, activity, followStatus, displayAd] = await Promise.all([
+    getGiftTiers(),
     getSubscriptionTiers(),
     getStreamActivity(stream.id),
     getFollowStatus(stream.creator.id),
@@ -83,7 +83,7 @@ export default async function WatchPage({ params }: { params: Promise<{ username
             streamId={stream.id}
             creatorId={stream.creator.id}
             viewerCount={stream.viewerCount}
-            giftTypes={giftTypes}
+            giftTiers={giftTiers}
             isAuthed={!!user}
             currentUsername={user?.username ?? null}
             currentUserId={user?.id ?? null}

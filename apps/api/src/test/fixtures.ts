@@ -71,8 +71,23 @@ export async function createTestCreator(revenueShareBps = 8000): Promise<TestCre
 // found because the pre-existing test suite still referenced the deleted
 // names and failed against a fully-migrated database (this repo has no git
 // remote, so CI had never actually run to catch it).
+// "Golden Mulmul"/"Berbere Mulmul"/"Holiday Mulmul" were retired (set
+// is_active = FALSE, not deleted) by 0025_gursha_gift_economy.sql's
+// re-priced catalog — kept in this union since the rows still exist and a
+// test could deliberately want an inactive one (e.g. to verify sendGift
+// rejects it), but sendGift itself will 404 on any of the three.
 export async function getGiftTypeId(
-  name: "Classic Mulmul" | "Golden Mulmul" | "Berbere Mulmul" | "Holiday Mulmul"
+  name:
+    | "Classic Mulmul"
+    | "Golden Mulmul"
+    | "Berbere Mulmul"
+    | "Holiday Mulmul"
+    | "Jebena Buna"
+    | "Sini Buna"
+    | "Macchiato"
+    | "Berele Tej"
+    | "Filtered Tej"
+    | "Special Kurt"
 ): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(`SELECT id FROM gift_types WHERE name = $1`, [name]);
   const row = rows[0];
@@ -153,6 +168,10 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   // or sent more than one gift to the same creator (gifter_badges).
   await pool.query(`DELETE FROM admin_actions WHERE actor_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM gifter_badges WHERE user_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
+  // Also no CASCADE from users, same reasoning as gifter_badges above —
+  // 0025_gursha_gift_economy.sql's user_ranks/platform_subscriptions.
+  await pool.query(`DELETE FROM user_ranks WHERE user_id = ANY($1)`, [userIds]);
+  await pool.query(`DELETE FROM platform_subscriptions WHERE subscriber_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM gifts_sent WHERE sender_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM payouts WHERE creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM ledger_entries WHERE ledger_transaction_id = ANY($1)`, [ledgerTransactionIds]);
