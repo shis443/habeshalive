@@ -167,6 +167,12 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   // an admin action (cancelBoost/cancelGiftCard, both call logAdminAction)
   // or sent more than one gift to the same creator (gifter_badges).
   await pool.query(`DELETE FROM admin_actions WHERE actor_id = ANY($1)`, [userIds]);
+  // Also no CASCADE from users (0001_init.sql — actor_id/target_user_id
+  // both plain REFERENCES) — surfaced by actions-service.test.ts, the
+  // first test coverage banUser/unbanUser ever had.
+  await pool.query(`DELETE FROM moderation_actions WHERE actor_id = ANY($1) OR target_user_id = ANY($1)`, [
+    userIds,
+  ]);
   await pool.query(`DELETE FROM gifter_badges WHERE user_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   // Also no CASCADE from users, same reasoning as gifter_badges above —
   // 0025_gursha_gift_economy.sql's user_ranks/platform_subscriptions.
