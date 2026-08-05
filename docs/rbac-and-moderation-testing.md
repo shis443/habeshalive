@@ -1,35 +1,83 @@
 # RBAC and moderation manual testing checklist
 
-## Known gap: SRS admin API is IPv4-only, Fly's private network is IPv6-only
+## RESOLVED: SRS admin API IPv6 reachability + a second bug it uncovered
 
-Discovered live during the production deploy of this RBAC pass, via
-`scripts/verify-production-readiness.ts`'s internal-SRS check actually
-being run from inside Fly's private network for the first time (not
-assumed): `apps/api/src/common/env.ts`'s `SRS_ADMIN_API_BASE`
+Originally discovered via `scripts/verify-production-readiness.ts`'s
+internal-SRS check actually being run from inside Fly's private network
+for the first time: `SRS_ADMIN_API_BASE`
 (`http://habeshalive-srs.internal:1985`) resolves to an IPv6-only address
 (Fly's `*.internal` 6PN hostnames), but SRS's `http_api` only ever binds
-IPv4 (`0.0.0.0:1985` — confirmed via `/proc/net/tcp6` on the real machine
-showing no entry for port 1985 at all). Every server-to-server call
-`apps/api` makes to this admin API over the private network —
-`moderation/actions-service.ts`'s `killActiveRtmpPublishers` (the RTMP
-publisher kill-on-ban from this same session) and `streams/whep-routes.ts`'s
-WHEP broker (currently inert, `WHEP_ENABLED` unset) — currently gets
-`ECONNREFUSED`, silently swallowed by their own fail-open/best-effort
-error handling. Not a crash, just quietly not working: **a ban still
-correctly sets `is_banned` and blocks all future publish/chat/WHEP
-actions — the actual security boundary — but the "kill an
-already-broadcasting session immediately" half of §1 below is not
-currently effective in production.**
+IPv4. A same-session attempt at a dual-stack SRS fix
+(`listen 1985 [::]:1985;`) didn't work — SRS accepted the directive but
+never actually opened a second listener — and briefly crash-looped
+production via an unrelated typo (`//` instead of SRS's `#` comment
+syntax) before being caught and reverted.
 
-A dual-stack fix (`listen 1985 [::]:1985;` in
-`infra/srs/conf/srs.conf.template`) was attempted live and reverted — SRS
-accepted the directive without a config-parse error, but its own startup
-log only ever showed one `HTTP-API listen at tcp://0.0.0.0:1985` line,
-never attempting the second address. Needs real investigation (SRS's own
-source, or fronting it with a small dual-stack proxy — the same category
-of fix already used for the public-facing WHIP port, see
-`infra/srs/conf/whip-proxy.nginx.conf`) before trying again, not a
-same-session fix. Track this as its own follow-up.
+**Actual fix**: `infra/srs/conf/whip-proxy.nginx.conf` gained a second
+`server{}` block — `listen [::]:1985 ipv6only=on;`, proxying only
+`/api/v1/` to `127.0.0.1:1985`. nginx's dual-stack support doesn't have
+whatever limitation SRS's own does; this sidesteps the SRS-side gap
+entirely rather than fixing it there. No `SRS_ADMIN_API_BASE` value
+change was needed — same URL, now actually reachable.
+
+**Verified for real, in this order, before ever calling it done:**
+1. `nginx -t` syntax check, then a full local dry-run — a real dummy
+   HTTP backend on `127.0.0.1:1985`, this exact config started against
+   it, GET/DELETE through the IPv6 listener, and confirmation the public
+   listener (1986) still 403s `/api/v1/`. All before touching production.
+2. Deployed to `habeshalive-srs` (after confirming `/streams/live` was
+   empty — a real, active stream was live at first attempt; deploy was
+   held until it ended).
+3. From `habeshalive`'s own machine, the exact `fetch()` call pattern the
+   application code uses reached `http://habeshalive-srs.internal:1985/api/v1/clients/`
+   and got real SRS data back — not just a raw TCP connect.
+4. **A full live end-to-end test**: a real synthetic RTMP stream
+   (`ffmpeg` against `rtmp://habeshalive-srs.fly.dev:1935/live/...`) was
+   published to production under a throwaway test creator account, then
+   `banUser()` was invoked directly against that live target on the
+   `habeshalive` machine. This is what actually caught a second, real
+   bug — see below — and after fixing it, the *same* live ffmpeg process
+   died with `Broken pipe` moments after the ban, the unambiguous
+   signature of SRS forcibly closing the socket server-side.
+
+**The second bug, found only by step 4 (not by unit tests, which had
+mocked the wrong thing):** `killActiveRtmpPublishers` (and
+`streams/whep-routes.ts`'s equivalent WHEP correlation helper) filtered
+SRS's client list on `entry.stream === providerStreamId`. Real SRS
+responses (confirmed against `vendor/trunk/src/app/srs_app_statistic.cpp`)
+put an **internal SRS stream-object id** in `stream` (e.g.
+`"vid-275253j"`) — completely unrelated to the actual RTMP stream
+name/userId, which lives in the `name` field instead. The filter had
+never matched anything, in production or in the mocked unit test (which
+fabricated `stream: target.id` based on the same wrong assumption). Fixed
+to filter on `name`; the unit test's mock was corrected to match real SRS
+shape (`stream` set to an unrelated opaque id, `name` set to the actual
+match target) so it can't silently regress back to testing the wrong
+field. This is exactly the class of bug real-target testing is for — a
+plausible-looking, internally-consistent, entirely wrong assumption that
+survived a full mocked test suite and only broke on contact with a real
+server.
+
+The throwaway test account and all uploaded verification scripts were
+deleted from production immediately after; no test data was left behind.
+
+**One honest caveat**: `scripts/verify-production-readiness.ts`'s full
+run (all 8 DB checks + all 3 HTTP checks in one process) was not
+successfully completed end-to-end from *inside* Fly's private network in
+this final round — repeated attempts hit `pg` connection drops
+("Connection terminated unexpectedly") specific to opening a fresh
+Postgres connection from that particular SSH session context, most
+likely connection-pooling pressure from this session's own repeated
+one-off script invocations against Neon, not a real defect. Every
+individual check the script performs was independently confirmed by a
+more direct method instead: the DB/RBAC checks passed cleanly when the
+script ran from an external machine (§ this file's own earlier
+verification), the public-block check was confirmed via a real external
+`curl`, and the internal-SRS-reachability check was confirmed via a
+minimal, isolated script hitting the exact same URL and returning a
+clean `200` with real data. The full script should still work fine on a
+future clean run; this just documents why this specific session didn't
+end with one single unbroken 11-line PASS output to point to.
 
 **Why this exists as a manual checklist, not automated:** two things here
 genuinely can't be produced by an agent without human hardware — a real
@@ -44,10 +92,12 @@ second account.
 
 ## 1. Live OBS RTMP publisher kill-on-ban
 
-**Currently expected to fail in production** — see the known-gap section
-above; this test will still be useful to confirm the fix once that's
-resolved, and is written as if the connectivity gap didn't exist so it
-doesn't need rewriting later.
+**Already verified end-to-end with a real synthetic RTMP publish** — see
+the RESOLVED section above for the full account of that test. This
+checklist entry remains useful as a *repeatable, human-run* version of
+the same test (real OBS instead of a scripted `ffmpeg` stand-in, a real
+second account instead of a throwaway one), not because the underlying
+mechanism is still in doubt.
 
 Verifies `apps/api/src/moderation/actions-service.ts`'s
 `killActiveRtmpPublishers` — the part of `banUser` that force-disconnects

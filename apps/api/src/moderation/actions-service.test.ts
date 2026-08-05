@@ -100,13 +100,17 @@ describe("banUser", () => {
         // The client list: one matching publisher (should be killed), one
         // matching *viewer* on the same stream name (publish: false —
         // must NOT be killed), one publisher on an unrelated stream (must
-        // NOT be killed).
+        // NOT be killed). `stream` here is deliberately SRS's internal
+        // stream-object id (opaque, unrelated to `name`) — matching real
+        // SRS responses (confirmed live against production, see
+        // actions-service.ts's SrsClientEntry comment); `name` is the
+        // actual match field.
         return new Response(
           JSON.stringify({
             clients: [
-              { id: "111", stream: target.id, publish: true },
-              { id: "222", stream: target.id, publish: false },
-              { id: "333", stream: "some-other-creator-id", publish: true },
+              { id: "111", stream: "vid-aaa111", name: target.id, publish: true },
+              { id: "222", stream: "vid-bbb222", name: target.id, publish: false },
+              { id: "333", stream: "vid-ccc333", name: "some-other-creator-id", publish: true },
             ],
           }),
           { status: 200 }

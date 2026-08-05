@@ -31,7 +31,18 @@ function fetchWithTimeout(url: string | URL, init: RequestInit, timeoutMs: numbe
 
 interface SrsClientEntry {
   id: string;
+  // NOT the stream name/userId — SRS's own source
+  // (vendor/trunk/src/app/srs_app_statistic.cpp's SrsStatisticClient::dumps)
+  // sets this to stream_->id_, an internal SRS-generated stream-object
+  // identifier (e.g. "vid-275253j"), unrelated to the RTMP/WHIP/WHEP
+  // stream name used to publish/play. `name` (req_->stream_) is the
+  // actual match target. Found live during a real ffmpeg-publish +
+  // moderation/actions-service.ts kill test against production: the real
+  // client-list response had stream="vid-275253j" while name correctly
+  // held the real userId — filtering on `stream` here never matched
+  // anything.
   stream: string;
+  name: string;
   publish: boolean;
 }
 
@@ -54,7 +65,7 @@ async function listSrsPlaybackClientIds(providerStreamId: string): Promise<Set<s
     if (!res.ok) return new Set();
     const data = (await res.json()) as { clients?: SrsClientEntry[] };
     return new Set(
-      (data.clients ?? []).filter((c) => c.stream === providerStreamId && c.publish === false).map((c) => c.id)
+      (data.clients ?? []).filter((c) => c.name === providerStreamId && c.publish === false).map((c) => c.id)
     );
   } catch {
     return new Set();

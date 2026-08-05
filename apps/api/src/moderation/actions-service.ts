@@ -10,7 +10,17 @@ import { teardownWhepSession } from "../streams/whep-routes.js";
 
 interface SrsClientEntry {
   id: string;
+  // NOT the stream name/userId — SRS's own source
+  // (vendor/trunk/src/app/srs_app_statistic.cpp's SrsStatisticClient::dumps)
+  // sets this to stream_->id_, an internal SRS-generated stream-object
+  // identifier (e.g. "vid-275253j"), completely unrelated to the RTMP
+  // stream name used to publish. `name` (req_->stream_) is the actual
+  // match target. Found live: a real ffmpeg test publish against
+  // production showed stream="vid-275253j" while name correctly held the
+  // real userId — this field was never usable for matching, and the
+  // original filter below silently never matched anything as a result.
   stream: string;
+  name: string;
   publish: boolean;
 }
 
@@ -75,13 +85,15 @@ function fetchWithTimeout(url: string | URL, init: RequestInit, timeoutMs: numbe
 //    against SRS's real-time client list is the only correct source of
 //    truth for "which connection, if any, is this user's active publish."
 //
-// 6. WHY FILTER stream === providerStreamId, NOT ip OR anything else:
+// 6. WHY FILTER name === providerStreamId, NOT ip OR anything else:
 //    `provider_stream_id` on the `streams` table is the creator's own
 //    userId (streams/service.ts's composeStreamKeyField/getPlaybackUrl —
 //    the same identifier SRS already knows this stream by for
 //    RTMP/WHIP/HLS), so `targetUserId` passed straight through as the
 //    filter is both correct and requires no extra DB lookup inside this
-//    function.
+//    function. Matched against `name`, not `stream` — see
+//    SrsClientEntry's own comment for why `stream` is the wrong field
+//    (an internal SRS stream-object id, not the RTMP stream name).
 async function killActiveRtmpPublishers(providerStreamId: string): Promise<void> {
   let res: Response;
   try {
@@ -108,9 +120,7 @@ async function killActiveRtmpPublishers(providerStreamId: string): Promise<void>
   // comment in whep-session-registry.ts for the equivalent WHEP-side
   // finding) — a banned creator's session is killed regardless of which
   // protocol they published with.
-  const targets = (data.clients ?? []).filter(
-    (entry) => entry.stream === providerStreamId && entry.publish === true
-  );
+  const targets = (data.clients ?? []).filter((entry) => entry.name === providerStreamId && entry.publish === true);
 
   await Promise.all(
     targets.map(async (entry) => {

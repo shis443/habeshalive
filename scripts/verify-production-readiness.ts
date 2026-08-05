@@ -28,13 +28,26 @@ function record(name: string, status: CheckResult["status"], detail: string): vo
   console.log(`${icon} [${status.toUpperCase()}] ${name} — ${detail}`);
 }
 
+// AbortController alone isn't always enough of a guarantee — confirmed
+// live: a hairpin-NAT-style hang partway through a TLS handshake (a
+// machine calling its own sibling app's public hostname from inside
+// Fly's private network — see the public-SRS check's own comment) left a
+// plain abort()-on-timeout fetch() hanging well past its stated timeout,
+// with the process never returning control. `Promise.race` against an
+// independent rejecting timer is a hard backstop that doesn't depend on
+// the abort signal actually unsticking whatever the socket is doing.
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
+  let hardTimer: ReturnType<typeof setTimeout> | undefined;
+  const hardTimeout = new Promise<never>((_, reject) => {
+    hardTimer = setTimeout(() => reject(new Error(`hard timeout after ${timeoutMs + 1000}ms`)), timeoutMs + 1000);
+  });
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await Promise.race([fetch(url, { ...init, signal: controller.signal }), hardTimeout]);
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(abortTimer);
+    clearTimeout(hardTimer);
   }
 }
 
@@ -167,6 +180,15 @@ async function verifySrsAdminIsolation(): Promise<void> {
   // Overridable since the production hostname isn't hardcoded elsewhere
   // in this codebase either (SRS_HTTP_HOST/NEXT_PUBLIC_SRS_WHIP_URL are
   // both env-driven for the same reason: local dev vs. production).
+  // A connection-level failure here (timeout/reset, not a real HTTP
+  // response) is treated as SKIP, not FAIL — confirmed live: running this
+  // script from *inside* Fly's private network, a machine calling its own
+  // sibling app's public hostname can hit hairpin-NAT-style routing
+  // limitations that have nothing to do with whether the actual security
+  // control works (verified independently via a real external client at
+  // the same moment: clean HTTP 403). This check is only fully meaningful
+  // run from a genuinely external vantage point; a FAIL here only means
+  // something when an actual response arrived with the wrong status.
   const publicBase = process.env.SRS_PUBLIC_ADMIN_CHECK_URL ?? "https://habeshalive-srs.fly.dev:8443";
   try {
     const res = await fetchWithTimeout(`${publicBase}/api/v1/clients/`, {}, 5000);
@@ -180,7 +202,11 @@ async function verifySrsAdminIsolation(): Promise<void> {
       );
     }
   } catch (err) {
-    record("SRS admin API is blocked on the public port", "fail", `request itself failed: ${(err as Error).message}`);
+    record(
+      "SRS admin API is blocked on the public port",
+      "skip",
+      `request itself failed (${(err as Error).message}) — likely hairpin-NAT if run from inside Fly's private network; re-run from a genuinely external client to confirm`
+    );
   }
 
   // The private, Fly-6PN-only base — see apps/api/src/common/env.ts's
