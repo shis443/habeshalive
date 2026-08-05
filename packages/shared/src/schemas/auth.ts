@@ -78,7 +78,9 @@ export const authUserSchema = z.object({
   username: z.string(),
   displayName: z.string(),
   avatarUrl: z.string().nullable(),
-  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
+  // 'super_admin', 'finance_auditor' added as a new, narrower tier.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
   showSensitiveContent: z.boolean(),
 });
 export type AuthUser = z.infer<typeof authUserSchema>;
@@ -107,7 +109,9 @@ export const myAccountSchema = z.object({
   pendingPhoneNumber: z.string().nullable(),
   pendingEmail: z.string().nullable(),
   hasPassword: z.boolean(),
-  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
+  // 'super_admin', 'finance_auditor' added as a new, narrower tier.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
   isVerified: z.boolean(),
   deletionRequestedAt: z.string().nullable(),
   createdAt: z.string(),

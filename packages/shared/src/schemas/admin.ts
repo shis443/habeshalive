@@ -181,7 +181,9 @@ export const userListItemSchema = z.object({
   displayName: z.string(),
   phoneNumber: z.string().nullable(),
   email: z.string().nullable(),
-  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
+  // 'super_admin', 'finance_auditor' added as a new, narrower tier.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
   isBanned: z.boolean(),
   createdAt: z.string(),
   walletBalanceSantim: z.number().int(),
@@ -191,7 +193,9 @@ export const userListItemSchema = z.object({
 export type UserListItem = z.infer<typeof userListItemSchema>;
 
 export const updateUserRoleSchema = z.object({
-  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
+  // 'super_admin', 'finance_auditor' added as a new, narrower tier.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
 });
 export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
 

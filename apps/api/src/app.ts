@@ -20,6 +20,7 @@ import { redis } from "./common/redis.js";
 import { captureUnexpectedError } from "./common/sentry.js";
 import { moderationRoutes } from "./moderation/routes.js";
 import { notificationRoutes } from "./notifications/routes.js";
+import { getRolePermissions, type PermissionKey } from "./common/rbac.js";
 import { searchRoutes } from "./search/routes.js";
 import { streamRoutes } from "./streams/routes.js";
 import { whepRoutes } from "./streams/whep-routes.js";
@@ -124,17 +125,75 @@ export function buildApp() {
   // (a human clicking around a dashboard, not a hot read path), so the
   // extra per-request query here isn't the tradeoff it would be on
   // something like GET /streams/live.
-  app.decorate("requireAdmin", async (req, reply) => {
+  //
+  // Shared by requireAdmin/requireRole/requirePermission below — each
+  // authenticates and re-reads the live role the same way, differing only
+  // in what they do with it. Returns null (after already writing the 401
+  // reply) if authentication itself failed, so callers can just check for
+  // null and return early without duplicating the jwtVerify try/catch
+  // three times.
+  async function authenticateAndGetRole(
+    req: import("fastify").FastifyRequest,
+    reply: import("fastify").FastifyReply
+  ): Promise<string | null> {
     try {
       await req.jwtVerify();
     } catch {
       reply.status(401).send({ error: "unauthorized" });
-      return;
+      return null;
     }
     const { rows } = await pool.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [req.user.sub]);
-    if (rows[0]?.role !== "admin") {
+    return rows[0]?.role ?? null;
+  }
+
+  // db/migrations/0026_rbac_role_isolation.sql renamed the old flat
+  // 'admin' role to 'super_admin' as part of introducing
+  // moderator/finance_auditor as real, narrower tiers alongside it (see
+  // that migration's own adversarial-reasoning header for the full
+  // rationale, including why this is enforced here — application-level,
+  // re-checked live — rather than via Postgres RLS).
+  app.decorate("requireAdmin", async (req, reply) => {
+    const role = await authenticateAndGetRole(req, reply);
+    if (role === null) return;
+    if (role !== "super_admin") {
       reply.status(403).send({ error: "forbidden" });
     }
+  });
+
+  // Parameterized version of requireAdmin — for routes that should admit
+  // more than one specific role (e.g. both super_admin and moderator) but
+  // still not everyone. A factory, not a fixed preHandler, since which
+  // roles are allowed varies per route: use as
+  // `preHandler: app.requireRole(["super_admin", "moderator"])`.
+  app.decorate("requireRole", (allowedRoles: string[]) => {
+    return async (req: import("fastify").FastifyRequest, reply: import("fastify").FastifyReply) => {
+      const role = await authenticateAndGetRole(req, reply);
+      if (role === null) return;
+      if (!allowedRoles.includes(role)) {
+        reply.status(403).send({ error: "forbidden" });
+      }
+    };
+  });
+
+  // The genuinely fine-grained check: gates on a specific *capability*
+  // (db/migrations/0026_rbac_role_isolation.sql's role_permissions table)
+  // rather than an explicit role list, so a route asking "can this caller
+  // view financial data" doesn't need to know or maintain which roles
+  // currently happen to grant that — e.g.
+  // `preHandler: app.requirePermission("can_view_financials")` admits
+  // both finance_auditor and super_admin today without either being named
+  // at the route, and stays correct if the permission set for a role ever
+  // changes (a role_permissions data change, not a code change at every
+  // call site).
+  app.decorate("requirePermission", (permission: PermissionKey) => {
+    return async (req: import("fastify").FastifyRequest, reply: import("fastify").FastifyReply) => {
+      const role = await authenticateAndGetRole(req, reply);
+      if (role === null) return;
+      const permissions = await getRolePermissions(role);
+      if (!permissions || !permissions[permission]) {
+        reply.status(403).send({ error: "forbidden" });
+      }
+    };
   });
 
   app.setErrorHandler((err, req, reply) => {

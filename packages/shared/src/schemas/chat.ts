@@ -22,7 +22,9 @@ export const chatMessageSchema = z.object({
   // computed-not-stored pattern as gifterBadgeTier above — a later role
   // change doesn't rewrite history, it just changes what the next message
   // reflects).
-  senderRole: z.enum(["viewer", "creator", "moderator", "admin"]),
+  // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
+  // 'super_admin', 'finance_auditor' added as a new, narrower tier.
+  senderRole: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
   // Whole months since subscriptions.started_at for an active subscription
   // to THIS stream's creator specifically; null if not subscribed.
   subscriberMonths: z.number().int().nullable(),

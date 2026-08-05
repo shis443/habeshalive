@@ -6,7 +6,9 @@ import { useState } from "react";
 import styles from "./AdminQueue.module.css";
 import userStyles from "./UsersList.module.css";
 
-const ROLES = ["viewer", "creator", "moderator", "admin"] as const;
+// db/migrations/0026_rbac_role_isolation.sql renamed 'admin' to
+// 'super_admin' and added 'finance_auditor' as a new, narrower tier.
+const ROLES = ["viewer", "creator", "moderator", "finance_auditor", "super_admin"] as const;
 
 export function UsersList({ items }: { items: UserListItem[] }) {
   const router = useRouter();

@@ -42,7 +42,9 @@ export const viewerListEntrySchema = z.object({
   username: z.string(),
   displayName: z.string(),
   avatarUrl: z.string().nullable(),
-  role: z.enum(["viewer", "creator", "moderator", "admin"]),
+  // db/migrations/0026_rbac_role_isolation.sql — 'admin' renamed to
+  // 'super_admin', 'finance_auditor' added as a new, narrower tier.
+  role: z.enum(["viewer", "creator", "moderator", "super_admin", "finance_auditor"]),
   gifterBadgeTier: z.enum(["none", "bronze", "silver", "gold", "platinum"]),
 });
 export type ViewerListEntry = z.infer<typeof viewerListEntrySchema>;
