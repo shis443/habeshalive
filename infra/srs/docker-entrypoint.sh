@@ -63,4 +63,11 @@ if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
   cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
 fi
 
+# Path-filtering proxy in front of SRS's http_api (1985) — see
+# conf/whip-proxy.nginx.conf's file comment. fly.toml's WHIP [[services]]
+# block points its public 8443 mapping at this proxy's port (1986), not
+# SRS's real 1985 directly, so this must be running before SRS starts
+# accepting the traffic Fly forwards to it.
+nginx -c /usr/local/srs/conf/whip-proxy.nginx.conf -g "daemon off;" &
+
 exec /usr/local/srs/objs/srs -c /usr/local/srs/conf/srs.conf

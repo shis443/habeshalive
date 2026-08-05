@@ -40,6 +40,15 @@ primary_region = "ams"
 #     claimed by http_service below) with its own TLS termination — a
 #     browser on an HTTPS page (Vercel) can't POST to a plain http:// WHIP
 #     endpoint any more than it could fetch an http:// HLS manifest.
+#
+#     internal_port is 1986 (the docker-entrypoint.sh-launched nginx path
+#     filter), NOT SRS's real http_api port 1985 directly — SRS's http_api
+#     also serves /api/v1/*, its unauthenticated admin surface (client
+#     enumeration, DELETE-to-kick), on this exact same listener with no
+#     path-scoped ACL of its own. Confirmed live before this fix: that
+#     admin API was reachable on this exact port, unauthenticated, from
+#     the public internet. See infra/srs/conf/whip-proxy.nginx.conf for
+#     the fix — it allow-lists only /rtc/v1/whip/ and 403s everything else.
 #  2. Media: once signaling completes, actual audio/video flows over UDP
 #     (ICE/SRTP) on port 8000 below. Unverified whether Fly's UDP proxying
 #     "just works" with SRS's default 0.0.0.0 bind or needs more — Fly's own
@@ -47,7 +56,7 @@ primary_region = "ams"
 #     (fly-global-services) on some setups; testing this empirically rather
 #     than assuming, same as the RTMP shared-IPv4 issue earlier.
 [[services]]
-  internal_port = 1985
+  internal_port = 1986
   protocol = "tcp"
   auto_stop_machines = false
   auto_start_machines = true
