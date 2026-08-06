@@ -5,8 +5,14 @@ const CATEGORY_LABELS: Record<AvatarCategory, string> = {
   background: "Background",
   skin_tone: "Skin Tone",
   hair: "Hair",
+  hair_color: "Hair Color",
   eyes: "Eyes",
+  eyebrows: "Eyebrows",
+  mouth: "Mouth",
+  facial_hair: "Facial Hair",
   accessories: "Accessories",
+  clothing: "Clothing",
+  clothes_color: "Clothing Color",
 };
 
 export function AvatarCategoryTabs({

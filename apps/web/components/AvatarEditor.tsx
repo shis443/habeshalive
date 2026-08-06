@@ -3,10 +3,10 @@
 import {
   renderAvatarSvg,
   type AvatarCategory,
-  type AvatarColors,
   type AvatarManifest,
   type AvatarPart,
   type AvatarSelection,
+  type AvatarValues,
 } from "@habeshalive/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,7 +17,26 @@ import { AvatarPreviewHero } from "./AvatarPreviewHero";
 import styles from "./AvatarEditor.module.css";
 import { BackIcon, CheckIcon, ShuffleIcon } from "./icons";
 
-const CATEGORIES: AvatarCategory[] = ["background", "skin_tone", "hair", "eyes", "accessories"];
+const CATEGORIES: AvatarCategory[] = [
+  "background",
+  "skin_tone",
+  "hair",
+  "hair_color",
+  "eyes",
+  "eyebrows",
+  "mouth",
+  "facial_hair",
+  "accessories",
+  "clothing",
+  "clothes_color",
+];
+
+// Mirrors apps/api/src/avatars/service.ts's COLOR_CATEGORIES — this
+// client-side render call needs the exact same category/value-type split
+// as the server-side one, since both go through the identical shared
+// renderAvatarSvg() and must produce identical output (that's the whole
+// point of sharing the function — see avatarRender.ts's own comment).
+const COLOR_CATEGORIES = new Set<AvatarCategory>(["background", "skin_tone", "hair_color", "clothes_color"]);
 
 type Draft = Record<AvatarCategory, string>;
 
@@ -35,14 +54,14 @@ function pickRandomDraft(manifest: AvatarManifest): Draft {
   return draft;
 }
 
-function resolveColors(manifest: AvatarManifest, draft: Draft): AvatarColors {
-  const colors = {} as AvatarColors;
+function resolveValues(manifest: AvatarManifest, draft: Draft): AvatarValues {
+  const values = {} as AvatarValues;
   for (const category of CATEGORIES) {
     const options = manifest[category] ?? [];
     const part = options.find((p) => p.id === draft[category]);
-    colors[category] = part?.swatchColor ?? null;
+    values[category] = part ? (COLOR_CATEGORIES.has(category) ? part.swatchColor : part.name) : null;
   }
-  return colors;
+  return values;
 }
 
 export function AvatarEditor({
@@ -70,7 +89,7 @@ export function AvatarEditor({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const svg = useMemo(() => renderAvatarSvg(resolveColors(manifest, draft)), [manifest, draft]);
+  const svg = useMemo(() => renderAvatarSvg(resolveValues(manifest, draft)), [manifest, draft]);
 
   function handleSelectPart(category: AvatarCategory, part: AvatarPart) {
     setDraft((prev) => ({ ...prev, [category]: part.id }));

@@ -1,15 +1,32 @@
 import {
   renderAvatarSvg,
   type AvatarCategory,
-  type AvatarColors,
   type AvatarManifest,
   type AvatarPart,
   type AvatarSelection,
+  type AvatarValues,
 } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
-const CATEGORIES: AvatarCategory[] = ["background", "skin_tone", "hair", "eyes", "accessories"];
+const CATEGORIES: AvatarCategory[] = [
+  "background",
+  "skin_tone",
+  "hair",
+  "hair_color",
+  "eyes",
+  "eyebrows",
+  "mouth",
+  "facial_hair",
+  "accessories",
+  "clothing",
+  "clothes_color",
+];
+
+// Style categories pass their avatar_parts.name (the literal
+// @dicebear/avataaars option key) to the renderer; color categories pass
+// swatch_color (a hex string). See avatarRender.ts's AvatarValues comment.
+const COLOR_CATEGORIES = new Set<AvatarCategory>(["background", "skin_tone", "hair_color", "clothes_color"]);
 
 interface PartRow {
   id: string;
@@ -42,8 +59,19 @@ export async function randomizeSelection(): Promise<AvatarSelection> {
   for (const category of CATEGORIES) {
     const options = manifest[category] ?? [];
     if (options.length === 0) continue;
+    // Always a real pick, never null — unlike the old flat-swatch model,
+    // every category now has only genuine, always-renderable options
+    // (a "no facial hair"/"no accessories" choice is itself a real row,
+    // avatar_parts.name = 'blank', not a null sentinel — see
+    // db/migrations/0029_avataaars_render.sql). A previous version of
+    // this function treated `swatchColor === null` as "this pick means
+    // unset" — that was specific to the old placeholder's "None" rows and
+    // is wrong now that style categories legitimately have a null
+    // swatchColor on every real option, which would have made randomize
+    // silently pick nothing for hair/eyes/eyebrows/mouth/facialHair/
+    // accessories/clothing every time.
     const pick = options[Math.floor(Math.random() * options.length)]!;
-    selection[category] = pick.swatchColor === null ? null : pick.id;
+    selection[category] = pick.id;
   }
   return selection;
 }
@@ -112,22 +140,19 @@ export async function saveSelection(userId: string, selection: AvatarSelection):
 }
 
 export async function renderUserAvatar(userId: string): Promise<string> {
-  const { rows } = await pool.query<{ category: AvatarCategory; swatch_color: string | null }>(
-    `SELECT s.category, p.swatch_color
+  const { rows } = await pool.query<{ category: AvatarCategory; name: string; swatch_color: string | null }>(
+    `SELECT s.category, p.name, p.swatch_color
      FROM user_avatar_selections s
      JOIN avatar_parts p ON p.id = s.part_id
      WHERE s.user_id = $1`,
     [userId]
   );
 
-  const colors: AvatarColors = {
-    background: null,
-    skin_tone: null,
-    hair: null,
-    eyes: null,
-    accessories: null,
-  };
-  for (const row of rows) colors[row.category] = row.swatch_color;
+  const values: AvatarValues = {} as AvatarValues;
+  for (const category of CATEGORIES) values[category] = null;
+  for (const row of rows) {
+    values[row.category] = COLOR_CATEGORIES.has(row.category) ? row.swatch_color : row.name;
+  }
 
-  return renderAvatarSvg(colors);
+  return renderAvatarSvg(values);
 }

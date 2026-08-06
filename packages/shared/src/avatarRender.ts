@@ -1,38 +1,84 @@
+import { createAvatar } from "@dicebear/core";
+import * as avataaars from "@dicebear/avataaars";
+import type { Options as AvataaarsOptions } from "@dicebear/avataaars";
 import type { AvatarCategory } from "./schemas/avatars.js";
 
-// Generates a flat-swatch placeholder avatar as an SVG string. This stands
-// in for real layered character art — swapping in real PNG/SVG assets later
-// only means changing this function, not the manifest/selection data model.
-// Shared between the backend's persisted render and the editor's live
-// preview so what you see while picking options exactly matches what gets
-// saved.
+// Real layered character art (@dicebear/avataaars — a headless, pure-SVG
+// reimplementation of Pablo Stanley's "Avataaars" design, no React/DOM
+// involved) replacing the original flat-swatch placeholder — see
+// db/migrations/0029_avataaars_render.sql's comment for the full story.
+// Still one function, still shared between the backend's persisted
+// render (apps/api/src/avatars/service.ts) and the editor's live preview
+// (AvatarPreviewHero.tsx's dangerouslySetInnerHTML), so what you see while
+// picking options is pixel-identical to what gets saved — same contract
+// the original placeholder had, just a real renderer underneath now.
 
-export type AvatarColors = Record<AvatarCategory, string | null>;
+// One value per BIRQ category: for a style category (hair/eyes/eyebrows/
+// mouth/facialHair/accessories/clothing) this is the literal
+// @dicebear/avataaars option key stored in avatar_parts.name (e.g.
+// "curly", "happy") — see that migration's comment for why the key lives
+// directly in `name` rather than a separate column. For a color category
+// (background/skin_tone/hair_color/clothes_color) this is a "#rrggbb" hex
+// string from avatar_parts.swatch_color, matching this table's existing
+// convention from before this renderer swap.
+export type AvatarValues = Record<AvatarCategory, string | null>;
 
-const DEFAULT_BACKGROUND = "#171f33"; // surface-container
-const DEFAULT_SKIN = "#a0785a";
+// avatar_parts stores color values as "#rrggbb" (this table's convention
+// since 0004_avatars.sql) but @dicebear/core's own convertColor always
+// prepends "#" itself (confirmed against the installed package's
+// utils/convertColor.js — it is not conditional), so a value arriving
+// here already carrying "#" would come out "##rrggbb" if passed through
+// unchanged.
+function stripHash(hex: string): string {
+  return hex.startsWith("#") ? hex.slice(1) : hex;
+}
 
-export function renderAvatarSvg(colors: AvatarColors): string {
-  const background = colors.background ?? DEFAULT_BACKGROUND;
-  const skin = colors.skin_tone ?? DEFAULT_SKIN;
+// Defaults for a category with no selection yet (new account, or one of
+// the three categories 0029's migration cleared selections for) — same
+// "always render something coherent, never a broken/half-composed
+// avatar" reasoning the original placeholder's DEFAULT_BACKGROUND/
+// DEFAULT_SKIN constants had, extended to every category since a real
+// layered avatar can't sensibly omit a body part the way a flat shape
+// layer could just not draw.
+const DEFAULTS: AvatarValues = {
+  background: "#171f33", // surface-container, matches the old placeholder default
+  skin_tone: "#d08b5b", // "Brown" — verified against @dicebear/avataaars's real skin tone set
+  hair: "shortRound",
+  hair_color: "#4a312c", // "Brown Dark"
+  eyes: "default",
+  eyebrows: "default",
+  mouth: "smile",
+  facial_hair: "blank",
+  accessories: "blank",
+  clothing: "shirtCrewNeck",
+  clothes_color: "#5199e4", // "Blue"
+};
 
-  const hairLayer = colors.hair
-    ? `<path d="M40 95 A60 60 0 0 1 160 95 L160 60 A60 55 0 0 0 40 60 Z" fill="${colors.hair}" />`
-    : "";
+// avatar_parts.name is a plain DB string, not a literal union — there's
+// no real end-to-end type safety to preserve here regardless (the actual
+// guardrail is the CHECK constraint + curated seed data in
+// db/migrations/0029_avataaars_render.sql, not TypeScript). This cast
+// just satisfies @dicebear/avataaars's stricter Options type without
+// repeating an "extract array element type" conditional for every field.
+type Loose = Record<string, string[] | undefined>;
 
-  const eyesLayer = colors.eyes
-    ? `<circle cx="82" cy="105" r="6" fill="${colors.eyes}" /><circle cx="118" cy="105" r="6" fill="${colors.eyes}" />`
-    : "";
+export function renderAvatarSvg(values: AvatarValues): string {
+  const v = (category: AvatarCategory) => values[category] ?? DEFAULTS[category]!;
 
-  const accessoriesLayer = colors.accessories
-    ? `<circle cx="55" cy="130" r="5" fill="${colors.accessories}" /><circle cx="145" cy="130" r="5" fill="${colors.accessories}" />`
-    : "";
+  const options: Loose = {
+    style: ["circle"],
+    backgroundColor: [stripHash(v("background"))],
+    skinColor: [stripHash(v("skin_tone"))],
+    top: [v("hair")],
+    hairColor: [stripHash(v("hair_color"))],
+    eyes: [v("eyes")],
+    eyebrows: [v("eyebrows")],
+    mouth: [v("mouth")],
+    facialHair: [v("facial_hair")],
+    accessories: [v("accessories")],
+    clothing: [v("clothing")],
+    clothesColor: [stripHash(v("clothes_color"))],
+  };
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <rect width="200" height="200" fill="${background}" />
-  <circle cx="100" cy="120" r="55" fill="${skin}" />
-  ${hairLayer}
-  ${eyesLayer}
-  ${accessoriesLayer}
-</svg>`;
+  return createAvatar(avataaars, options as AvataaarsOptions).toString();
 }

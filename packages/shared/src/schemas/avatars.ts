@@ -1,11 +1,21 @@
 import { z } from "zod";
 
+// db/migrations/0029_avataaars_render.sql widened this from the original
+// 5-category flat-swatch set to match @dicebear/avataaars's real option
+// categories. 'hair'/'eyes'/'accessories' kept their names but changed
+// meaning (color -> style key) — see that migration's own comment.
 export const avatarCategorySchema = z.enum([
   "background",
   "skin_tone",
   "hair",
+  "hair_color",
   "eyes",
+  "eyebrows",
+  "mouth",
+  "facial_hair",
   "accessories",
+  "clothing",
+  "clothes_color",
 ]);
 export type AvatarCategory = z.infer<typeof avatarCategorySchema>;
 
