@@ -45,5 +45,22 @@
     "security": "ደህንነት",
     "safetyCenter": "የደህንነት ማዕከል",
     "allLegalDocs": "ሁሉም ህጋዊ ሰነዶች"
+  },
+  "watch": {
+    "offlineTitle": "@{username} አሁን ቀጥታ ስርጭት ላይ አይደለም",
+    "offlineText": "ቆይተው ይመልከቱ ወይም ሌሎች ፈጣሪዎችን ያስሱ።"
+  },
+  "embed": {
+    "offlineTitle": "@{username} አሁን ቀጥታ ስርጭት ላይ አይደለም።"
+  },
+  "chat": {
+    "welcome": "እንኳን ወደ ቻት በደህና መጡ! እባክዎ አክባሪ ይሁኑ።",
+    "placeholder": "መልዕክት ይላኩ..."
+  },
+  "gursha": {
+    "button": "ጉርሻ"
+  },
+  "actionRow": {
+    "giftASub": "ሳብስክራይብ ስጦታ"
   }
 }

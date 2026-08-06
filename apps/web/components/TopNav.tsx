@@ -255,16 +255,18 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
                       {language === lang && <CheckIcon className={styles.checkMark} />}
                     </button>
                   ))}
-                  {language === "Amharic" && (
+                  {/* All five UI_LANGUAGES now have a real (if partial)
+                      message catalog — see messages/*.json and
+                      IntlProvider.tsx's MESSAGES_BY_LOCALE. Same coverage
+                      level for all of them: nav/menu chrome plus the
+                      watch/chat/gursha strings, everything else in the app
+                      still English — so one shared note, not a
+                      per-language special case. */}
+                  {language !== "English" && (
                     <p className={styles.settingsNote}>
-                      Amharic saved — navigation and menus are translated. Most page content is
-                      still English while full translation coverage is worked on.
-                    </p>
-                  )}
-                  {language !== "English" && language !== "Amharic" && (
-                    <p className={styles.settingsNote}>
-                      {language} saved. The interface itself is still English-only — full
-                      translation is coming later.
+                      {language} saved — navigation, menus, and some player/chat text are
+                      translated. Most page content is still English while full translation
+                      coverage is worked on.
                     </p>
                   )}
                 </>

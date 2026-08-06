@@ -1,0 +1,66 @@
+{
+  "nav": {
+    "explore": "ዳህስስ",
+    "following": "ትስዕቦም ዘለኻ",
+    "goLive": "ብቐጥታ ጀምር",
+    "wallet": "ቦርሳ",
+    "search": "ድለይ",
+    "more": "ተወሳኺ",
+    "notifications": "ማሳወቅታት",
+    "noNotifications": "ሓድሽ ማሳወቅታ የለን",
+    "settings": "ቅንብራት",
+    "language": "ቋንቋ",
+    "darkTheme": "ጸላም ጌጥ",
+    "cookiesAds": "ኩኪታትን ምርጫ ናይ ማስታወቅታን",
+    "labeledContent": "ዝተሓበረ ትሕዝቶ",
+    "logIn": "እቶ",
+    "signUp": "ተመዝገብ",
+    "dashboard": "ዳሽቦርድ",
+    "logOut": "ውጻእ",
+    "loggingOut": "ይወጽእ ኣሎ…",
+    "yourAccount": "ሕሳብካ",
+    "groupGeneral": "ሓፈሻዊ",
+    "groupHelpLegal": "ሓገዝን ሕግን",
+    "showSensitive": "ስሱዕ/ናይ ዓበይቲ ትሕዝቶ ኣርኢ",
+    "loading": "ይጽዕን ኣሎ…"
+  },
+  "moreGeneral": {
+    "browse": "ድህስስ",
+    "help": "ሓገዝ",
+    "about": "ብዛዕባና",
+    "advertisers": "ኣስተዋወቅቲ",
+    "blog": "ብሎግ",
+    "careers": "ስራሕ",
+    "giftCards": "ካርድታት ህያብ",
+    "anchorProgram": "ፕሮግራም ፈጠርቲ"
+  },
+  "moreLegal": {
+    "communityGuidelines": "መምርሒታት ማሕበረሰብ",
+    "privacyNotice": "መግለጺ ውልቃዊነት",
+    "privacyCenter": "ማእከል ውልቃዊነት",
+    "cookieNotice": "መግለጺ ኩኪ",
+    "adChoices": "ምርጫ ማስታወቅታ",
+    "terms": "ውዕላት",
+    "accessibility": "መግለጺ ተበጻሕነት",
+    "security": "ድሕንነት",
+    "safetyCenter": "ማእከል ድሕንነት",
+    "allLegalDocs": "ኩሎም ሕጋውያን ሰነዳት"
+  },
+  "watch": {
+    "offlineTitle": "@{username} ሕጂ ብቐጥታ ኣይኮነን ዘሎ",
+    "offlineText": "ደሓር ተመለሱ ወይ ካልኦት ፈጠርቲ ርአዩ።"
+  },
+  "embed": {
+    "offlineTitle": "@{username} ሕጂ ብቐጥታ ኣይኮነን ዘሎ።"
+  },
+  "chat": {
+    "welcome": "እንቋዕ ናብዛ ቻት ብደሓን መጻእኩም! ብኽብረትኩም ኣኽብሩ።",
+    "placeholder": "መልእኽቲ ስደድ..."
+  },
+  "gursha": {
+    "button": "ጉርሻ"
+  },
+  "actionRow": {
+    "giftASub": "ሳብስክራይብ 💡"
+  }
+}

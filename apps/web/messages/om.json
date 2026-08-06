@@ -1,0 +1,66 @@
+{
+  "nav": {
+    "explore": "Sakatta'i",
+    "following": "Hordofamaa jira",
+    "goLive": "Dhiheessi",
+    "wallet": "Kusaa",
+    "search": "Barbaadi",
+    "more": "Dabalata",
+    "notifications": "Beeksisawwan",
+    "noNotifications": "Beeksisni haaraan hin jiru",
+    "settings": "Qindaa'ina",
+    "language": "Afaan",
+    "darkTheme": "Bifa Dukkanaa",
+    "cookiesAds": "Kuukiiwwan fi Filannoo Beeksisaa",
+    "labeledContent": "Qabiyyee Mallattaa'e",
+    "logIn": "Seeni",
+    "signUp": "Galmaa'i",
+    "dashboard": "Daashboordii",
+    "logOut": "Ba'i",
+    "loggingOut": "Ba'aa jira…",
+    "yourAccount": "Herrega Keessan",
+    "groupGeneral": "Waliigalaa",
+    "groupHelpLegal": "Gargaarsaa fi Seera",
+    "showSensitive": "Qabiyyee saaxilamaa/nama guddaa mul'isi",
+    "loading": "Fe'aa jira…"
+  },
+  "moreGeneral": {
+    "browse": "Sakatta'i",
+    "help": "Gargaarsa",
+    "about": "Waa'ee keenya",
+    "advertisers": "Beeksisxootan",
+    "blog": "Bilogii",
+    "careers": "Carraa Hojii",
+    "giftCards": "Kaardii Kennaa",
+    "anchorProgram": "Sagantaa Uumtoota Ankarii"
+  },
+  "moreLegal": {
+    "communityGuidelines": "Qajeelfama Hawaasaa",
+    "privacyNotice": "Beeksisa Iccitii",
+    "privacyCenter": "Giddugala Iccitii",
+    "cookieNotice": "Beeksisa Kuukii",
+    "adChoices": "Filannoo Beeksisaa",
+    "terms": "Haala Fayyadamaa",
+    "accessibility": "Ibsa Argamsiisuu",
+    "security": "Nageenya",
+    "safetyCenter": "Giddugala Nageenyaa",
+    "allLegalDocs": "Sanadoota Seeraa Hunda"
+  },
+  "watch": {
+    "offlineTitle": "@{username} ammatti liiyii miti",
+    "offlineText": "Booda deebi'ii ilaali ykn uumtoota biroo sakatta'i."
+  },
+  "embed": {
+    "offlineTitle": "@{username} ammatti liiyii miti."
+  },
+  "chat": {
+    "welcome": "Baga gara chat dhuftan! Kabajaan mari'adhaa.",
+    "placeholder": "Ergaa ergi..."
+  },
+  "gursha": {
+    "button": "Gurshaa"
+  },
+  "actionRow": {
+    "giftASub": "Sub Kennaa"
+  }
+}

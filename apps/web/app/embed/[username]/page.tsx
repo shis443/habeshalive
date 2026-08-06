@@ -1,3 +1,4 @@
+import { EmbedOfflineNotice } from "@/components/EmbedOfflineNotice";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { getLiveStreamByUsername } from "@/lib/api";
 import styles from "./page.module.css";
@@ -10,11 +11,7 @@ export default async function EmbedPage({ params }: { params: Promise<{ username
   const stream = await getLiveStreamByUsername(username);
 
   if (!stream) {
-    return (
-      <div className={styles.offline}>
-        <p>@{username} is not live right now.</p>
-      </div>
-    );
+    return <EmbedOfflineNotice username={username} />;
   }
 
   return (

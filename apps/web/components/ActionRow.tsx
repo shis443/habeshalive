@@ -1,4 +1,7 @@
+"use client";
+
 import type { SubscriptionTier } from "@habeshalive/shared";
+import { useTranslations } from "next-intl";
 import { EndStreamButton } from "./EndStreamButton";
 import { FollowButton } from "./FollowButton";
 import { GurshaActionButton } from "./GurshaActionButton";
@@ -24,13 +27,15 @@ export function ActionRow({
   isOwner?: boolean;
   tiers: SubscriptionTier[];
 }) {
+  const t = useTranslations("actionRow");
+
   return (
     <div className={styles.row}>
       {isOwner && <EndStreamButton />}
       <FollowButton creatorId={creatorId} isAuthed={isAuthed} initialFollowing={isFollowing} />
       <GurshaActionButton />
       <TierActionDropdown
-        label="Gift a Sub"
+        label={t("giftASub")}
         tiers={tiers}
         creatorId={creatorId}
         isAuthed={isAuthed}

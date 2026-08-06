@@ -45,5 +45,22 @@
     "security": "Security",
     "safetyCenter": "Safety Center",
     "allLegalDocs": "All Legal Docs"
+  },
+  "watch": {
+    "offlineTitle": "@{username} is not live right now",
+    "offlineText": "Check back later or explore other creators."
+  },
+  "embed": {
+    "offlineTitle": "@{username} is not live right now."
+  },
+  "chat": {
+    "welcome": "Welcome to the chat! Please be respectful.",
+    "placeholder": "Send a message..."
+  },
+  "gursha": {
+    "button": "Gursha"
+  },
+  "actionRow": {
+    "giftASub": "Gift a Sub"
   }
 }

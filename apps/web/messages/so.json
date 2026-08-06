@@ -1,0 +1,66 @@
+{
+  "nav": {
+    "explore": "Sahami",
+    "following": "Waad la socotaa",
+    "goLive": "Qaddoo Bixiya",
+    "wallet": "Boorsada",
+    "search": "Raadi",
+    "more": "Dheeraad",
+    "notifications": "Ogaysiisyada",
+    "noNotifications": "Ogaysiis cusub ma jiro",
+    "settings": "Dejinta",
+    "language": "Luqadda",
+    "darkTheme": "Muuqaalka Madow",
+    "cookiesAds": "Cookies iyo Doorashada Xayeysiisyada",
+    "labeledContent": "Content la Calaamadeeyay",
+    "logIn": "Gal",
+    "signUp": "Isdiiwaangeli",
+    "dashboard": "Dashboard-ka",
+    "logOut": "Ka bax",
+    "loggingOut": "Ka baxaya…",
+    "yourAccount": "Akoonkaaga",
+    "groupGeneral": "Guud",
+    "groupHelpLegal": "Caawimaad iyo Sharci",
+    "showSensitive": "Muuji content xasaasi ah/dadka waaweyn",
+    "loading": "Soo raraya…"
+  },
+  "moreGeneral": {
+    "browse": "Sahami",
+    "help": "Caawimaad",
+    "about": "Nagu Saabsan",
+    "advertisers": "Xayeysiiyayaasha",
+    "blog": "Blog-ga",
+    "careers": "Shaqooyinka",
+    "giftCards": "Kaararka Hadiyadda",
+    "anchorProgram": "Barnaamijka Abuurayaasha"
+  },
+  "moreLegal": {
+    "communityGuidelines": "Tilmaamaha Bulshada",
+    "privacyNotice": "Ogeysiiska Asturnaanta",
+    "privacyCenter": "Xarunta Asturnaanta",
+    "cookieNotice": "Ogeysiiska Cookie-ga",
+    "adChoices": "Doorashada Xayeysiisyada",
+    "terms": "Shuruudaha",
+    "accessibility": "Bayaanka Helitaanka",
+    "security": "Ammaanka",
+    "safetyCenter": "Xarunta Badbaadada",
+    "allLegalDocs": "Dhammaan Dukumentiyada Sharciga"
+  },
+  "watch": {
+    "offlineTitle": "@{username} hada ma live aha",
+    "offlineText": "Markale soo eeg ama sahami abuurayaal kale."
+  },
+  "embed": {
+    "offlineTitle": "@{username} hada ma live aha."
+  },
+  "chat": {
+    "welcome": "Kusoo dhawoow chat-ka! Fadlan ixtiraam wada jira.",
+    "placeholder": "Dir xaqiiq..."
+  },
+  "gursha": {
+    "button": "Gursha"
+  },
+  "actionRow": {
+    "giftASub": "Hadiya Sub"
+  }
+}

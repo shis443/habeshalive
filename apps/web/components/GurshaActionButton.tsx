@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import styles from "./TierActionDropdown.module.css";
 import { GiftIcon } from "./icons";
 
@@ -11,6 +12,8 @@ import { GiftIcon } from "./icons";
 // there's still exactly one GurshaModal in the tree regardless of which
 // entry point opened it.
 export function GurshaActionButton() {
+  const t = useTranslations("gursha");
+
   function handleClick() {
     const target = document.querySelector<HTMLButtonElement>('[aria-label="Send Gursha"]');
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -20,7 +23,7 @@ export function GurshaActionButton() {
   return (
     <button type="button" className={styles.trigger} onClick={handleClick}>
       <GiftIcon />
-      Gursha
+      {t("button")}
     </button>
   );
 }

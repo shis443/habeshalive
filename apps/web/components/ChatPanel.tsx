@@ -2,6 +2,7 @@
 
 import type { ChatMessage, GifterBadgeTier, GiftTier, PinnedMessage, Rank, StreamActivity } from "@habeshalive/shared";
 import { Centrifuge } from "centrifuge";
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
 import { openAuthModal } from "@/lib/useAuthModal";
@@ -74,12 +75,6 @@ type ChatEntry =
       createdAt: string;
     };
 
-const WELCOME_MESSAGE: ChatEntry = {
-  id: "sys-welcome",
-  kind: "system",
-  text: "Welcome to the chat! Please be respectful.",
-};
-
 function toEntry(m: ChatMessage): ChatEntry {
   return {
     id: m.id,
@@ -135,8 +130,17 @@ export function ChatPanel({
   currentUserRole: "viewer" | "creator" | "moderator" | "super_admin" | "finance_auditor" | "admin" | null;
   activity: StreamActivity;
 }) {
+  const t = useTranslations("chat");
   const { settings, update: updateSettings } = useChatSettings();
-  const [messages, setMessages] = useState<ChatEntry[]>([WELCOME_MESSAGE]);
+  // Lazy initializer, not a module-level constant — needs useTranslations,
+  // which only works inside a component. Runs once at mount only: if the
+  // viewer switches language mid-session this already-seeded message
+  // doesn't retroactively re-translate, same accepted tradeoff as the
+  // English-first-paint flash documented in IntlProvider.tsx — not worth
+  // an effect just to keep one ephemeral system message perfectly in sync.
+  const [messages, setMessages] = useState<ChatEntry[]>(() => [
+    { id: "sys-welcome", kind: "system", text: t("welcome") },
+  ]);
   const [pinnedMessage, setPinnedMessage] = useState<PinnedMessage | null>(null);
   const [balanceSantim, setBalanceSantim] = useState<number | null>(null);
   const [input, setInput] = useState("");
@@ -437,7 +441,7 @@ export function ChatPanel({
         <form className={styles.inputRow} onSubmit={handleSend}>
           <input
             type="text"
-            placeholder="Send a message..."
+            placeholder={t("placeholder")}
             className={styles.input}
             value={input}
             onChange={(e) => setInput(e.target.value)}
