@@ -1,50 +1,153 @@
-import type { Vod } from "@habeshalive/shared";
+import type { PublishVodInput, Vod } from "@habeshalive/shared";
 import { getVodRetentionDays } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
+import { AppError } from "../common/errors.js";
 import { deleteObject, getSignedVodUrl, uploadObject } from "../common/object-storage.js";
 
 interface VodRow {
   id: string;
   title: string;
+  description: string | null;
+  category: string | null;
   thumbnail_url: string | null;
   playback_url: string;
   duration_seconds: number | null;
+  views: number;
+  is_published: boolean;
   created_at: string;
+}
+
+async function toVod(row: VodRow): Promise<Vod> {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    thumbnailUrl: row.thumbnail_url,
+    playbackUrl: await getSignedVodUrl(row.playback_url),
+    durationSeconds: row.duration_seconds,
+    views: row.views,
+    isPublished: row.is_published,
+    createdAt: row.created_at,
+  };
 }
 
 // stream_vods.playback_url stores the bucket key, not a URL — signed into
 // a real, short-lived URL here on every read (see
 // common/object-storage.ts's getSignedVodUrl) rather than once at write
 // time, so a link handed to one viewer can't be replayed indefinitely.
+//
+// Public path (GET /vods/:username, no auth) — is_published = true only.
+// title/category COALESCE to the parent stream's values when a creator
+// hasn't set a per-VOD override (db/migrations/0028's own comment);
+// description has no such fallback, streams has no description column.
 export async function listVodsForCreator(username: string): Promise<Vod[]> {
   const { rows } = await pool.query<VodRow>(
-    `SELECT v.id, s.title, s.thumbnail_url, v.playback_url, v.duration_seconds, v.created_at
+    `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
+            COALESCE(v.category, s.category) AS category, s.thumbnail_url,
+            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at
      FROM stream_vods v
      JOIN streams s ON s.id = v.stream_id
      JOIN users u ON u.id = s.creator_id
-     WHERE u.username = $1 AND v.expires_at > now()
+     WHERE u.username = $1 AND v.expires_at > now() AND v.is_published = true
      ORDER BY v.created_at DESC`,
     [username]
   );
-  return Promise.all(
-    rows.map(async (row) => ({
-      id: row.id,
-      title: row.title,
-      thumbnailUrl: row.thumbnail_url,
-      playbackUrl: await getSignedVodUrl(row.playback_url),
-      durationSeconds: row.duration_seconds,
-      createdAt: row.created_at,
-    }))
-  );
+  return Promise.all(rows.map(toVod));
 }
 
-// Called from the SRS on_dvr webhook once recording is actually wired up
-// (see streams/routes.ts's /webhooks/vod-ready and the comment there for
-// exactly what's still missing — this function itself is real and tested
-// against a real file, just never yet invoked by a live SRS callback).
-// fileUrl must be a URL this API can fetch over HTTP — SRS's own
-// http_server already serves recorded files the same way it serves HLS
-// segments, so no separate file-transfer mechanism is needed.
+// Authenticated — a creator managing their own channel needs to see
+// drafts too (the whole point of the publish workflow), unlike the public
+// path above. Ownership is the query itself (JOIN streams ON creator_id =
+// $1), not a separate check, so there's no way to pass someone else's
+// userId and see their drafts.
+export async function listMyVods(userId: string): Promise<Vod[]> {
+  const { rows } = await pool.query<VodRow>(
+    `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
+            COALESCE(v.category, s.category) AS category, s.thumbnail_url,
+            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at
+     FROM stream_vods v
+     JOIN streams s ON s.id = v.stream_id
+     WHERE s.creator_id = $1 AND v.expires_at > now()
+     ORDER BY v.created_at DESC`,
+    [userId]
+  );
+  return Promise.all(rows.map(toVod));
+}
+
+// Same ownership pattern for all three mutations below: JOIN through to
+// streams.creator_id in the same query that does the write, rather than a
+// separate SELECT-then-check — a TOCTOU-safe single round trip, and if
+// updated/rows.length is 0 the caller genuinely can't distinguish "VOD
+// doesn't exist" from "exists but isn't yours", which is the correct,
+// non-leaky behavior for a 404 either way.
+
+export async function publishVod(vodId: string, userId: string, input: PublishVodInput): Promise<Vod> {
+  const { rows } = await pool.query<VodRow>(
+    `UPDATE stream_vods v
+     SET is_published = true,
+         title = COALESCE($3, v.title),
+         description = COALESCE($4, v.description),
+         category = COALESCE($5, v.category)
+     FROM streams s
+     WHERE v.id = $1 AND v.stream_id = s.id AND s.creator_id = $2
+     RETURNING v.id, COALESCE(v.title, s.title) AS title, v.description,
+               COALESCE(v.category, s.category) AS category, s.thumbnail_url,
+               v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at`,
+    [vodId, userId, input.title ?? null, input.description ?? null, input.category ?? null]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "VOD not found");
+  return toVod(row);
+}
+
+export async function unpublishVod(vodId: string, userId: string): Promise<Vod> {
+  const { rows } = await pool.query<VodRow>(
+    `UPDATE stream_vods v
+     SET is_published = false
+     FROM streams s
+     WHERE v.id = $1 AND v.stream_id = s.id AND s.creator_id = $2
+     RETURNING v.id, COALESCE(v.title, s.title) AS title, v.description,
+               COALESCE(v.category, s.category) AS category, s.thumbnail_url,
+               v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at`,
+    [vodId, userId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "VOD not found");
+  return toVod(row);
+}
+
+export async function deleteVodOwned(vodId: string, userId: string): Promise<void> {
+  const { rows } = await pool.query<{ playback_url: string }>(
+    `SELECT v.playback_url FROM stream_vods v
+     JOIN streams s ON s.id = v.stream_id
+     WHERE v.id = $1 AND s.creator_id = $2`,
+    [vodId, userId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "VOD not found");
+  // Object storage first: if this throws, the DB row (and thus the
+  // creator's ability to retry the delete) is still there — deleting the
+  // DB row first and having the object-storage delete fail would instead
+  // orphan the file with nothing left pointing at it to clean up.
+  await deleteObject(row.playback_url);
+  await pool.query(`DELETE FROM stream_vods WHERE id = $1`, [vodId]);
+}
+
+// Public, unauthenticated (same trust level as a Twitch/YouTube view
+// counter) — but only counts against a published VOD, both so a draft
+// nobody can even see yet can't accumulate views, and so this can't be
+// used as a side channel to probe whether an arbitrary VOD id exists.
+export async function incrementVodViews(vodId: string): Promise<void> {
+  await pool.query(`UPDATE stream_vods SET views = views + 1 WHERE id = $1 AND is_published = true`, [vodId]);
+}
+
+// Called from the SRS on_dvr webhook (streams/routes.ts's
+// /webhooks/vod-ready) once a stream's recording is ready. is_published
+// defaults to false (db/migrations/0028_vod_publish_workflow.sql) — every
+// new recording starts as a draft; the dashboard's "stream ended" prompt
+// (GET /vods/mine, filtered client-side to unpublished) is what lets a
+// creator actually publish it.
 export async function createVodFromRecording(streamId: string, fileUrl: string): Promise<Vod> {
   const streamResult = await pool.query<{ creator_id: string; is_anchor_creator: boolean }>(
     `SELECT s.creator_id, cp.is_anchor_creator
@@ -65,26 +168,36 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
   const retention = await getVodRetentionDays();
   const retentionDays = stream.is_anchor_creator ? retention.anchor : retention.default;
 
-  const { rows } = await pool.query<{ id: string; created_at: string }>(
+  const { rows } = await pool.query<{
+    id: string;
+    title: string | null;
+    description: string | null;
+    category: string | null;
+    playback_url: string;
+    duration_seconds: number | null;
+    views: number;
+    is_published: boolean;
+    created_at: string;
+  }>(
     `INSERT INTO stream_vods (stream_id, playback_url, expires_at)
      VALUES ($1, $2, now() + interval '1 day' * $3)
-     RETURNING id, created_at`,
+     RETURNING id, title, description, category, playback_url, duration_seconds, views, is_published, created_at`,
     [streamId, key, retentionDays]
   );
+  const inserted = rows[0]!;
 
-  const titleResult = await pool.query<{ title: string; thumbnail_url: string | null }>(
-    `SELECT title, thumbnail_url FROM streams WHERE id = $1`,
+  const streamRow = await pool.query<{ title: string; category: string | null; thumbnail_url: string | null }>(
+    `SELECT title, category, thumbnail_url FROM streams WHERE id = $1`,
     [streamId]
   );
+  const parentStream = streamRow.rows[0]!;
 
-  return {
-    id: rows[0]!.id,
-    title: titleResult.rows[0]!.title,
-    thumbnailUrl: titleResult.rows[0]!.thumbnail_url,
-    playbackUrl: await getSignedVodUrl(key),
-    durationSeconds: null,
-    createdAt: rows[0]!.created_at,
-  };
+  return toVod({
+    ...inserted,
+    title: inserted.title ?? parentStream.title,
+    category: inserted.category ?? parentStream.category,
+    thumbnail_url: parentStream.thumbnail_url,
+  });
 }
 
 // Daily cron (see server.ts) — deletes both the DB row and the underlying
@@ -105,4 +218,3 @@ export async function cleanupExpiredVods(): Promise<void> {
     }
   }
 }
-

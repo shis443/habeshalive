@@ -12,6 +12,7 @@ import { chatRoutes } from "./chat/routes.js";
 import { env } from "./common/env.js";
 import { AppError } from "./common/errors.js";
 import { creatorApplicationRoutes } from "./creator-applications/routes.js";
+import { creatorRoutes } from "./creators/routes.js";
 import { followRoutes } from "./follows/routes.js";
 import { giftCardRoutes } from "./gift-cards/routes.js";
 import { httpRequestDuration, httpRequestsTotal, registry } from "./common/metrics.js";
@@ -266,6 +267,7 @@ export function buildApp() {
   app.register(avatarRoutes, { prefix: "/avatars" });
   app.register(chatRoutes, { prefix: "/chat" });
   app.register(followRoutes, { prefix: "/follows" });
+  app.register(creatorRoutes, { prefix: "/creators" });
   app.register(creatorApplicationRoutes, { prefix: "/creator-applications" });
   app.register(adRoutes, { prefix: "/ads" });
   app.register(giftCardRoutes, { prefix: "/gift-cards" });

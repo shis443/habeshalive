@@ -20,6 +20,7 @@ import {
   creatorApplicationAdminItemSchema,
   creatorApplicationCapStatusSchema,
   creatorListItemSchema,
+  creatorProfileSchema,
   creatorSearchResultSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
@@ -83,6 +84,7 @@ import {
   type CreatorApplicationAdminItem,
   type CreatorApplicationCapStatus,
   type CreatorListItem,
+  type CreatorProfile,
   type CreatorSearchResult,
   type CreatorStats,
   type EarningsThisMonth,
@@ -269,10 +271,36 @@ export async function getStreamKey(): Promise<StreamKeyResponse | null> {
   return streamKeySchema.parse(await res.json());
 }
 
+// Independent of live status, unlike getLiveStreamByUsername — see
+// creatorProfileSchema's own comment. Used by the offline path of
+// /watch/[username] for the header (avatar/display name/follower count)
+// and About tab, neither of which have any other data source once a
+// creator isn't currently live.
+export async function getCreatorProfile(username: string): Promise<CreatorProfile | null> {
+  const res = await fetchAuthed(`/creators/${encodeURIComponent(username)}/profile`);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    console.error(`Failed to load creator profile for ${username} (${res.status})`);
+    return null;
+  }
+  return creatorProfileSchema.parse(await res.json());
+}
+
 export async function getVods(username: string): Promise<Vod[]> {
   const res = await fetch(`${API_INTERNAL_URL}/vods/${encodeURIComponent(username)}`, { cache: "no-store" });
   if (!res.ok) {
     console.error(`Failed to load VODs for ${username} (${res.status})`);
+    return [];
+  }
+  return vodSchema.array().parse(await res.json());
+}
+
+// Authenticated — includes drafts, unlike getVods above (public, published-
+// only). Used by the dashboard's stream-ended publish prompt.
+export async function getMyVods(): Promise<Vod[]> {
+  const res = await fetchAuthed("/vods/mine");
+  if (!res.ok) {
+    console.error(`Failed to load own VODs (${res.status})`);
     return [];
   }
   return vodSchema.array().parse(await res.json());

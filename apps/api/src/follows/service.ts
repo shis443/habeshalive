@@ -1,4 +1,4 @@
-import type { CreatorSearchResult, FollowStatus } from "@habeshalive/shared";
+import type { CreatorProfile, CreatorSearchResult, FollowStatus } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
@@ -38,12 +38,58 @@ export async function getFollowedCreators(followerId: string): Promise<CreatorSe
   }));
 }
 
-async function getFollowerCount(creatorId: string): Promise<number> {
+// Exported — reused by getCreatorProfile below (a second, independent
+// caller, not just getFollowStatus's own internal helper anymore).
+export async function getFollowerCount(creatorId: string): Promise<number> {
   const { rows } = await pool.query<{ count: number }>(
     `SELECT count(*) FROM follows WHERE creator_id = $1`,
     [creatorId]
   );
   return rows[0]?.count ?? 0;
+}
+
+interface CreatorProfileRow {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  is_verified: boolean;
+}
+
+// Public creator identity independent of live status — see
+// packages/shared/src/schemas/follows.ts's creatorProfileSchema comment
+// for why this exists as its own lookup rather than reusing
+// getLiveStreamByUsername (that returns null the moment a creator isn't
+// currently live, which is exactly when a profile page needs this most).
+export async function getCreatorProfile(username: string, viewerId: string | null): Promise<CreatorProfile | null> {
+  const { rows } = await pool.query<CreatorProfileRow>(
+    `SELECT id, username, display_name, avatar_url, bio, is_verified
+     FROM users WHERE username = $1`,
+    [username]
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  const [followerCount, isFollowing] = await Promise.all([
+    getFollowerCount(row.id),
+    viewerId
+      ? pool
+          .query(`SELECT 1 FROM follows WHERE follower_id = $1 AND creator_id = $2`, [viewerId, row.id])
+          .then((r) => r.rows.length > 0)
+      : Promise.resolve(false),
+  ]);
+
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    isVerified: row.is_verified,
+    followerCount,
+    isFollowing,
+  };
 }
 
 // followerId is null for anonymous viewers — follower count is public,

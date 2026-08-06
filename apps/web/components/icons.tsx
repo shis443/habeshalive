@@ -304,3 +304,21 @@ export function PipIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function SkipBackIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="20" height="20" className={className}>
+      <path d="M4 12a8 8 0 1 1 2.2 5.5" />
+      <path d="M4 7v5h5" />
+    </svg>
+  );
+}
+
+export function SkipForwardIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="20" height="20" className={className}>
+      <path d="M20 12a8 8 0 1 0-2.2 5.5" />
+      <path d="M20 7v5h-5" />
+    </svg>
+  );
+}

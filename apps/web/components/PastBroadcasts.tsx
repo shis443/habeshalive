@@ -3,6 +3,7 @@
 import type { Vod } from "@habeshalive/shared";
 import { useState } from "react";
 import styles from "./PastBroadcasts.module.css";
+import { VodPlayer } from "./VodPlayer";
 
 function formatDuration(seconds: number | null): string | null {
   if (seconds == null) return null;
@@ -23,8 +24,9 @@ export function PastBroadcasts({ vods }: { vods: Vod[] }) {
         {vods.map((vod) => (
           <div key={vod.id} className={styles.card}>
             {playingId === vod.id ? (
-              // eslint-disable-next-line jsx-a11y/media-has-caption
-              <video src={vod.playbackUrl} controls autoPlay className={styles.video} />
+              <div className={styles.playerWrap}>
+                <VodPlayer src={vod.playbackUrl} poster={vod.thumbnailUrl} vodId={vod.id} />
+              </div>
             ) : (
               <button type="button" className={styles.thumbnailButton} onClick={() => setPlayingId(vod.id)}>
                 {vod.thumbnailUrl ? (
@@ -39,6 +41,9 @@ export function PastBroadcasts({ vods }: { vods: Vod[] }) {
               </button>
             )}
             <p className={styles.title}>{vod.title}</p>
+            <p className={styles.meta}>
+              {vod.views.toLocaleString()} view{vod.views === 1 ? "" : "s"} · {new Date(vod.createdAt).toLocaleDateString()}
+            </p>
           </div>
         ))}
       </div>

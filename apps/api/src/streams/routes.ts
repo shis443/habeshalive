@@ -155,27 +155,34 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     reply.send({ code: 0 });
   });
 
-  // NOT YET REACHABLE IN PRODUCTION: SRS has no dvr{} block or on_dvr hook
-  // configured (see infra/srs/conf/srs.conf.template) — recording isn't
-  // enabled, so this callback never fires today. createVodFromRecording()
-  // itself is real and works against any reachable file URL; what's
-  // missing is (a) enabling SRS's dvr{} recording, (b) adding
-  // `on_dvr __API_WEBHOOK_BASE__/streams/webhooks/vod-ready?secret=...` to
-  // http_hooks, and (c) real VOD_S3_* credentials (see common/env.ts) —
-  // none of which this pass touches, since it means redeploying the live
-  // SRS ingest service with no credentials on hand to verify against.
+  // SRS's dvr{} block (infra/srs/conf/srs.conf.template) and this hook are
+  // now both configured — see that file's own comment for the full story.
+  // STILL BLOCKED ON: real VOD_S3_* credentials (common/env.ts) — without
+  // them, uploadObject() inside createVodFromRecording() throws "Object
+  // storage is not configured" and this webhook 500s. That's the one
+  // remaining piece nobody but a human with real bucket credentials can
+  // provide; see docs/vod-recording-rollout.md.
   app.post("/webhooks/vod-ready", async (req, reply) => {
     assertWebhookSecret(req);
     const input = srsDvrCallbackSchema.parse(req.body);
     const streamId = await getMostRecentStreamIdByProviderStreamId(input.stream);
     if (!streamId) throw new AppError(404, "Unknown provider stream id");
-    // SRS's on_dvr sends a local filesystem path (`file`); this assumes
-    // dvr_path is placed under http_server's served directory root
-    // (./objs/nginx/html), same as HLS segments, so stripping that prefix
-    // yields the URL path SRS already serves the file at.
-    const urlPath = input.file.split("objs/nginx/html/")[1];
+    // SRS's on_dvr sends a local filesystem path (`file`, e.g.
+    // ".../objs/dvr/<userId>/<timestamp>.mp4"), not a URL — this API can't
+    // read it directly (separate machine, no shared filesystem), so it has
+    // to be turned into a URL apps/api can fetch. Deliberately built from
+    // SRS_ADMIN_API_BASE (Fly's private 6PN, e.g.
+    // http://habeshalive-srs.internal:1985) rather than the public
+    // SRS_HTTP_SCHEME/SRS_HTTP_HOST pair the old version of this route
+    // used — dvr_path was moved outside http_server's publicly-served
+    // ./objs/nginx/html root specifically so recordings are never
+    // reachable over the public internet at all (see srs.conf.template's
+    // dvr{} comment for the full reasoning); whip-proxy.nginx.conf's
+    // internal-only IPv6 listener gained a matching /dvr/ static-file
+    // location to serve them only over this private path instead.
+    const urlPath = input.file.split("objs/dvr/")[1];
     if (!urlPath) throw new AppError(400, "Unexpected dvr file path shape");
-    const fileUrl = `${env.SRS_HTTP_SCHEME}://${env.SRS_HTTP_HOST}/${urlPath}`;
+    const fileUrl = `${env.SRS_ADMIN_API_BASE}/dvr/${urlPath}`;
     await createVodFromRecording(streamId, fileUrl);
     reply.send({ code: 0 });
   });

@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { GoLivePanel } from "@/components/GoLivePanel";
 import { ModerationPanel } from "@/components/ModerationPanel";
 import { StatCard } from "@/components/StatCard";
+import { StreamEndedPrompt } from "@/components/StreamEndedPrompt";
 import { TopNav } from "@/components/TopNav";
 import { WalletPanel } from "@/components/WalletPanel";
 import { resolveAvatarUrl } from "@/lib/avatar";
@@ -15,6 +16,7 @@ import {
   getCurrentUser,
   getEarningsThisMonth,
   getLiveStreamByUsername,
+  getMyVods,
   getStreamKey,
   getWalletBalance,
 } from "@/lib/api";
@@ -37,6 +39,10 @@ export default async function DashboardPage() {
   // (same gate GoLivePanel below already keys off streamKey for) — no
   // point fetching it for a viewer who can't stream yet.
   const adsSettings = streamKey ? await getCreatorAdsSettings() : null;
+  // Same gate — only a creator can have VODs at all. Filtered here, not
+  // inside StreamEndedPrompt, so that component only ever has to think
+  // about "here are drafts to show", not the isPublished distinction.
+  const draftVods = streamKey ? (await getMyVods()).filter((v) => !v.isPublished) : [];
 
   return (
     <>
@@ -61,6 +67,8 @@ export default async function DashboardPage() {
           <StatCard label="Followers" value={String(stats?.followerCount ?? 0)} />
           <StatCard label="Stream hours" value={`${stats?.streamHoursTotal ?? 0}h`} />
         </div>
+
+        {draftVods.length > 0 && <StreamEndedPrompt drafts={draftVods} />}
 
         {streamKey && (
           <GoLivePanel

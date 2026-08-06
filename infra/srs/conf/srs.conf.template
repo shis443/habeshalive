@@ -94,15 +94,62 @@ vhost __defaultVhost__ {
     hls {
         enabled         on;
         hls_path        ./objs/nginx/html;
-        # 2s fragments / 10s window (was 4s/30s) — shortens end-to-end HLS
-        # glass-to-glass latency; smaller segments mean more frequent
-        # manifest polling and more total HTTP requests per viewer, which
-        # is the tradeoff against the old wider window. See BIRQ
-        # guidelines' latency section: this alone won't get under ~5s
-        # (inherent to segmented HLS), WHEP/WebRTC playback is the real
-        # path there if that's ever needed — not attempted here.
+        # 2s fragments — shortens end-to-end HLS glass-to-glass latency;
+        # smaller segments mean more frequent manifest polling and more
+        # total HTTP requests per viewer, which is the tradeoff against a
+        # wider fragment. See BIRQ guidelines' latency section: this alone
+        # won't get under ~5s (inherent to segmented HLS), WHEP/WebRTC
+        # playback is the real path there if that's ever needed.
         hls_fragment    2;
-        hls_window      10;
+        # hls_window is DVR retention depth (how many seconds of past
+        # segments stay listed in the live playlist / on disk before
+        # SRS prunes them — confirmed against vendor source:
+        # srs_app_hls.cpp's segments_->shrink(hls_window_) is what actually
+        # deletes old segments), NOT startup latency for a fresh viewer.
+        # Those are two independent things: a new viewer's start position
+        # is governed by hls_fragment above plus the player's own
+        # liveSyncDurationCount (apps/web/components/VideoPlayer.tsx) —
+        # both target the newest segments in the playlist regardless of
+        # how many older ones are also still listed. Raised from 10 (the
+        # bare minimum to avoid the live edge itself rolling off the list)
+        # to 120 to back the DVR rewind UI in VideoPlayer.tsx — at 2s
+        # fragments that's ~60 segments retained per live stream at once,
+        # trivial in disk terms. Not yet re-confirmed live that glass-to-
+        # glass latency is actually unaffected by this change, despite the
+        # reasoning above — see docs/hls-latency-testing.md before treating
+        # that as settled, same as every other latency claim in this repo.
+        hls_window      120;
+    }
+
+    # Post-stream VOD recording. dvr_path is deliberately OUTSIDE
+    # ./objs/nginx/html (http_server's dir above, hls_path above, and the
+    # Cloudflare Tunnel in docker-entrypoint.sh all serve/route that exact
+    # root publicly) — the same class of bug as the admin-API exposure
+    # documented on http_api's listen line above: a recorded stream sitting
+    # under the publicly-served root would be downloadable by anyone,
+    # unauthenticated, indefinitely, at a guessable-ish
+    # {userId}/{timestamp}.mp4 path. Keeping it in a sibling directory
+    # means SRS's own http_server (and the Cloudflare Tunnel riding on the
+    # same port) simply 404 on it — no path-filtering rule to get right or
+    # keep in sync, the file is just not reachable through that route at
+    # all. apps/api fetches it instead through the existing internal-only
+    # IPv6 bridge (whip-proxy.nginx.conf's `[::]:1985` server, reachable
+    # only over Fly's private 6PN — same listener that already serves
+    # /api/v1/ and /rtc/v1/whep/), which gained a matching `/dvr/` location
+    # in this same change. See streams/routes.ts's /webhooks/vod-ready for
+    # the apps/api side that fetches from there.
+    dvr {
+        enabled     on;
+        # session (not segment): one complete file per publish session,
+        # reaped at unpublish — matches this app's "one VOD per stream"
+        # model. dvr_duration/dvr_wait_keyframe (segment-plan-only per
+        # vendor/trunk/conf/full.conf's own comments) don't apply here.
+        dvr_plan    session;
+        # .mp4, not SRS's .flv default — playable directly by a plain
+        # HTML5 <video> element (VodPlayer.tsx), no remux step needed,
+        # consistent with vods/service.ts's createVodFromRecording already
+        # assuming/producing an .mp4 object key.
+        dvr_path    ./objs/dvr/[app]/[stream].[timestamp].mp4;
     }
 
     # rtc_to_rtmp must be on for a WHIP-published (WebRTC) stream to reach
@@ -141,5 +188,12 @@ vhost __defaultVhost__ {
         enabled         on;
         on_publish      __API_WEBHOOK_BASE__/streams/webhooks/live-started?secret=__SRS_WEBHOOK_SECRET__;
         on_unpublish    __API_WEBHOOK_BASE__/streams/webhooks/live-ended?secret=__SRS_WEBHOOK_SECRET__;
+        # Fires once dvr{} above finishes writing the session's recording
+        # (dvr_plan session — right after on_unpublish, same moment). See
+        # streams/routes.ts's /webhooks/vod-ready — this was previously
+        # unreachable because this line and the dvr{} block above didn't
+        # exist yet; both were added together since one is useless without
+        # the other.
+        on_dvr          __API_WEBHOOK_BASE__/streams/webhooks/vod-ready?secret=__SRS_WEBHOOK_SECRET__;
     }
 }

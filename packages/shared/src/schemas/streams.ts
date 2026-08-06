@@ -112,12 +112,29 @@ export type CreatorStats = z.infer<typeof creatorStatsSchema>;
 export const vodSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
+  description: z.string().nullable(),
+  category: z.string().nullable(),
   thumbnailUrl: z.string().nullable(),
   playbackUrl: z.string(),
   durationSeconds: z.number().int().nullable(),
+  views: z.number().int().nonnegative(),
+  isPublished: z.boolean(),
   createdAt: z.string(),
 });
 export type Vod = z.infer<typeof vodSchema>;
+
+// PATCH /vods/:id/publish body — every field optional since publishing
+// with no overrides (just flip is_published) is the common case; only a
+// creator explicitly renaming/re-categorizing before publishing sends
+// title/description/category. Length caps mirror streams.title's own
+// VARCHAR(140)/streams.category's VARCHAR(50) — see db/migrations/0028_
+// vod_publish_workflow.sql.
+export const publishVodSchema = z.object({
+  title: z.string().min(1).max(140).optional(),
+  description: z.string().max(2000).optional(),
+  category: z.string().max(50).optional(),
+});
+export type PublishVodInput = z.infer<typeof publishVodSchema>;
 
 // SRS's on_publish/on_unpublish HTTP callback body — both hooks send the
 // same shape. `stream` is the RTMP stream name. As of the stream-key

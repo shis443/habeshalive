@@ -32,6 +32,36 @@ before treating them as a clean win.
 This checklist verifies the effect of both batches, neither of which has
 been measured yet.
 
+**Built, NOT yet deployed** (2026-08-06): `infra/srs/conf/srs.conf.template`'s
+`hls_window` raised 10s→120s, to back a new DVR rewind scrubber in
+`VideoPlayer.tsx` (±10s skip buttons + a real seek timeline, gated to the
+`hls` engine only — WHEP has no seekable timeline). The reasoning for why
+this shouldn't reintroduce glass-to-glass latency is documented inline in
+`srs.conf.template` (`hls_window` is retention depth, not new-viewer start
+position — those are governed independently by `hls_fragment` +
+`liveSyncDurationCount`) and cross-checked against SRS's own source
+(`srs_app_hls.cpp`'s `segments_->shrink(hls_window_)` is what actually
+prunes old segments), but **this is reasoning, not a live measurement** —
+add "confirm glass-to-glass latency is unaffected by the wider
+`hls_window`" to this checklist's own list above before/when this
+actually ships to production, the same way every other change in this
+file got a real before/after check rather than resting on the reasoning
+alone.
+
+The scrubber itself (`VideoPlayer.tsx`'s `dvrRange` state) is also
+unverified against a real live stream for a different reason: no browser
+automation is available in the environment that built it, so only
+`tsc --noEmit` and a non-HLS smoke render were possible — the actual
+mechanism (hls.js's `LEVEL_UPDATED` event exposing `fragmentStart`/`edge`
+from the live playlist, not just what's been downloaded) was confirmed by
+reading the installed hls.js package's own source, not guessed, but
+"the types and logic are right" and "it visibly works against a real
+broadcast in a real browser" are different claims. Check, on a real OBS
+stream once `hls_window` is actually deployed: the scrubber appears once
+enough playlist history exists, dragging it backward actually plays
+older video (not a stall), and the LIVE button correctly jumps back to
+the edge.
+
 ## 1. Set OBS's keyframe interval to 2s first
 
 The BIRQ guidelines specifically call this out, and it matters for a
@@ -52,7 +82,7 @@ the SRS config change, silently defeating the point of this whole change.
 | **Glass-to-glass latency** | Point a phone camera at a millisecond-precision clock (e.g. [time.is](https://time.is) fullscreen) as the OBS source. Play the resulting stream on a viewer device sitting next to that same clock. Photograph or screen-record both the physical clock and the viewer's screen in the same frame — the visible time difference is your latency. (Simplest rig: laptop showing time.is is the "camera subject," phone plays the stream next to the laptop screen, one photo captures both.) |
 | **Time to first frame** | Stopwatch from clicking "watch" to first visible video frame. |
 | **Rebuffer count** | Watch 5 continuous minutes per browser/device, count visible stalls/spinner appearances. |
-| **Recovery after a network hiccup** | Toggle wifi off for ~3s mid-playback, confirm it resumes smoothly rather than erroring or getting stuck — the smaller `hls_window` (10s, was 30s) means less backlog buffer is available server-side for a lagging client to catch up from, worth specifically checking this didn't get worse. |
+| **Recovery after a network hiccup** | Toggle wifi off for ~3s mid-playback, confirm it resumes smoothly rather than erroring or getting stuck. `hls_window` governs server-side retention depth, not this directly, but worth re-checking after any change to it. |
 | **New-viewer join latency** | Open the stream fresh (not already watching) — confirm it starts near-live, not noticeably behind. |
 
 ## 3. What to test on (this codebase has two real, different playback paths — test both)

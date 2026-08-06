@@ -45,10 +45,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-2);
   background: linear-gradient(to top, rgba(0, 0, 0, 0.75), transparent);
   opacity: 0;
   transition: opacity 0.15s;
@@ -57,6 +54,60 @@
 .wrap:hover .controls,
 .wrap:focus-within .controls {
   opacity: 1;
+}
+
+.bottomRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.scrubber {
+  width: 100%;
+  display: block;
+  margin-bottom: var(--space-1);
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.liveButton {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.liveButton:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.liveButton:disabled {
+  cursor: default;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* "Live" (disabled/inert, at the edge) vs a past DVR position (clickable,
+   jumps back to the edge) — var(--primary) matches this app's existing
+   liveBadge convention (StreamMeta.module.css/StreamCard.module.css),
+   dim/grey (the base .liveButton color) when the viewer has scrubbed back. */
+.liveButtonActive {
+  color: var(--primary);
 }
 
 .controlButton {

@@ -4,11 +4,13 @@ import { pool } from "../common/db.js";
 export interface TestUser {
   id: string;
   walletId: string;
+  username: string;
 }
 
 async function createUserWithWallet(prefix: string): Promise<TestUser> {
   const suffix = randomBytes(4).toString("hex");
   const phone = `+2519${suffix.slice(0, 8)}`.padEnd(13, "0").slice(0, 13);
+  const username = `${prefix}_${suffix}`;
 
   const client = await pool.connect();
   try {
@@ -16,7 +18,7 @@ async function createUserWithWallet(prefix: string): Promise<TestUser> {
     const userResult = await client.query<{ id: string }>(
       `INSERT INTO users (phone_number, username, display_name, is_verified)
        VALUES ($1, $2, $3, TRUE) RETURNING id`,
-      [phone, `${prefix}_${suffix}`, `${prefix} ${suffix}`]
+      [phone, username, `${prefix} ${suffix}`]
     );
     const userId = userResult.rows[0]!.id;
 
@@ -31,7 +33,7 @@ async function createUserWithWallet(prefix: string): Promise<TestUser> {
     ]);
 
     await client.query("COMMIT");
-    return { id: userId, walletId };
+    return { id: userId, walletId, username };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
