@@ -12,3 +12,5 @@ infra/zap/*.html
 infra/zap/*.json
 infra/zap/zap.yaml
 .vercel/
+.vercel
+.env*

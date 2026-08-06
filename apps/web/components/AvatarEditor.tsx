@@ -89,7 +89,12 @@ export function AvatarEditor({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const svg = useMemo(() => renderAvatarSvg(resolveValues(manifest, draft)), [manifest, draft]);
+  // Shared between the big preview and every per-option thumbnail in the
+  // grid below (OptionThumbnail.tsx composites each tile onto this same
+  // draft, varying only its own category) — computed once per draft
+  // change, not once per tile.
+  const currentValues = useMemo(() => resolveValues(manifest, draft), [manifest, draft]);
+  const svg = useMemo(() => renderAvatarSvg(currentValues), [currentValues]);
 
   function handleSelectPart(category: AvatarCategory, part: AvatarPart) {
     setDraft((prev) => ({ ...prev, [category]: part.id }));
@@ -162,8 +167,10 @@ export function AvatarEditor({
           <div className={styles.panelGlow} />
           <AvatarCategoryTabs categories={CATEGORIES} active={activeCategory} onChange={setActiveCategory} />
           <AvatarPartGrid
+            category={activeCategory}
             parts={manifest[activeCategory] ?? []}
             selectedId={draft[activeCategory] ?? null}
+            baseValues={currentValues}
             onSelect={(part) => handleSelectPart(activeCategory, part)}
           />
         </div>

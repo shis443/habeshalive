@@ -54,21 +54,6 @@
   color: var(--on-surface-variant);
 }
 
-.styleIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--surface-container-high);
-  color: var(--on-surface-variant);
-  font-family: var(--font-headline);
-  font-size: 15px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
 .tileName {
   font-family: var(--font-label);
   font-size: 10px;

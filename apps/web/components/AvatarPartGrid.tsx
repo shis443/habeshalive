@@ -1,23 +1,34 @@
-import type { AvatarPart } from "@habeshalive/shared";
+import type { AvatarCategory, AvatarPart, AvatarValues } from "@habeshalive/shared";
 import { formatAvatarOptionLabel } from "@/lib/avatar";
 import styles from "./AvatarPartGrid.module.css";
 import { BlockedIcon } from "./icons";
+import { OptionThumbnail } from "./OptionThumbnail";
 
 // "None"/"blank" are real, selectable avatar_parts rows (a genuine
 // "no facial hair" choice, not a null sentinel — see db/migrations/0029_
 // avataaars_render.sql's comment), but still worth the same blocked-icon
 // treatment the old flat-swatch model used for its "None" background/hair
-// rows — a visual "this category is off" cue is clearer than the literal
-// word "Blank" as a tile label.
+// rows — a visual "this category is off" cue is clearer than a rendered
+// avatar that looks identical to several other options (a bare face
+// reads as ambiguous, not obviously "nothing selected").
 const NONE_NAMES = new Set(["none", "blank"]);
 
 export function AvatarPartGrid({
+  category,
   parts,
   selectedId,
+  baseValues,
   onSelect,
 }: {
+  category: AvatarCategory;
   parts: AvatarPart[];
   selectedId: string | null;
+  // The current full draft — every style-option tile previews itself
+  // composited onto this (your actual current skin tone, hair color,
+  // etc.), not a generic default face. See OptionThumbnail.tsx's own
+  // comment for why this is a full re-composition rather than an
+  // isolated feature fragment.
+  baseValues: AvatarValues;
   onSelect: (part: AvatarPart) => void;
 }) {
   return (
@@ -36,14 +47,7 @@ export function AvatarPartGrid({
             ) : isNone ? (
               <BlockedIcon className={styles.noneIcon} />
             ) : (
-              // No per-option thumbnail art exists for style categories
-              // (that would mean rendering + caching a full mini-avatar
-              // per option, out of scope for this pass) — a monogram chip
-              // is a cheap, still-legible stand-in that isn't just an
-              // empty circle.
-              <span className={styles.styleIcon} aria-hidden="true">
-                {formatAvatarOptionLabel(part.name).charAt(0)}
-              </span>
+              <OptionThumbnail category={category} optionName={part.name} baseValues={baseValues} />
             )}
             <span className={styles.tileName}>{isNone ? "None" : formatAvatarOptionLabel(part.name)}</span>
           </button>

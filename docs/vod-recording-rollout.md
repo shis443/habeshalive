@@ -39,46 +39,41 @@ the real compiled API server — not just typechecked:
   `/dvr/` — all before touching production. See `srs.conf.template` and
   `whip-proxy.nginx.conf`'s own comments for the full reasoning.
 
-## What's still blocked: real VOD_S3_* credentials
+## CORRECTED 2026-08-06: VOD_S3_* credentials are already set
 
-`apps/api/src/vods/service.ts`'s `createVodFromRecording` — which fetches
-the recording from SRS and uploads it to object storage — has been real,
-tested code since before this pass (it just had nothing feeding it). It's
-still blocked on the one thing nobody but you can provide: real R2/S3
-credentials. `apps/api/src/common/object-storage.ts` is fully implemented
-and ready; `VOD_S3_ENDPOINT`/`VOD_S3_ACCESS_KEY_ID`/
-`VOD_S3_SECRET_ACCESS_KEY` are all empty by default (`VOD_S3_BUCKET`
-defaults to `habeshalive-vods`, override only if you want a different
-bucket name).
+Everything below this heading originally claimed the pipeline was
+"blocked on real VOD_S3_* credentials," inferred from
+`common/env.ts`'s comment ("no real bucket exists yet") without actually
+checking. That was wrong, caught the same day while preparing a handoff
+document: `flyctl secrets list -a habeshalive` shows
+`VOD_S3_ACCESS_KEY_ID`, `VOD_S3_BUCKET`, `VOD_S3_ENDPOINT`,
+`VOD_S3_SECRET_ACCESS_KEY` all **already deployed** (present since at
+least 2026-08-05, per that day's own handoff doc — this pass's docs
+just never checked). `apps/api/src/common/object-storage.ts`'s
+`isObjectStorageConfigured` is real, not a stub — it means the object
+storage upload path should already be live, not dormant.
 
-Once you have a real Cloudflare R2 (or any S3-compatible) bucket, set the
-real secrets yourself, directly — not pasted here:
-
-```
-flyctl secrets set VOD_S3_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com" -a habeshalive
-flyctl secrets set VOD_S3_ACCESS_KEY_ID="<real-access-key>" -a habeshalive
-flyctl secrets set VOD_S3_SECRET_ACCESS_KEY="<real-secret-key>" -a habeshalive
-```
+**What this changes**: the recording pipeline is very likely already
+capable of working end-to-end right now, not blocked as previously
+documented. **What's still genuinely unverified**: nobody has actually
+triggered a real `on_dvr` callback against production yet (needs a real
+OBS/ffmpeg stream against the now-deployed `dvr{}` config) to confirm the
+whole chain — SRS recording -> on_dvr webhook -> fetch over the internal
+`/dvr/` bridge -> real R2 upload -> `stream_vods` row -> visible in the
+creator's dashboard prompt — actually works with these specific real
+credentials. That's a real live-stream test, deliberately deferred (see
+the bottom of this file).
 
 ## Deploying the SRS config change
 
-`infra/srs/conf/srs.conf.template` and `infra/srs/conf/whip-proxy.nginx.conf`
-both changed (dvr{}, on_dvr, the internal /dvr/ location) — this needs a
-`habeshalive-srs` redeploy, same care as every other SRS config change
-this project has made: confirm `/streams/live` is empty before restarting
-(no live stream gets interrupted), deploy, confirm the machine comes up
-healthy. Do this independently of the VOD_S3_* credentials above — the
-dvr{} recording + on_dvr webhook firing works regardless; without real
-credentials, `/webhooks/vod-ready` will receive the callback and then fail
-inside `createVodFromRecording`'s `uploadObject` call (a clean, logged
-500, not a crash — SRS doesn't retry on_dvr on a non-2xx response, so a
-recording made before credentials are set is just never turned into a
-VOD, not lost in some half-state).
-
-**Recommended order**: set the real credentials first, then deploy the
-SRS config change — that way the very first real recording made after
-deploy succeeds end-to-end, rather than needing a second stream to
-actually exercise the fixed path.
+**Done, 2026-08-06**: `infra/srs/conf/srs.conf.template` and
+`infra/srs/conf/whip-proxy.nginx.conf` (dvr{}, on_dvr, the internal
+/dvr/ location) deployed to `habeshalive-srs` — confirmed no live
+stream was interrupted (`/streams/live` was empty first), machine came
+up healthy, no crash-loop, public paths still correctly 403 `/dvr/` and
+`/api/v1/`. Since VOD_S3_* credentials were already set (see above), the
+very next real recording should exercise the fixed path end-to-end —
+this just hasn't happened yet (needs a real stream).
 
 ## Known gap, flagged rather than fixed: local recording accumulation
 
@@ -124,3 +119,26 @@ full" later.
   either need live-chat coupling (Gursha) or `tiers` data not fetched on
   this path. Shipping buttons that look clickable but don't do anything
   would be worse than the smaller action set shown.
+
+## Deferred verification, marked for the next handoff document
+
+Explicitly deferred on 2026-08-06, not forgotten — both need real
+resources this environment doesn't have on its own (a live stream, or a
+decision to mutate real production user data), and were deliberately
+left for a session with more context/time rather than rushed or skipped
+silently:
+
+1. **Live-stream viewing with the DVR scrubber** (`VideoPlayer.tsx`,
+   `hls_window` 10s->120s) against a real broadcast in production — no
+   stream was live during this session's deploy window to test against.
+   Verified structurally (typecheck, a local dev-server render), not
+   against real production HLS.
+2. **Authenticated write paths against production specifically**
+   (`PATCH /vods/:id/publish`, `.../unpublish`, `DELETE /vods/:id`,
+   `POST /avatars/save`) — exhaustively verified against a local
+   throwaway Postgres with a real HTTP round-trip and a real minted JWT
+   (ownership rejection, 401/404 cases, all covered), and the exact same
+   code + migration is what's live now, but not re-run against
+   production itself specifically — that means either a real user
+   session or minting test data in the real database, both more
+   consequential than the read-only checks already done.
