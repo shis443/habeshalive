@@ -8,6 +8,7 @@ import type {
 } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
+import { recordSecurityEvent } from "../common/security-hold.js";
 import { emailGateway } from "./email-gateway.js";
 import { generateSixDigitCode, hashCode, verifyCodeHash } from "./otp.js";
 import { hashPassword, verifyPasswordHash } from "./password.js";
@@ -482,4 +483,5 @@ export async function changeMyPassword(userId: string, input: ChangePasswordInpu
     passwordHash,
     userId,
   ]);
+  await recordSecurityEvent(userId, "password_change");
 }

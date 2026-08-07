@@ -1,18 +1,21 @@
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
+import { KycSection } from "@/components/KycSection";
 import { NotificationPreferencesSection } from "@/components/NotificationPreferencesSection";
 import { PreferencesSection } from "@/components/PreferencesSection";
 import { SessionsSection } from "@/components/SessionsSection";
 import { TopNav } from "@/components/TopNav";
-import { getCurrentUser, getNotificationPreferences } from "@/lib/api";
+import { TotpSection } from "@/components/TotpSection";
+import { getCurrentUser, getMyKycStatus, getNotificationPreferences, getTotpStatus } from "@/lib/api";
 import styles from "../account/page.module.css";
-import sectionStyles from "@/components/AccountSection.module.css";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/settings");
 
   const notificationPrefs = await getNotificationPreferences();
+  const totpStatus = await getTotpStatus();
+  const kycStatus = await getMyKycStatus();
 
   return (
     <>
@@ -21,12 +24,8 @@ export default async function SettingsPage() {
         <h1 className={styles.heading}>Settings</h1>
         <PreferencesSection isAuthed />
         {notificationPrefs && <NotificationPreferencesSection initial={notificationPrefs} />}
-        <div className={sectionStyles.card}>
-          <h2 className={sectionStyles.title}>Security</h2>
-          <p className={sectionStyles.hint}>
-            Two-factor authentication — [CONFIRM] deferred to post-launch, not built yet.
-          </p>
-        </div>
+        <TotpSection initialEnabled={totpStatus?.enabled ?? false} />
+        <KycSection initial={kycStatus} />
         <SessionsSection />
       </main>
       <BottomNav />

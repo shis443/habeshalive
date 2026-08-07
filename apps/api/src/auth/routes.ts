@@ -3,6 +3,8 @@ import {
   changeUsernameSchema,
   confirmEmailChangeSchema,
   confirmPhoneChangeSchema,
+  confirmTotpSchema,
+  disableTotpSchema,
   forgotPasswordSchema,
   loginSchema,
   requestAccountDeletionSchema,
@@ -13,12 +15,24 @@ import {
   resetPasswordSchema,
   socialAuthSchema,
   socialProviderSchema,
+  totpLoginVerifySchema,
   updatePreferencesSchema,
   updateProfileSchema,
   verifyEmailOtpSchema,
   verifyOtpSchema,
+  type AuthUser,
 } from "@habeshalive/shared";
-import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { AppError } from "../common/errors.js";
+import {
+  confirmTotp,
+  disableTotp,
+  getTotpStatus,
+  isTotpEnabled,
+  recordLoginAndNotifyIfNewDevice,
+  setupTotp,
+  verifyTotpForLogin,
+} from "./totp-service.js";
 import {
   linkSocialAccount,
   listLinkedSocialAccounts,
@@ -78,6 +92,34 @@ function keyByIdentifier(req: FastifyRequest): string {
   return typeof body?.identifier === "string" ? `identifier:${body.identifier}` : req.ip;
 }
 
+// Shared by every route that reaches "primary credential (password/OTP)
+// verified, user identified" — /login, /verify-otp, /verify-email-otp.
+// If the user has 2FA enabled, this does NOT complete the login: it
+// issues a short-lived pending token instead and the caller must finish
+// via POST /2fa/login-verify. If 2FA isn't enabled, behavior is
+// unchanged from before this pass — a real session token, immediately.
+//
+// req.ip is Fastify's own (respects trustProxy — see app.ts's Fastify
+// constructor options — so this is the real client IP behind Fly's
+// proxy, not Fly's own edge IP) — used for both the login_events audit
+// row and the new-device email; 'unknown' user-agent is a real, if rare,
+// possibility (a bare curl/script call), not treated as an error.
+async function completeLoginOrChallenge(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  user: AuthUser
+): Promise<void> {
+  if (await isTotpEnabled(user.id)) {
+    const pendingToken = await reply.jwtSign({ sub: user.id, pending2fa: true }, { expiresIn: "5m" });
+    reply.send({ requiresTotp: true, pendingToken });
+    return;
+  }
+
+  const token = await reply.jwtSign({ sub: user.id, role: user.role });
+  await recordLoginAndNotifyIfNewDevice(user.id, req.ip, req.headers["user-agent"] ?? "unknown");
+  reply.send({ token, user });
+}
+
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     "/request-otp",
@@ -116,8 +158,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const input = verifyOtpSchema.parse(req.body);
       const { user } = await verifyOtp(input);
       await clearPendingDeletion(user.id);
-      const token = await reply.jwtSign({ sub: user.id, role: user.role });
-      reply.send({ token, user });
+      await completeLoginOrChallenge(req, reply, user);
     }
   );
 
@@ -158,8 +199,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const input = verifyEmailOtpSchema.parse(req.body);
       const { user } = await verifyEmailOtp(input);
       await clearPendingDeletion(user.id);
-      const token = await reply.jwtSign({ sub: user.id, role: user.role });
-      reply.send({ token, user });
+      await completeLoginOrChallenge(req, reply, user);
     }
   );
 
@@ -186,8 +226,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const input = loginSchema.parse(req.body);
       const { user } = await login(input.identifier, input.password);
       await clearPendingDeletion(user.id);
-      const token = await reply.jwtSign({ sub: user.id, role: user.role });
-      reply.send({ token, user });
+      await completeLoginOrChallenge(req, reply, user);
     }
   );
 
@@ -232,6 +271,76 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get("/me", { preHandler: app.authenticate }, async (req) => getUserById(req.user.sub));
+
+  // --- 2FA (TOTP) ---
+
+  app.get("/2fa/status", { preHandler: app.authenticate }, async (req) => getTotpStatus(req.user.sub));
+
+  app.post("/2fa/setup", { preHandler: app.authenticate }, async (req) => {
+    const account = await getMyAccount(req.user.sub);
+    // otpauth:// label — email if the account has one (more recognizable
+    // in an authenticator app's account list than a UUID), else username.
+    return setupTotp(req.user.sub, account.email ?? account.username);
+  });
+
+  app.post("/2fa/confirm", { preHandler: app.authenticate }, async (req, reply) => {
+    const input = confirmTotpSchema.parse(req.body);
+    await confirmTotp(req.user.sub, input.code);
+    reply.send({ ok: true });
+  });
+
+  app.post("/2fa/disable", { preHandler: app.authenticate }, async (req, reply) => {
+    const input = disableTotpSchema.parse(req.body);
+    await disableTotp(req.user.sub, input.code);
+    reply.send({ ok: true });
+  });
+
+  // Deliberately NOT behind app.authenticate — the whole point is that
+  // the caller doesn't have a real session token yet (that's exactly
+  // what this route produces on success). Verifies pendingToken directly
+  // via app.jwt.verify (the raw token string from the request body, not
+  // a header — unlike every other route here, this one's "credential" is
+  // a JSON field, not an Authorization header) rather than
+  // req.jwtVerify(), which only ever reads from the header.
+  app.post(
+    "/2fa/login-verify",
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "5 minutes",
+          hook: "preHandler",
+          skipOnError: false,
+          keyGenerator: (req: FastifyRequest) => {
+            const body = req.body as { pendingToken?: unknown } | undefined;
+            return typeof body?.pendingToken === "string" ? `pending2fa:${body.pendingToken}` : req.ip;
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const input = totpLoginVerifySchema.parse(req.body);
+
+      let decoded: { sub: string; pending2fa?: boolean };
+      try {
+        decoded = app.jwt.verify<{ sub: string; pending2fa?: boolean }>(input.pendingToken);
+      } catch {
+        throw new AppError(401, "Invalid or expired login session — please sign in again");
+      }
+      if (decoded.pending2fa !== true) {
+        throw new AppError(401, "Not a valid pending-2FA token");
+      }
+
+      if (!(await verifyTotpForLogin(decoded.sub, input.code))) {
+        throw new AppError(401, "Invalid code");
+      }
+
+      const user = await getUserById(decoded.sub);
+      const token = await reply.jwtSign({ sub: user.id, role: user.role });
+      await recordLoginAndNotifyIfNewDevice(user.id, req.ip, req.headers["user-agent"] ?? "unknown");
+      reply.send({ token, user });
+    }
+  );
 
   app.patch("/preferences", { preHandler: app.authenticate }, async (req) => {
     const input = updatePreferencesSchema.parse(req.body);

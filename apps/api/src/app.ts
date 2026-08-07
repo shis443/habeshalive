@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { ZodError } from "zod";
@@ -15,6 +16,7 @@ import { creatorApplicationRoutes } from "./creator-applications/routes.js";
 import { creatorRoutes } from "./creators/routes.js";
 import { followRoutes } from "./follows/routes.js";
 import { giftCardRoutes } from "./gift-cards/routes.js";
+import { kycRoutes } from "./kyc/routes.js";
 import { httpRequestDuration, httpRequestsTotal, registry } from "./common/metrics.js";
 import { pool } from "./common/db.js";
 import { redis } from "./common/redis.js";
@@ -39,6 +41,13 @@ export function buildApp() {
   // through the /api/backend/* same-origin proxy).
   app.register(cors, { origin: [env.WEB_PUBLIC_URL] });
   app.register(jwt, { secret: env.JWT_SECRET });
+  // KYC document uploads (kyc/routes.ts) are the one route in this API
+  // that takes a file — 10MB cap matches kyc/service.ts's own
+  // MAX_DOCUMENT_BYTES check (this is the hard stop that rejects an
+  // oversized upload before it's fully buffered in memory; the service
+  // layer's check is what makes the resulting AppError message clean and
+  // consistent instead of a raw multipart-plugin error).
+  app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 
   // Shared Redis-backed store (ioredis) so limits are enforced across all
   // API instances, not per-process — must be registered before the route
@@ -79,9 +88,27 @@ export function buildApp() {
     skipOnError: true,
   });
 
+  // A pending-2FA token (auth/totp-service.ts's PendingTotpClaims — issued
+  // mid-login to a user who's proven their password/OTP but still owes a
+  // TOTP code) is signed with the same secret as a real session token, so
+  // req.jwtVerify() accepts it just fine — this is what actually stops it
+  // from also working as one. Explicitly clearing req.user (not just
+  // throwing inside this preHandler's own try/catch) matters because
+  // jwtVerify() already wrote req.user as a side effect before this check
+  // runs — any downstream handler reading req.user directly (not just
+  // trusting this preHandler's pass/fail) would otherwise still see a
+  // real sub from the unfinished login.
+  function rejectPendingTotpToken(req: import("fastify").FastifyRequest): void {
+    if (req.user && "pending2fa" in req.user) {
+      req.user = undefined as unknown as typeof req.user;
+      throw new Error("pending 2FA token used as a session token");
+    }
+  }
+
   app.decorate("authenticate", async (req, reply) => {
     try {
       await req.jwtVerify();
+      rejectPendingTotpToken(req);
     } catch {
       reply.status(401).send({ error: "unauthorized" });
     }
@@ -93,8 +120,11 @@ export function buildApp() {
   app.decorate("tryAuthenticate", async (req) => {
     try {
       await req.jwtVerify();
+      rejectPendingTotpToken(req);
     } catch {
-      // No token, or an invalid one — proceed unauthenticated.
+      // No token, an invalid one, or a pending-2FA token — proceed
+      // unauthenticated either way (req.user is already cleared above in
+      // the pending-2FA case specifically).
     }
   });
 
@@ -139,6 +169,7 @@ export function buildApp() {
   ): Promise<string | null> {
     try {
       await req.jwtVerify();
+      rejectPendingTotpToken(req);
     } catch {
       reply.status(401).send({ error: "unauthorized" });
       return null;
@@ -271,6 +302,7 @@ export function buildApp() {
   app.register(creatorApplicationRoutes, { prefix: "/creator-applications" });
   app.register(adRoutes, { prefix: "/ads" });
   app.register(giftCardRoutes, { prefix: "/gift-cards" });
+  app.register(kycRoutes, { prefix: "/kyc" });
   app.register(streamRoutes, { prefix: "/streams" });
   app.register(whepRoutes, { prefix: "/streams" });
   app.register(walletRoutes, { prefix: "/wallet" });

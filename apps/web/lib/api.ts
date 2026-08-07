@@ -29,6 +29,8 @@ import {
   giftCardPreviewSchema,
   giftTierSchema,
   giftTypeSchema,
+  kycAdminItemSchema,
+  kycStatusSchema,
   ledgerReconciliationSchema,
   ledgerTransactionLookupSchema,
   linkedSocialAccountSchema,
@@ -57,6 +59,7 @@ import {
   streamTagAdminItemSchema,
   subscriptionAdminItemSchema,
   subscriptionTierSchema,
+  totpStatusSchema,
   transactionSchema,
   unreadCountSchema,
   userListItemSchema,
@@ -668,6 +671,24 @@ export async function getCreatorApplications(
   return creatorApplicationAdminItemSchema.array().parse(await res.json());
 }
 
+// --- KYC (Module 1.4) ---
+
+export async function getKycSubmissions(status?: "pending" | "approved" | "rejected") {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetchAuthed(`/admin/kyc${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load KYC submissions (${res.status})`);
+    return [];
+  }
+  return kycAdminItemSchema.array().parse(await res.json());
+}
+
+export async function getMyKycStatus() {
+  const res = await fetchAuthed("/kyc/status");
+  if (!res.ok) return null;
+  return kycStatusSchema.parse(await res.json());
+}
+
 // --- Ads (B.2) ---
 
 export async function getServedAd(streamId: string, format: string): Promise<ServedAd | null> {
@@ -833,4 +854,10 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
   const res = await fetchAuthed("/notifications/preferences");
   if (!res.ok) return null;
   return notificationPreferencesSchema.parse(await res.json());
+}
+
+export async function getTotpStatus(): Promise<{ enabled: boolean } | null> {
+  const res = await fetchAuthed("/auth/2fa/status");
+  if (!res.ok) return null;
+  return totpStatusSchema.parse(await res.json());
 }

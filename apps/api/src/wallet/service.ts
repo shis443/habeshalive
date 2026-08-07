@@ -24,11 +24,13 @@ import type {
 import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { logAdminAction } from "../admin/audit.js";
-import { getPayoutManualReviewThreshold } from "../admin/config-service.js";
+import { getKycRequiredForPayouts, getPayoutManualReviewThreshold } from "../admin/config-service.js";
+import { hasApprovedKyc } from "../kyc/service.js";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
+import { getActiveSecurityHold } from "../common/security-hold.js";
 import { flagIfMatched } from "../moderation/service.js";
 import { notify } from "../notifications/service.js";
 import { chapaClient, chapaPayoutClient } from "./chapa-client.js";
@@ -575,6 +577,26 @@ async function reversePayoutLedger(
 // (see docs/temporal-migration-plan.md). Same dispatch pattern for
 // approvePayout/rejectPayout/completePayoutFromWebhook further down.
 export async function requestPayout(creatorId: string, input: RequestPayoutInput): Promise<PayoutResponse> {
+  // Module 1.3: a 72h hold after a password change or 2FA enable/disable —
+  // see common/security-hold.ts. Checked once here, ahead of both the
+  // Temporal and legacy paths below, since either is a real funds
+  // movement this is meant to gate.
+  const hold = await getActiveSecurityHold(creatorId);
+  if (hold) {
+    throw new AppError(
+      403,
+      `For your security, withdrawals are paused for 72 hours after a password or 2FA change. Try again after ${hold.until.toISOString()}.`
+    );
+  }
+
+  // Module 1.4 — off by default (0032_kyc.sql), an admin opts in from
+  // Admin Settings once the review queue is staffed.
+  if (await getKycRequiredForPayouts()) {
+    if (!(await hasApprovedKyc(creatorId))) {
+      throw new AppError(403, "Identity verification required before payouts — submit your Fayda or Kebele ID in Settings.");
+    }
+  }
+
   if (!isTemporalConfigured) return requestPayoutLegacy(creatorId, input);
 
   const { rows: userRows } = await pool.query<{ display_name: string; is_suspended: boolean }>(

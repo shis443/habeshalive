@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { encryptSecret } from "../common/crypto.js";
 import { pool } from "../common/db.js";
 
 export interface TestUser {
@@ -52,11 +53,17 @@ export interface TestCreator extends TestUser {
 
 export async function createTestCreator(revenueShareBps = 8000): Promise<TestCreator> {
   const user = await createUserWithWallet("creator");
+  // Encrypted at rest, matching real production behavior (streams/
+  // service.ts's ensureCreatorProfile) — a test fixture that stored
+  // plaintext here would silently stop being representative the moment
+  // encryption shipped, and any test asserting on the raw column's shape
+  // (streams/service.test.ts's stream-key-encryption suite) would test
+  // the fixture's shortcut, not reality.
   const streamKey = randomBytes(16).toString("hex");
 
   await pool.query(
     `INSERT INTO creator_profiles (user_id, stream_key, revenue_share_bps) VALUES ($1, $2, $3)`,
-    [user.id, streamKey, revenueShareBps]
+    [user.id, encryptSecret(streamKey), revenueShareBps]
   );
 
   const streamResult = await pool.query<{ id: string }>(
@@ -175,6 +182,13 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   await pool.query(`DELETE FROM moderation_actions WHERE actor_id = ANY($1) OR target_user_id = ANY($1)`, [
     userIds,
   ]);
+  // Also no CASCADE from users on reviewed_by (0032_kyc.sql) — user_id
+  // itself does cascade, so a row is already gone by the time the final
+  // DELETE FROM users below runs if user_id was one of ours; this only
+  // needs to catch rows an admin (also one of ours) reviewed for some
+  // OTHER, non-test user. Surfaced by kyc/service.test.ts's first
+  // coverage of approveKyc.
+  await pool.query(`DELETE FROM kyc_submissions WHERE reviewed_by = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM gifter_badges WHERE user_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   // Also no CASCADE from users, same reasoning as gifter_badges above —
   // 0025_gursha_gift_economy.sql's user_ranks/platform_subscriptions.

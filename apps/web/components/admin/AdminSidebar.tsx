@@ -38,6 +38,9 @@ export function AdminSidebar() {
       >
         Creator Applications
       </Link>
+      <Link href="/admin/kyc" className={pathname.startsWith("/admin/kyc") ? styles.linkActive : styles.link}>
+        KYC Review
+      </Link>
       <Link href="/admin/moderation" className={inModeration ? styles.linkActive : styles.link}>
         Moderation
       </Link>

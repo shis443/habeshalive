@@ -78,6 +78,8 @@ const PREFERENCE_COLUMN: Record<NotificationType, keyof NotificationPreferences 
   application_approved: null,
   application_rejected: null,
   ad_revenue_paid: "payoutEvents",
+  kyc_approved: null,
+  kyc_rejected: null,
 };
 
 // Single-recipient notification (everything except creator_live, which

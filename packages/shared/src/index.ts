@@ -11,6 +11,7 @@ export * from "./schemas/chat.js";
 export * from "./schemas/creator-applications.js";
 export * from "./schemas/follows.js";
 export * from "./schemas/gift-cards.js";
+export * from "./schemas/kyc.js";
 export * from "./schemas/moderation.js";
 export * from "./schemas/notifications.js";
 export * from "./schemas/reports.js";

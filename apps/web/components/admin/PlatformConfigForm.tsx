@@ -21,6 +21,7 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   const [adRevenueSharePct, setAdRevenueSharePct] = useState(config ? String(config.adRevenueShareBps / 100) : "");
   const [adFrequencyCap, setAdFrequencyCap] = useState(config ? String(config.adFrequencyCapPerHour) : "");
   const [giftCardExpiryMonths, setGiftCardExpiryMonths] = useState(config ? String(config.giftCardExpiryMonths) : "");
+  const [kycRequiredForPayouts, setKycRequiredForPayouts] = useState(config?.kycRequiredForPayouts ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -42,6 +43,7 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           adRevenueShareBps: Math.round(parseFloat(adRevenueSharePct || "0") * 100),
           adFrequencyCapPerHour: Math.round(parseFloat(adFrequencyCap || "0")),
           giftCardExpiryMonths: Math.round(parseFloat(giftCardExpiryMonths || "0")),
+          kycRequiredForPayouts,
         }),
       });
       const data = await res.json();
@@ -161,6 +163,21 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
         value={giftCardExpiryMonths}
         onChange={(e) => setGiftCardExpiryMonths(e.target.value)}
       />
+
+      <label className={formStyles.fieldLabel}>
+        <input
+          type="checkbox"
+          checked={kycRequiredForPayouts}
+          onChange={(e) => setKycRequiredForPayouts(e.target.checked)}
+          style={{ marginRight: 8 }}
+        />
+        Require approved identity verification (KYC) before payouts
+      </label>
+      <p className={formStyles.warning}>
+        When on, a creator&apos;s payout requests are blocked until an admin approves a Fayda/Kebele ID
+        submission under KYC review. Off by default so this doesn&apos;t block existing creators&apos;
+        payouts before the review queue is actually staffed.
+      </p>
 
       <button type="button" className={styles.approveButton} disabled={submitting} onClick={submit}>
         {submitting ? "Saving..." : "Save settings"}

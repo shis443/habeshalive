@@ -29,18 +29,29 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   // received a bare path and silently matched nothing.
   const targetUrl = `${API_INTERNAL_URL}/${path.join("/")}${req.nextUrl.search}`;
   const canHaveBody = req.method !== "GET" && req.method !== "HEAD";
-  const body = canHaveBody ? await req.text() : undefined;
+  // ArrayBuffer, not text() — this proxy now also carries binary
+  // multipart/form-data bodies (kyc/routes.ts's file upload), and text()
+  // would corrupt non-UTF8 bytes (a JPEG/PNG/PDF) by round-tripping them
+  // through string decoding. An empty ArrayBuffer is truthy (unlike ""),
+  // hence the explicit byteLength check below rather than `body || undefined`.
+  const body = canHaveBody ? await req.arrayBuffer() : undefined;
+  const hasBody = body !== undefined && body.byteLength > 0;
 
   const res = await fetch(targetUrl, {
     method: req.method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Forwards the real Content-Type (application/json, or
+      // multipart/form-data; boundary=... for a file upload) rather than
+      // hardcoding application/json — a multipart body needs its boundary
+      // parameter to parse at all. Only set when there's a body at all:
       // Fastify's JSON parser rejects an empty body sent with this header
-      // (e.g. a bodyless POST like key rotation), so only set it when there
-      // is actually a body to parse.
-      ...(body ? { "Content-Type": "application/json" } : {}),
+      // (e.g. a bodyless POST like key rotation).
+      ...(hasBody && req.headers.get("content-type")
+        ? { "Content-Type": req.headers.get("content-type")! }
+        : {}),
     },
-    body: body || undefined,
+    body: hasBody ? body : undefined,
     cache: "no-store",
   });
 

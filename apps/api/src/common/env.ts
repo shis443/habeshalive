@@ -6,6 +6,12 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1),
   API_PORT: z.coerce.number().int().positive().default(4000),
   VIDEO_WEBHOOK_SECRET: z.string().min(1),
+  // AES-256 key for encrypting creator_profiles.stream_key at rest (see
+  // common/crypto.ts) — base64, must decode to exactly 32 bytes. Unlike
+  // Stripe/Telebirr-style third-party credentials, this is fully self-
+  // generated infra (e.g. `openssl rand -base64 32`), not something
+  // requiring a business account.
+  STREAM_KEY_ENCRYPTION_KEY: z.string().min(1),
   // Host creators' OBS points at (RTMP ingest) and the host clients fetch
   // HLS playback from (SRS's HTTP server) — different in local dev
   // (localhost) vs. production (the real domain/IP), hence env-driven.

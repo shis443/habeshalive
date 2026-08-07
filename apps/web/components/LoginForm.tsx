@@ -13,7 +13,11 @@ type SignupStep = "identifier" | "code";
 // "Forgot password?" link — sends an OTP, verifies it, sets a new
 // password, then logs in with it immediately (no separate "now log back
 // in" step).
-type LoginView = "password" | "forgot-identifier" | "forgot-code";
+// "totp": password (or signup OTP) was accepted but the account has 2FA
+// enabled — /api/session returned {requiresTotp, pendingToken} instead of
+// a session, and this view collects the 6-digit authenticator code to
+// finish via /api/session/2fa.
+type LoginView = "password" | "forgot-identifier" | "forgot-code" | "totp";
 
 async function postSession(body: Record<string, unknown>, addAccount: boolean): Promise<Response> {
   return fetch(addAccount ? "/api/session?addAccount=true" : "/api/session", {
@@ -64,6 +68,40 @@ export function LoginForm({
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pendingToken, setPendingToken] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+
+  // Shared by handleLogin and handleVerifyOtp: both complete via
+  // completeLoginOrChallenge on the backend, so either can come back with
+  // a real session or a 2FA challenge instead.
+  function handleSessionResponse(data: { requiresTotp?: boolean; pendingToken?: string }): void {
+    if (data.requiresTotp && data.pendingToken) {
+      setPendingToken(data.pendingToken);
+      setLoginView("totp");
+      return;
+    }
+    completeAuth();
+  }
+
+  async function handleVerifyTotp(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(addAccount ? "/api/session/2fa?addAccount=true" : "/api/session/2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingToken, code: totpCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Invalid code");
+      completeAuth();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function switchMethod(next: Method) {
     setMethod(next);
@@ -103,7 +141,7 @@ export function LoginForm({
       const res = await postSession({ ...identity, code, username, displayName, password }, addAccount);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to verify code");
-      completeAuth();
+      handleSessionResponse(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -119,7 +157,7 @@ export function LoginForm({
       const res = await postSession({ identifier, password }, addAccount);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to log in");
-      completeAuth();
+      handleSessionResponse(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -166,7 +204,7 @@ export function LoginForm({
       const loginRes = await postSession({ identifier, password: newPassword }, addAccount);
       const loginData = await loginRes.json();
       if (!loginRes.ok) throw new Error(loginData.error ?? "Password reset, but login failed — try logging in");
-      completeAuth();
+      handleSessionResponse(loginData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -179,6 +217,8 @@ export function LoginForm({
     setError(null);
     setCode("");
     setNewPassword("");
+    setPendingToken("");
+    setTotpCode("");
   }
 
   const showingForgotFlow = mode === "login" && loginView !== "password";
@@ -190,9 +230,16 @@ export function LoginForm({
         <p className={styles.subtext}>
           {mode === "signup" && "Create your account with your "}
           {mode === "signup" && (method === "phone" ? "phone number" : "email")}
-          {mode === "login" && loginView === "password" && "Sign in to your account"}
-          {mode === "login" && loginView === "forgot-identifier" && "Enter your phone number or email"}
-          {mode === "login" && loginView === "forgot-code" && "Enter the code and a new password"}
+          {loginView === "totp" && "Two-factor authentication required"}
+          {loginView !== "totp" && mode === "login" && loginView === "password" && "Sign in to your account"}
+          {loginView !== "totp" &&
+            mode === "login" &&
+            loginView === "forgot-identifier" &&
+            "Enter your phone number or email"}
+          {loginView !== "totp" &&
+            mode === "login" &&
+            loginView === "forgot-code" &&
+            "Enter the code and a new password"}
         </p>
 
         {mode === "signup" && signupStep === "identifier" && (
@@ -257,6 +304,36 @@ export function LoginForm({
               }}
             >
               Forgot password?
+            </button>
+          </form>
+        )}
+
+        {loginView === "totp" && (
+          <form onSubmit={handleVerifyTotp}>
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="totp-code">
+                Authenticator code
+              </label>
+              <input
+                id="totp-code"
+                type="text"
+                required
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="123456"
+                autoFocus
+                className={styles.input}
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+              />
+              <p className={styles.hint}>Enter the 6-digit code from your authenticator app.</p>
+            </div>
+            <button type="submit" className={styles.submitButton} disabled={loading || totpCode.length !== 6}>
+              {loading ? "Verifying..." : "Verify"}
+            </button>
+            <button type="button" className={styles.secondaryButton} onClick={backToLogin}>
+              Back to log in
             </button>
           </form>
         )}

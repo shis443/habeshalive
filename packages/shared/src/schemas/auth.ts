@@ -100,6 +100,52 @@ export const authResponseSchema = z.object({
 });
 export type AuthResponse = z.infer<typeof authResponseSchema>;
 
+// --- 2FA (TOTP, RFC 6238 — apps/api/src/auth/totp.ts) ---
+
+// Login now returns one of two shapes: a normal AuthResponse (2FA not
+// enabled — unchanged, existing behavior), or this challenge (2FA
+// enabled — the caller must POST pendingToken+code to /2fa/login-verify
+// to get a real AuthResponse). pendingToken is a short-lived, purpose-
+// restricted JWT — see app.ts's rejectPendingTotpToken for why it can
+// never be used in place of a real session token.
+export const totpChallengeSchema = z.object({
+  requiresTotp: z.literal(true),
+  pendingToken: z.string(),
+});
+export type TotpChallenge = z.infer<typeof totpChallengeSchema>;
+
+export const loginResultSchema = z.union([authResponseSchema, totpChallengeSchema]);
+export type LoginResult = z.infer<typeof loginResultSchema>;
+
+export const totpStatusSchema = z.object({
+  enabled: z.boolean(),
+});
+export type TotpStatus = z.infer<typeof totpStatusSchema>;
+
+export const totpSetupResponseSchema = z.object({
+  secret: z.string(),
+  otpauthUri: z.string(),
+});
+export type TotpSetupResponse = z.infer<typeof totpSetupResponseSchema>;
+
+const totpCodeSchema = z.string().regex(/^\d{6}$/, "Enter the 6-digit code from your authenticator app");
+
+export const confirmTotpSchema = z.object({
+  code: totpCodeSchema,
+});
+export type ConfirmTotpInput = z.infer<typeof confirmTotpSchema>;
+
+export const disableTotpSchema = z.object({
+  code: totpCodeSchema,
+});
+export type DisableTotpInput = z.infer<typeof disableTotpSchema>;
+
+export const totpLoginVerifySchema = z.object({
+  pendingToken: z.string(),
+  code: totpCodeSchema,
+});
+export type TotpLoginVerifyInput = z.infer<typeof totpLoginVerifySchema>;
+
 // --- E.1: account identity ---
 
 export const myAccountSchema = z.object({

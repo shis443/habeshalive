@@ -8,6 +8,7 @@ import {
   manualAdjustmentSchema,
   mergeStreamTagsSchema,
   rejectCreatorApplicationSchema,
+  rejectKycSchema,
   suspendCreatorSchema,
   updateAdCampaignStatusSchema,
   updateAdLeadStatusSchema,
@@ -49,6 +50,7 @@ import {
   listSubscriptionsForAdmin,
 } from "../subscriptions/service.js";
 import { cancelBoost, listBoostRevenueByCreator } from "./boosts-service.js";
+import { approveKyc, getKycDocumentUrl, listKycSubmissions, rejectKyc } from "../kyc/service.js";
 import { getPlatformConfig, updatePlatformConfig } from "./config-service.js";
 import { listCreators, suspendCreator, unsuspendCreator, updateCreator } from "./creators-service.js";
 import {
@@ -241,6 +243,31 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { ok: true };
     }
   );
+
+  // --- KYC (Module 1.4 — Fayda/Kebele ID review) ---
+
+  app.get<{ Querystring: { status?: "pending" | "approved" | "rejected" } }>(
+    "/kyc",
+    { preHandler: app.requireAdmin },
+    async (req) => listKycSubmissions(req.query.status)
+  );
+
+  // Short-lived signed URL, not the document itself proxied through this
+  // JSON API — same reasoning as vods/routes.ts's playback URL endpoint.
+  app.get<{ Params: { id: string } }>("/kyc/:id/document-url", { preHandler: app.requireAdmin }, async (req) => {
+    return { url: await getKycDocumentUrl(req.params.id) };
+  });
+
+  app.post<{ Params: { id: string } }>("/kyc/:id/approve", { preHandler: app.requireAdmin }, async (req) => {
+    await approveKyc(req.user.sub, req.params.id);
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/kyc/:id/reject", { preHandler: app.requireAdmin }, async (req) => {
+    const input = rejectKycSchema.parse(req.body);
+    await rejectKyc(req.user.sub, req.params.id, input.reason);
+    return { ok: true };
+  });
 
   // --- Ads (B.2) ---
 

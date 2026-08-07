@@ -239,6 +239,11 @@ export const platformConfigSchema = z.object({
   adRevenueShareBps: z.number().int(),
   adFrequencyCapPerHour: z.number().int(),
   giftCardExpiryMonths: z.number().int(),
+  // Module 1.4 — see kyc/service.ts. Defaults false at the DB level
+  // (0032_kyc.sql); an admin opts in from Admin Settings once the review
+  // queue is actually staffed, rather than this shipping hard-on and
+  // instantly blocking every existing creator's payouts.
+  kycRequiredForPayouts: z.boolean(),
   updatedAt: z.string(),
   updatedByUsername: z.string().nullable(),
 });
@@ -255,6 +260,7 @@ export const updatePlatformConfigSchema = z.object({
   adRevenueShareBps: z.number().int().min(0).max(10000),
   adFrequencyCapPerHour: z.number().int().positive(),
   giftCardExpiryMonths: z.number().int().positive(),
+  kycRequiredForPayouts: z.boolean(),
 });
 export type UpdatePlatformConfigInput = z.infer<typeof updatePlatformConfigSchema>;
 

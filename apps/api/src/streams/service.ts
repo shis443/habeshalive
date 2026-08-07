@@ -11,14 +11,15 @@ import {
   type ViewerList,
   type ViewerListEntry,
 } from "@habeshalive/shared";
-import { timingSafeEqual } from "node:crypto";
 import { logAdminAction } from "../admin/audit.js";
 import { getBoostPricing, getDefaultRevenueShareBps } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { AppError } from "../common/errors.js";
 import { env } from "../common/env.js";
+import { encryptSecret, resolveStreamKey, timingSafeEqualStreamKey } from "../common/crypto.js";
 import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
+import { killActiveRtmpPublishers } from "../moderation/actions-service.js";
 import { isApprovedCreator } from "../creator-applications/service.js";
 import { notifyFollowersCreatorLive } from "../notifications/service.js";
 import { appendHlsToken } from "./hls-token.js";
@@ -147,10 +148,14 @@ async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Encrypted at rest (AES-256-GCM, common/crypto.ts) from creation —
+    // only ever-generated keys land here, never a legacy plaintext row
+    // (those all predate this pass; see resolveStreamKey's own comment
+    // for how reads stay dual-compat with them).
     const inserted = await client.query<CreatorProfileRow>(
       `INSERT INTO creator_profiles (user_id, stream_key, revenue_share_bps) VALUES ($1, $2, $3)
        RETURNING user_id, stream_key`,
-      [userId, streamKey, defaultRevenueShareBps]
+      [userId, encryptSecret(streamKey), defaultRevenueShareBps]
     );
     await client.query(`UPDATE users SET role = 'creator' WHERE id = $1 AND role = 'viewer'`, [
       userId,
@@ -178,16 +183,29 @@ function composeStreamKeyField(userId: string, secret: string): string {
 
 export async function getStreamKey(userId: string): Promise<StreamKeyResponse> {
   const profile = await ensureCreatorProfile(userId);
-  return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey: composeStreamKeyField(userId, profile.stream_key) };
+  return {
+    rtmpUrl: videoProvider.getRtmpUrl(),
+    streamKey: composeStreamKeyField(userId, resolveStreamKey(profile.stream_key)),
+  };
 }
 
+// "Instant" is real, not just a fresh key in the DB: whatever's currently
+// publishing under the old key gets force-disconnected too, same
+// mechanism (and same fail-open reasoning — see
+// moderation/actions-service.ts's killActiveRtmpPublishers) as a ban's
+// RTMP teardown. Without this, a leaked key stayed live until the
+// encoder's *next* natural disconnect — rotating it didn't actually stop
+// an attacker already broadcasting with the old one.
 export async function rotateStreamKey(userId: string): Promise<StreamKeyResponse> {
   await ensureCreatorProfile(userId);
   const { streamKey } = await videoProvider.createLiveInput();
   await pool.query(`UPDATE creator_profiles SET stream_key = $1, updated_at = now() WHERE user_id = $2`, [
-    streamKey,
+    encryptSecret(streamKey),
     userId,
   ]);
+  killActiveRtmpPublishers(userId).catch((err) => {
+    console.error(`[streams] failed to kill active publisher after key rotation for ${userId}:`, err);
+  });
   return { rtmpUrl: videoProvider.getRtmpUrl(), streamKey: composeStreamKeyField(userId, streamKey) };
 }
 
@@ -730,12 +748,11 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
   // assertWebhookSecret and wallet/routes.ts's Chapa signature check — a
   // plain !== leaks timing information about how many leading characters
   // of the real stream_key matched, in principle usable to brute-force it
-  // byte-by-byte. Length-checked first since timingSafeEqual throws on
-  // mismatched buffer lengths rather than returning false.
-  const realKey = profile.rows[0]!.stream_key;
-  const providedBuf = Buffer.from(providedKey ?? "");
-  const realBuf = Buffer.from(realKey);
-  if (providedBuf.length !== realBuf.length || !timingSafeEqual(providedBuf, realBuf)) {
+  // byte-by-byte. timingSafeEqualStreamKey (common/crypto.ts) also
+  // transparently decrypts the stored value first (or leaves it as-is if
+  // it's still a pre-encryption legacy row — see resolveStreamKey's own
+  // comment) since providedKey always arrives as plaintext from RTMP.
+  if (!timingSafeEqualStreamKey(providedKey, profile.rows[0]!.stream_key)) {
     throw new AppError(401, "Invalid stream key");
   }
 
@@ -835,7 +852,10 @@ export async function markEndedByProviderStreamId(providerStreamId: string, prov
   // userId) is public, so without this a forged on_unpublish for any known
   // creator would be trivial for anyone who also has the shared
   // VIDEO_WEBHOOK_SECRET (defense in depth, not the primary boundary).
-  if (!providedKey || providedKey !== profile.rows[0]!.stream_key) {
+  // Reuses the same decrypt-aware, timing-safe helper as the publish-time
+  // check above — this used to be a plain !==, upgraded to timing-safe
+  // as a side effect of needing decryption-awareness here regardless.
+  if (!timingSafeEqualStreamKey(providedKey, profile.rows[0]!.stream_key)) {
     throw new AppError(401, "Invalid stream key");
   }
 

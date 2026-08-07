@@ -94,7 +94,11 @@ function fetchWithTimeout(url: string | URL, init: RequestInit, timeoutMs: numbe
 //    function. Matched against `name`, not `stream` — see
 //    SrsClientEntry's own comment for why `stream` is the wrong field
 //    (an internal SRS stream-object id, not the RTMP stream name).
-async function killActiveRtmpPublishers(providerStreamId: string): Promise<void> {
+// Exported — also reused by streams/service.ts's rotateStreamKey (a
+// regenerated stream key should immediately disconnect whatever's
+// currently publishing under the old one, same underlying SRS admin-API
+// mechanism as a ban, not just a second, subtly-different copy of it).
+export async function killActiveRtmpPublishers(providerStreamId: string): Promise<void> {
   let res: Response;
   try {
     res = await fetchWithTimeout(new URL("/api/v1/clients/?count=100", env.SRS_ADMIN_API_BASE), {}, 3000);

@@ -13,6 +13,7 @@ import {
   type TestUser,
 } from "../test/fixtures.js";
 import { subscribe } from "../subscriptions/service.js";
+import { recordSecurityEvent } from "../common/security-hold.js";
 import {
   completeTopupFromWebhook,
   getBalance,
@@ -244,5 +245,61 @@ describe("payout hold", () => {
       [payout.id]
     );
     await assertTransactionBalanced(rows[0]!.ledger_transaction_id);
+  });
+});
+
+describe("security hold + KYC gate on requestPayout", () => {
+  it("blocks a payout within 72h of a password/2FA change, funds untouched", async () => {
+    const creator = await trackUser(await createTestCreator());
+    await fundWallet(creator.id, 10_000);
+    await recordSecurityEvent(creator.id, "password_change");
+
+    await expect(
+      requestPayout(creator.id, { amountSantim: 5_000, method: "telebirr", destination: "0911234567" })
+    ).rejects.toMatchObject({ statusCode: 403 } satisfies Partial<AppError>);
+
+    expect(await getWalletBalance(creator.walletId)).toBe(10_000);
+  });
+
+  it("does not block a payout once no security event is on record", async () => {
+    const creator = await trackUser(await createTestCreator());
+    await fundWallet(creator.id, 10_000);
+
+    const payout = await requestPayout(creator.id, {
+      amountSantim: 5_000,
+      method: "telebirr",
+      destination: "0911234567",
+    });
+    expect(payout.status).toBe("processing");
+  });
+
+  it("blocks a payout when KYC is required and not approved, and unblocks once approved", async () => {
+    const creator = await trackUser(await createTestCreator());
+    await fundWallet(creator.id, 10_000);
+
+    await pool.query(`UPDATE platform_config SET kyc_required_for_payouts = true WHERE id = TRUE`);
+    try {
+      await expect(
+        requestPayout(creator.id, { amountSantim: 5_000, method: "telebirr", destination: "0911234567" })
+      ).rejects.toMatchObject({ statusCode: 403 } satisfies Partial<AppError>);
+      expect(await getWalletBalance(creator.walletId)).toBe(10_000);
+
+      await pool.query(
+        `INSERT INTO kyc_submissions (user_id, id_type, document_key, status, reviewed_at)
+         VALUES ($1, 'fayda', 'kyc/test/fake.jpg', 'approved', now())`,
+        [creator.id]
+      );
+
+      const payout = await requestPayout(creator.id, {
+        amountSantim: 5_000,
+        method: "telebirr",
+        destination: "0911234567",
+      });
+      expect(payout.status).toBe("processing");
+    } finally {
+      // Global singleton row (platform_config), shared across this whole
+      // suite — must not leak into other test files regardless of order.
+      await pool.query(`UPDATE platform_config SET kyc_required_for_payouts = false WHERE id = TRUE`);
+    }
   });
 });

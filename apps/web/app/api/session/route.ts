@@ -1,7 +1,27 @@
-import { authResponseSchema, loginSchema, verifyEmailOtpSchema, verifyOtpSchema } from "@habeshalive/shared";
+import { loginResultSchema, loginSchema, verifyEmailOtpSchema, verifyOtpSchema, type AuthResponse } from "@habeshalive/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
 import { clearSessionCookie, getSessionCookie, MAX_ACCOUNTS, writeSessionCookie } from "@/lib/session";
+
+// Shared by this route's normal login/signup completion and
+// api/session/2fa/route.ts's post-TOTP-challenge completion — both reach
+// the same "we now have a real {token, user}" point and need the same
+// account-switcher-aware cookie write (E.2).
+export async function completeSessionFromAuthResponse(
+  { token, user }: AuthResponse,
+  req: NextRequest
+): Promise<NextResponse> {
+  const addAccount = req.nextUrl.searchParams.get("addAccount") === "true";
+  const existing = addAccount ? await getSessionCookie() : null;
+
+  const newEntry = { userId: user.id, username: user.username, token };
+  const withoutThisUser = (existing?.accounts ?? []).filter((a) => a.userId !== user.id);
+  const accounts = [...withoutThisUser, newEntry].slice(-MAX_ACCOUNTS);
+
+  await writeSessionCookie({ activeUserId: user.id, accounts });
+
+  return NextResponse.json({ user });
+}
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.json();
@@ -31,23 +51,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, { status: res.status });
   }
 
-  const { token, user } = authResponseSchema.parse(data);
+  // Login now returns one of two shapes (see shared/schemas/auth.ts's
+  // loginResultSchema) — a real AuthResponse (2FA not enabled, unchanged
+  // behavior), or a TotpChallenge (2FA enabled: no session cookie is
+  // written yet, the caller must finish via POST /api/session/2fa with
+  // the returned pendingToken + a code). Parsing the union rather than
+  // authResponseSchema directly is what's fixed here — the old code threw
+  // a Zod error on every 2FA-enabled login instead of surfacing the
+  // challenge.
+  const result = loginResultSchema.parse(data);
+  if ("requiresTotp" in result) {
+    return NextResponse.json(result);
+  }
 
-  // E.2: ?addAccount=true means "append to whoever's already signed in"
-  // (the account switcher's "Add another account" entry point) — anything
-  // else is a normal login, which replaces the whole cookie rather than
-  // silently appending to a stale session the visitor may not know is
-  // still there on a shared device.
-  const addAccount = req.nextUrl.searchParams.get("addAccount") === "true";
-  const existing = addAccount ? await getSessionCookie() : null;
-
-  const newEntry = { userId: user.id, username: user.username, token };
-  const withoutThisUser = (existing?.accounts ?? []).filter((a) => a.userId !== user.id);
-  const accounts = [...withoutThisUser, newEntry].slice(-MAX_ACCOUNTS);
-
-  await writeSessionCookie({ activeUserId: user.id, accounts });
-
-  return NextResponse.json({ user });
+  return completeSessionFromAuthResponse(result, req);
 }
 
 export async function DELETE(req: NextRequest) {

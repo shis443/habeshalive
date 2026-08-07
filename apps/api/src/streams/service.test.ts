@@ -1,7 +1,8 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { pool } from "../common/db.js";
-import { cleanupTestUsers, createTestViewer, type TestUser } from "../test/fixtures.js";
-import { reapStaleStreams } from "./service.js";
+import { resolveStreamKey } from "../common/crypto.js";
+import { cleanupTestUsers, createTestCreator, createTestViewer, type TestUser } from "../test/fixtures.js";
+import { getStreamKey, markEndedByProviderStreamId, markLiveByProviderStreamId, reapStaleStreams, rotateStreamKey } from "./service.js";
 
 const createdUserIds: string[] = [];
 
@@ -120,5 +121,86 @@ describe("reapStaleStreams", () => {
     // The exploding one is treated as unreachable (its own check failed) and
     // gets ended — but critically, the sweep as a whole didn't throw.
     expect(await getStreamStatus(explodingStreamId)).toBe("ended");
+  });
+});
+
+async function getRawStreamKeyColumn(userId: string): Promise<string> {
+  const { rows } = await pool.query<{ stream_key: string }>(
+    `SELECT stream_key FROM creator_profiles WHERE user_id = $1`,
+    [userId]
+  );
+  return rows[0]!.stream_key;
+}
+
+describe("stream key encryption at rest + rotation", () => {
+  it("stores an encrypted value in the DB, not the plaintext key shown to the creator", async () => {
+    const creator = await trackUser(await createTestCreator());
+
+    const raw = await getRawStreamKeyColumn(creator.id);
+    // A real generated key is exactly 32 lowercase hex chars (video-
+    // provider.ts) — the stored value must NOT be that shape, or
+    // encryption silently isn't happening.
+    expect(raw).not.toMatch(/^[0-9a-f]{32}$/);
+
+    const { streamKey } = await getStreamKey(creator.id);
+    // getStreamKey's response is "{userId}?key={secret}" — the real
+    // secret is decryptable from the raw column and must match what the
+    // creator is shown.
+    const shownSecret = streamKey.split("?key=")[1];
+    expect(resolveStreamKey(raw)).toBe(shownSecret);
+  });
+
+  it("rotation re-encrypts a fresh key and invalidates the old one for publish auth", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const before = await getStreamKey(creator.id);
+    const oldSecret = before.streamKey.split("?key=")[1]!;
+
+    const rotated = await rotateStreamKey(creator.id);
+    const newSecret = rotated.streamKey.split("?key=")[1]!;
+    expect(newSecret).not.toBe(oldSecret);
+
+    const rawAfter = await getRawStreamKeyColumn(creator.id);
+    expect(resolveStreamKey(rawAfter)).toBe(newSecret);
+
+    // The old key must no longer authenticate a publish...
+    await expect(markLiveByProviderStreamId(creator.id, oldSecret)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    // ...but the new one must.
+    await expect(markLiveByProviderStreamId(creator.id, newSecret)).resolves.toBeUndefined();
+  });
+
+  it("markLiveByProviderStreamId / markEndedByProviderStreamId authenticate correctly against an encrypted-at-rest key", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const { streamKey } = await getStreamKey(creator.id);
+    const secret = streamKey.split("?key=")[1]!;
+
+    await expect(markLiveByProviderStreamId(creator.id, "definitely-wrong")).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    await expect(markLiveByProviderStreamId(creator.id, secret)).resolves.toBeUndefined();
+    expect(await getStreamStatus(creator.streamId)).toBe("live");
+
+    await expect(markEndedByProviderStreamId(creator.id, "definitely-wrong")).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    await expect(markEndedByProviderStreamId(creator.id, secret)).resolves.toBeUndefined();
+    expect(await getStreamStatus(creator.streamId)).toBe("ended");
+  });
+
+  it("dual-compat: a legacy plaintext row (pre-encryption) still authenticates correctly", async () => {
+    const creator = await trackUser(await createTestCreator());
+    // Simulate a row that predates this pass — written as raw plaintext,
+    // bypassing rotateStreamKey/ensureCreatorProfile's encryption.
+    const legacyPlaintext = "abcdef0123456789abcdef0123456789".slice(0, 32);
+    await pool.query(`UPDATE creator_profiles SET stream_key = $1 WHERE user_id = $2`, [
+      legacyPlaintext,
+      creator.id,
+    ]);
+
+    const { streamKey } = await getStreamKey(creator.id);
+    expect(streamKey.split("?key=")[1]).toBe(legacyPlaintext);
+
+    await expect(markLiveByProviderStreamId(creator.id, legacyPlaintext)).resolves.toBeUndefined();
   });
 });

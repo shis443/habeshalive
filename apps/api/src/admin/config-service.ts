@@ -13,6 +13,7 @@ interface ConfigRow {
   ad_revenue_share_bps: number;
   ad_frequency_cap_per_hour: number;
   gift_card_expiry_months: number;
+  kyc_required_for_payouts: boolean;
   updated_at: string;
   updated_by_username: string | null;
 }
@@ -22,7 +23,7 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
     `SELECT pc.boost_price_santim, pc.boost_duration_ms, pc.default_revenue_share_bps,
             pc.payout_manual_review_threshold_santim, pc.vod_retention_days_default, pc.vod_retention_days_anchor,
             pc.approved_creator_cap, pc.ad_revenue_share_bps, pc.ad_frequency_cap_per_hour, pc.gift_card_expiry_months,
-            pc.updated_at, u.username AS updated_by_username
+            pc.kyc_required_for_payouts, pc.updated_at, u.username AS updated_by_username
      FROM platform_config pc
      LEFT JOIN users u ON u.id = pc.updated_by
      WHERE pc.id = TRUE`
@@ -39,6 +40,7 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
     adRevenueShareBps: row.ad_revenue_share_bps,
     adFrequencyCapPerHour: row.ad_frequency_cap_per_hour,
     giftCardExpiryMonths: row.gift_card_expiry_months,
+    kycRequiredForPayouts: row.kyc_required_for_payouts,
     updatedAt: row.updated_at,
     updatedByUsername: row.updated_by_username,
   };
@@ -95,6 +97,15 @@ export async function getGiftCardExpiryMonths(): Promise<number> {
   return rows[0]!.gift_card_expiry_months;
 }
 
+// Read fresh in requestPayout() (wallet/service.ts) on every payout
+// request — see 0032_kyc.sql's comment on why this defaults false.
+export async function getKycRequiredForPayouts(): Promise<boolean> {
+  const { rows } = await pool.query<{ kyc_required_for_payouts: boolean }>(
+    `SELECT kyc_required_for_payouts FROM platform_config WHERE id = TRUE`
+  );
+  return rows[0]!.kyc_required_for_payouts;
+}
+
 export async function updatePlatformConfig(adminId: string, input: UpdatePlatformConfigInput): Promise<PlatformConfig> {
   await pool.query(
     `UPDATE platform_config SET
@@ -108,7 +119,8 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
        ad_revenue_share_bps = $8,
        ad_frequency_cap_per_hour = $9,
        gift_card_expiry_months = $10,
-       updated_at = now(), updated_by = $11
+       kyc_required_for_payouts = $11,
+       updated_at = now(), updated_by = $12
      WHERE id = TRUE`,
     [
       input.boostPriceSantim,
@@ -121,6 +133,7 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
       input.adRevenueShareBps,
       input.adFrequencyCapPerHour,
       input.giftCardExpiryMonths,
+      input.kycRequiredForPayouts,
       adminId,
     ]
   );
