@@ -48,7 +48,12 @@ export type CreatorPayoutContext = z.infer<typeof creatorPayoutContextSchema>;
 export const blocklistTermSchema = z.object({
   id: z.string().uuid(),
   term: z.string(),
-  language: z.enum(["en", "am"]),
+  // Module 5 — 'om' (Oromo), 'so' (Somali), 'am-latn' (Latin-
+  // transliterated Amharic) added alongside the original 'en'/'am'.
+  // scanText()'s matching (moderation/service.ts) was already
+  // script-agnostic; this just admits more language tags for the
+  // admin-curated term list itself.
+  language: z.enum(["en", "am", "om", "so", "am-latn"]),
   addedByUsername: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -56,7 +61,12 @@ export type BlocklistTerm = z.infer<typeof blocklistTermSchema>;
 
 export const addBlocklistTermSchema = z.object({
   term: z.string().min(1).max(100),
-  language: z.enum(["en", "am"]),
+  // Module 5 — 'om' (Oromo), 'so' (Somali), 'am-latn' (Latin-
+  // transliterated Amharic) added alongside the original 'en'/'am'.
+  // scanText()'s matching (moderation/service.ts) was already
+  // script-agnostic; this just admits more language tags for the
+  // admin-curated term list itself.
+  language: z.enum(["en", "am", "om", "so", "am-latn"]),
 });
 export type AddBlocklistTermInput = z.infer<typeof addBlocklistTermSchema>;
 

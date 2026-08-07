@@ -44,7 +44,8 @@ export type ModerationContentType =
   | "gift_message"
   | "chat_message"
   | "stream_thumbnail"
-  | "donation_message";
+  | "donation_message"
+  | "avatar_photo";
 
 // Flags content for human review — never blocks or deletes it. The
 // content itself already went through by the time this runs (called
@@ -75,7 +76,7 @@ export async function flagIfMatched(
 // the stream from going live over a moderation-service hiccup; the
 // original text-based flagIfMatched() has the same fail-open bias.
 export async function flagIfImageMatched(
-  contentType: "stream_thumbnail",
+  contentType: "stream_thumbnail" | "avatar_photo",
   contentId: string,
   authorId: string,
   dataUri: string

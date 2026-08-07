@@ -8,6 +8,8 @@ import {
 } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
+import { deleteObject, getObjectBuffer, isObjectStorageConfigured, uploadObject } from "../common/object-storage.js";
+import { flagIfImageMatched } from "../moderation/service.js";
 
 const CATEGORIES: AvatarCategory[] = [
   "background",
@@ -155,4 +157,66 @@ export async function renderUserAvatar(userId: string): Promise<string> {
   }
 
   return renderAvatarSvg(values);
+}
+
+// Module 5 — a real uploaded photo, alongside the generated-parts avatar
+// above rather than replacing it. No extension in the object key (unlike
+// clips/kyc documents) — S3/R2 stores Content-Type as real object
+// metadata independent of the key name, so serving it back just reads
+// that metadata rather than needing to reconstruct "was this a .jpg or
+// .png" from a stable, opaque avatar_url.
+const ALLOWED_PHOTO_CONTENT_TYPES = new Set(["image/jpeg", "image/png"]);
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+function avatarPhotoKey(userId: string): string {
+  return `avatars/${userId}`;
+}
+
+export async function uploadAvatarPhoto(
+  userId: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<{ avatarUrl: string }> {
+  if (!isObjectStorageConfigured) {
+    throw new AppError(503, "Photo upload isn't available right now — try again later.");
+  }
+  if (!ALLOWED_PHOTO_CONTENT_TYPES.has(contentType)) throw new AppError(400, "Upload a JPEG or PNG image.");
+  if (buffer.byteLength === 0) throw new AppError(400, "The uploaded file is empty.");
+  if (buffer.byteLength > MAX_PHOTO_BYTES) throw new AppError(400, "File is too large (max 5MB).");
+
+  const key = avatarPhotoKey(userId);
+  await uploadObject(key, buffer, contentType);
+
+  // Stable, opaque URL — never changes after the first upload, so every
+  // other place avatar_url is already embedded (chat messages, stream
+  // creator objects, ...) keeps working with zero changes, same as the
+  // existing /avatars/render/:userId.svg path.
+  const avatarUrl = `/avatars/photo/${userId}`;
+  await pool.query(`UPDATE users SET avatar_url = $1 WHERE id = $2`, [avatarUrl, userId]);
+
+  // After-the-fact flag for human review — never blocks the upload
+  // itself, same posture as every other moderation check in this
+  // codebase (flagIfMatched/flagIfImageMatched's own doc comment).
+  await flagIfImageMatched(
+    "avatar_photo",
+    userId,
+    userId,
+    `data:${contentType};base64,${buffer.toString("base64")}`
+  );
+
+  return { avatarUrl };
+}
+
+export async function getAvatarPhoto(userId: string): Promise<{ buffer: Buffer; contentType: string }> {
+  try {
+    const { buffer, contentType } = await getObjectBuffer(avatarPhotoKey(userId));
+    return { buffer, contentType: contentType ?? "application/octet-stream" };
+  } catch {
+    throw new AppError(404, "No uploaded photo for this user");
+  }
+}
+
+export async function revertToGeneratedAvatar(userId: string): Promise<void> {
+  await pool.query(`UPDATE users SET avatar_url = '/avatars/render/' || $1 || '.svg' WHERE id = $1`, [userId]);
+  await deleteObject(avatarPhotoKey(userId));
 }

@@ -2,6 +2,7 @@ import { pinMessageSchema, sendChatMessageSchema } from "@habeshalive/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { createCentrifugoConnectionToken } from "./token.js";
 import {
+  deleteChatMessage,
   getChatHistory,
   getPinnedMessage,
   getRecentGifters,
@@ -62,6 +63,18 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { streamId: string } }>("/:streamId/recent-gifters", async (req) =>
     getRecentGifters(req.params.streamId)
+  );
+
+  // Module 5 — soft-delete, gated the same three ways pin/unpin above
+  // already are (chat/service.ts's assertCanModerateStream: owner,
+  // platform staff, or a granted channel moderator).
+  app.delete<{ Params: { streamId: string; messageId: string } }>(
+    "/:streamId/messages/:messageId",
+    { preHandler: app.authenticate },
+    async (req, reply) => {
+      await deleteChatMessage(req.user.sub, req.params.streamId, req.params.messageId);
+      reply.send({ ok: true });
+    }
   );
 
   app.post<{ Params: { streamId: string } }>(

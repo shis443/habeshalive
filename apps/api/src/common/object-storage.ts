@@ -55,3 +55,20 @@ export async function getSignedVodUrl(key: string): Promise<string> {
   const command = new GetObjectCommand({ Bucket: env.VOD_S3_BUCKET, Key: key });
   return getSignedUrl(getClient(), command, { expiresIn: VOD_URL_TTL_SECONDS });
 }
+
+// Module 5 — avatar photos (avatars/service.ts) are proxied through this
+// app's own stable /avatars/photo/:userId path rather than a signed URL:
+// unlike a VOD (fetched once per page load and held for the life of that
+// page), an avatar renders on nearly every page and needs a URL that
+// never expires or changes shape, matching how the existing generated-
+// SVG avatar path (/avatars/render/:userId.svg) already works. Reads the
+// whole object into memory — fine for an avatar-sized image (low
+// megabytes at most, same kind of ceiling kyc/service.ts's
+// MAX_DOCUMENT_BYTES enforces at upload time), not something this app
+// does for VODs/clips, which stay signed-URL-only for exactly that reason.
+export async function getObjectBuffer(key: string): Promise<{ buffer: Buffer; contentType: string | undefined }> {
+  const res = await getClient().send(new GetObjectCommand({ Bucket: env.VOD_S3_BUCKET, Key: key }));
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) chunks.push(chunk);
+  return { buffer: Buffer.concat(chunks), contentType: res.ContentType };
+}

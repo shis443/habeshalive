@@ -10,7 +10,8 @@ import {
 } from "@habeshalive/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import { AvatarCategoryTabs } from "./AvatarCategoryTabs";
 import { AvatarPartGrid } from "./AvatarPartGrid";
 import { AvatarPreviewHero } from "./AvatarPreviewHero";
@@ -67,9 +68,11 @@ function resolveValues(manifest: AvatarManifest, draft: Draft): AvatarValues {
 export function AvatarEditor({
   manifest,
   initialSelection,
+  initialAvatarUrl,
 }: {
   manifest: AvatarManifest;
   initialSelection: AvatarSelection;
+  initialAvatarUrl: string | null;
 }) {
   const router = useRouter();
 
@@ -88,6 +91,14 @@ export function AvatarEditor({
   const [randomizing, setRandomizing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState(initialAvatarUrl);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  // Module 5 — an uploaded photo (apps/api/src/avatars/service.ts's
+  // uploadAvatarPhoto) always sets avatar_url to this exact prefix; the
+  // generated-parts avatar uses /avatars/render/:userId.svg instead. This
+  // is how the UI tells the two apart without a separate DB flag.
+  const hasUploadedPhoto = photoUrl?.startsWith("/avatars/photo/") ?? false;
 
   // Shared between the big preview and every per-option thumbnail in the
   // grid below (OptionThumbnail.tsx composites each tile onto this same
@@ -135,6 +146,42 @@ export function AvatarEditor({
     }
   }
 
+  async function handlePhotoSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingPhoto(true);
+    setPhotoError(null);
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+      const res = await fetch("/api/backend/avatars/photo", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to upload photo");
+      setPhotoUrl(data.avatarUrl);
+      router.refresh();
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
+  async function handleRevertPhoto() {
+    setUploadingPhoto(true);
+    setPhotoError(null);
+    try {
+      const res = await fetch("/api/backend/avatars/photo/revert", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to revert photo");
+      setPhotoUrl(null);
+      router.refresh();
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   return (
     <>
       <header className={styles.header}>
@@ -162,6 +209,36 @@ export function AvatarEditor({
         </div>
 
         {saveMessage && <p className={styles.saveMessage}>{saveMessage}</p>}
+
+        <div className={styles.photoSection}>
+          {hasUploadedPhoto && photoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={resolveAvatarUrl(photoUrl) ?? undefined} alt="Uploaded profile photo" className={styles.photoPreview} />
+          )}
+          <div className={styles.photoActions}>
+            <label className={styles.photoUploadButton}>
+              {uploadingPhoto ? "Uploading…" : hasUploadedPhoto ? "Replace photo" : "Upload a photo"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png"
+                onChange={handlePhotoSelect}
+                disabled={uploadingPhoto}
+                className={styles.photoInput}
+              />
+            </label>
+            {hasUploadedPhoto && (
+              <button
+                type="button"
+                className={styles.photoRevertButton}
+                onClick={handleRevertPhoto}
+                disabled={uploadingPhoto}
+              >
+                Use generated avatar instead
+              </button>
+            )}
+          </div>
+          {photoError && <p className={styles.error}>{photoError}</p>}
+        </div>
 
         <div className={styles.panel}>
           <div className={styles.panelGlow} />

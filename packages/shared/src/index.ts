@@ -7,6 +7,7 @@ export * from "./schemas/ads.js";
 export * from "./schemas/announcements.js";
 export * from "./schemas/auth.js";
 export * from "./schemas/avatars.js";
+export * from "./schemas/channel-moderation.js";
 export * from "./schemas/chat.js";
 export * from "./schemas/clips.js";
 export * from "./schemas/creator-applications.js";

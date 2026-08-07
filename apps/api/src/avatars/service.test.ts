@@ -1,8 +1,45 @@
 import type { AvatarCategory } from "@habeshalive/shared";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { pool } from "../common/db.js";
+import { AppError } from "../common/errors.js";
 import { cleanupTestUsers, createTestViewer } from "../test/fixtures.js";
-import { getUserSelection, listParts, randomizeSelection, renderUserAvatar, saveSelection } from "./service.js";
+
+// Module 5 — real object storage isn't configured in this test env
+// (VOD_S3_* unset), which would make uploadAvatarPhoto 503 immediately.
+// Mocked with an in-memory Map, same reasoning/pattern as vods/
+// clip-service.test.ts's uploadObjectMock. Rekognition's client already
+// self-stubs to an empty-labels response when AWS_REKOGNITION_ACCESS_KEY_ID
+// is unset (image-moderation-client.ts), so flagIfImageMatched needs no
+// mock of its own. Only the photo tests below actually exercise this —
+// the pre-existing generated-avatar tests never touch object storage.
+const photoStore = new Map<string, { buffer: Buffer; contentType: string }>();
+
+vi.mock("../common/object-storage.js", () => ({
+  isObjectStorageConfigured: true,
+  uploadObject: vi.fn(async (key: string, body: Buffer, contentType: string) => {
+    photoStore.set(key, { buffer: body, contentType });
+    return key;
+  }),
+  getObjectBuffer: vi.fn(async (key: string) => {
+    const entry = photoStore.get(key);
+    if (!entry) throw new Error("not found");
+    return { buffer: entry.buffer, contentType: entry.contentType };
+  }),
+  deleteObject: vi.fn(async (key: string) => {
+    photoStore.delete(key);
+  }),
+}));
+
+import {
+  getAvatarPhoto,
+  getUserSelection,
+  listParts,
+  randomizeSelection,
+  renderUserAvatar,
+  revertToGeneratedAvatar,
+  saveSelection,
+  uploadAvatarPhoto,
+} from "./service.js";
 
 const ALL_CATEGORIES = [
   "background",
@@ -40,6 +77,17 @@ afterAll(async () => {
   await cleanupTestUsers(createdUserIds);
   await pool.end();
 });
+
+afterEach(() => {
+  photoStore.clear();
+});
+
+async function getAvatarUrl(userId: string): Promise<string | null> {
+  const { rows } = await pool.query<{ avatar_url: string | null }>(`SELECT avatar_url FROM users WHERE id = $1`, [
+    userId,
+  ]);
+  return rows[0]!.avatar_url;
+}
 
 describe("listParts", () => {
   it("returns real, non-empty seeded options for all 11 categories", async () => {
@@ -113,5 +161,68 @@ describe("saveSelection / getUserSelection / renderUserAvatar", () => {
 
     const fetched = await getUserSelection(viewer.id);
     expect(fetched.hair).toBeNull();
+  });
+});
+
+describe("uploadAvatarPhoto", () => {
+  it("uploads a photo, points avatar_url at the stable proxy path, and serves it back unchanged", async () => {
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+    const buffer = Buffer.from("fake-jpeg-bytes");
+
+    const result = await uploadAvatarPhoto(viewer.id, buffer, "image/jpeg");
+
+    expect(result.avatarUrl).toBe(`/avatars/photo/${viewer.id}`);
+    expect(await getAvatarUrl(viewer.id)).toBe(`/avatars/photo/${viewer.id}`);
+
+    const photo = await getAvatarPhoto(viewer.id);
+    expect(photo.buffer.equals(buffer)).toBe(true);
+    expect(photo.contentType).toBe("image/jpeg");
+  });
+
+  it("rejects a disallowed content type", async () => {
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+    await expect(uploadAvatarPhoto(viewer.id, Buffer.from("x"), "image/gif")).rejects.toMatchObject({
+      statusCode: 400,
+    } satisfies Partial<AppError>);
+  });
+
+  it("rejects an empty file", async () => {
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+    await expect(uploadAvatarPhoto(viewer.id, Buffer.alloc(0), "image/jpeg")).rejects.toMatchObject({
+      statusCode: 400,
+    } satisfies Partial<AppError>);
+  });
+
+  it("rejects a file over the 5MB limit", async () => {
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+    const big = Buffer.alloc(5 * 1024 * 1024 + 1);
+    await expect(uploadAvatarPhoto(viewer.id, big, "image/jpeg")).rejects.toMatchObject({
+      statusCode: 400,
+    } satisfies Partial<AppError>);
+  });
+});
+
+describe("getAvatarPhoto", () => {
+  it("404s when no photo has been uploaded", async () => {
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+    await expect(getAvatarPhoto(viewer.id)).rejects.toMatchObject({ statusCode: 404 } satisfies Partial<AppError>);
+  });
+});
+
+describe("revertToGeneratedAvatar", () => {
+  it("resets avatar_url to the generated SVG path and deletes the uploaded object", async () => {
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+    await uploadAvatarPhoto(viewer.id, Buffer.from("fake-png-bytes"), "image/png");
+
+    await revertToGeneratedAvatar(viewer.id);
+
+    expect(await getAvatarUrl(viewer.id)).toBe(`/avatars/render/${viewer.id}.svg`);
+    await expect(getAvatarPhoto(viewer.id)).rejects.toMatchObject({ statusCode: 404 } satisfies Partial<AppError>);
   });
 });

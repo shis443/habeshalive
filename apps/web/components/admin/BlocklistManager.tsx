@@ -6,10 +6,25 @@ import { useState } from "react";
 import styles from "./AdminQueue.module.css";
 import blocklistStyles from "./BlocklistManager.module.css";
 
+type BlocklistLanguage = BlocklistTerm["language"];
+
+// Module 5 — widened alongside db/migrations/0036 + schemas/admin.ts's
+// blocklistTermSchema. Oromo and Somali ship with zero starter terms, same
+// as Amharic originally did (see the empty-state copy below) — real terms
+// come from a native speaker using this exact UI, not a guessed seed list.
+const LANGUAGE_LABELS: Record<BlocklistLanguage, string> = {
+  en: "English",
+  am: "Amharic",
+  om: "Oromo",
+  so: "Somali",
+  "am-latn": "Amharic (Latin)",
+};
+const LANGUAGES = Object.keys(LANGUAGE_LABELS) as BlocklistLanguage[];
+
 export function BlocklistManager({ items }: { items: BlocklistTerm[] }) {
   const router = useRouter();
   const [term, setTerm] = useState("");
-  const [language, setLanguage] = useState<"en" | "am">("en");
+  const [language, setLanguage] = useState<BlocklistLanguage>("en");
   const [submitting, setSubmitting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +68,6 @@ export function BlocklistManager({ items }: { items: BlocklistTerm[] }) {
     }
   }
 
-  const enTerms = items.filter((i) => i.language === "en");
-  const amTerms = items.filter((i) => i.language === "am");
-
   return (
     <div>
       <form className={blocklistStyles.form} onSubmit={addTerm}>
@@ -69,10 +81,13 @@ export function BlocklistManager({ items }: { items: BlocklistTerm[] }) {
         <select
           className={blocklistStyles.select}
           value={language}
-          onChange={(e) => setLanguage(e.target.value as "en" | "am")}
+          onChange={(e) => setLanguage(e.target.value as BlocklistLanguage)}
         >
-          <option value="en">English</option>
-          <option value="am">Amharic</option>
+          {LANGUAGES.map((lang) => (
+            <option key={lang} value={lang}>
+              {LANGUAGE_LABELS[lang]}
+            </option>
+          ))}
         </select>
         <button type="submit" className={styles.approveButton} disabled={submitting || !term.trim()}>
           {submitting ? "Adding..." : "Add term"}
@@ -80,40 +95,33 @@ export function BlocklistManager({ items }: { items: BlocklistTerm[] }) {
       </form>
       {error && <p className={styles.error}>{error}</p>}
 
-      <h3 className={blocklistStyles.groupHeading}>English ({enTerms.length})</h3>
-      {enTerms.length === 0 ? (
-        <p className={styles.empty}>No English terms.</p>
-      ) : (
-        <div className={blocklistStyles.chipRow}>
-          {enTerms.map((t) => (
-            <span key={t.id} className={blocklistStyles.chip}>
-              {t.term}
-              <button type="button" onClick={() => removeTerm(t.id)} disabled={removingId === t.id}>
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <h3 className={blocklistStyles.groupHeading}>Amharic ({amTerms.length})</h3>
-      {amTerms.length === 0 ? (
-        <p className={styles.empty}>
-          No Amharic terms yet — the blocklist ships empty for Amharic until a native speaker reviews and adds real
-          terms. Add them here.
-        </p>
-      ) : (
-        <div className={blocklistStyles.chipRow}>
-          {amTerms.map((t) => (
-            <span key={t.id} className={blocklistStyles.chip}>
-              {t.term}
-              <button type="button" onClick={() => removeTerm(t.id)} disabled={removingId === t.id}>
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+      {LANGUAGES.map((lang) => {
+        const langTerms = items.filter((i) => i.language === lang);
+        return (
+          <div key={lang}>
+            <h3 className={blocklistStyles.groupHeading}>
+              {LANGUAGE_LABELS[lang]} ({langTerms.length})
+            </h3>
+            {langTerms.length === 0 ? (
+              <p className={styles.empty}>
+                No {LANGUAGE_LABELS[lang]} terms yet — the blocklist ships empty until a native speaker reviews and
+                adds real terms. Add them here.
+              </p>
+            ) : (
+              <div className={blocklistStyles.chipRow}>
+                {langTerms.map((t) => (
+                  <span key={t.id} className={blocklistStyles.chip}>
+                    {t.term}
+                    <button type="button" onClick={() => removeTerm(t.id)} disabled={removingId === t.id}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

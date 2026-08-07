@@ -2,6 +2,7 @@ import type { ChatMessage, GifterBadgeTier, PinnedMessage, Rank, RecentGifter } 
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
+import { isBlockedFromChannel, isChannelModerator } from "../moderation/channel-mods-service.js";
 import { flagIfMatched } from "../moderation/service.js";
 
 interface ChatMessageRow {
@@ -125,8 +126,17 @@ async function publishToCentrifugo(channel: string, data: unknown): Promise<void
 }
 
 export async function sendChatMessage(userId: string, streamId: string, body: string): Promise<ChatMessage> {
-  const stream = await pool.query(`SELECT 1 FROM streams WHERE id = $1`, [streamId]);
-  if (stream.rows.length === 0) throw new AppError(404, "Stream not found");
+  const stream = await pool.query<{ creator_id: string }>(`SELECT creator_id FROM streams WHERE id = $1`, [
+    streamId,
+  ]);
+  const streamRow = stream.rows[0];
+  if (!streamRow) throw new AppError(404, "Stream not found");
+  // Module 5 — channel-scoped block (channel-mods-service.ts), distinct
+  // from a platform-wide ban (which is already enforced earlier in the
+  // request pipeline via app.rejectIfBanned on this route).
+  if (await isBlockedFromChannel(streamRow.creator_id, userId)) {
+    throw new AppError(403, "You're blocked from chatting in this channel");
+  }
 
   const { rows } = await pool.query<ChatMessageRow>(
     `INSERT INTO chat_messages (stream_id, user_id, body)
@@ -182,7 +192,12 @@ async function assertCanModerateStream(actorId: string, streamId: string): Promi
   // requireAdmin. finance_auditor is deliberately excluded here
   // (read-only financial access, not a content-moderation grant).
   const isStaff = row.role === "moderator" || row.role === "super_admin" || row.role === "admin";
-  if (!isOwner && !isStaff) throw new AppError(403, "Only the creator or a moderator can do this");
+  if (isOwner || isStaff) return;
+  // Module 5 — the third case: a viewer this specific creator has
+  // granted channel-moderator status to (channel-mods-service.ts),
+  // distinct from platform-wide staff above.
+  if (await isChannelModerator(row.creator_id, actorId)) return;
+  throw new AppError(403, "Only the creator or a moderator can do this");
 }
 
 async function loadPinnedMessage(streamId: string): Promise<PinnedMessage | null> {
@@ -230,6 +245,20 @@ export async function unpinMessage(actorId: string, streamId: string): Promise<v
   await assertCanModerateStream(actorId, streamId);
   await pool.query(`DELETE FROM pinned_messages WHERE stream_id = $1`, [streamId]);
   await publishToCentrifugo(channelForStream(streamId), { type: "pin", pinnedMessage: null });
+}
+
+// Module 5 — soft-delete (chat_messages.is_deleted already existed and
+// was already read-filtered by getChatHistory below; nothing ever wrote
+// it until now). Publishes a "delete" event so it disappears live from
+// every connected viewer's chat, not just on their next reload.
+export async function deleteChatMessage(actorId: string, streamId: string, messageId: string): Promise<void> {
+  await assertCanModerateStream(actorId, streamId);
+  const { rows } = await pool.query(
+    `UPDATE chat_messages SET is_deleted = TRUE WHERE id = $1 AND stream_id = $2 AND is_deleted = FALSE RETURNING id`,
+    [messageId, streamId]
+  );
+  if (!rows[0]) throw new AppError(404, "Message not found");
+  await publishToCentrifugo(channelForStream(streamId), { type: "delete", messageId });
 }
 
 // D.2 recent-gifter strip. Grouped by (sender, is_anonymous) rather than

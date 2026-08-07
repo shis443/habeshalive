@@ -202,6 +202,19 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   await pool.query(`DELETE FROM donations WHERE donor_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM ppv_purchases WHERE buyer_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM payouts WHERE creator_id = ANY($1)`, [userIds]);
+  // Also no CASCADE from users on chat_messages.user_id (0001_init.sql —
+  // only stream_id cascades) — surfaced by chat/service.test.ts's first
+  // coverage of sendChatMessage/deleteChatMessage.
+  await pool.query(`DELETE FROM chat_messages WHERE user_id = ANY($1)`, [userIds]);
+  // channel_blocks.creator_id/blocked_user_id both cascade (0036_
+  // channel_mods_and_multiscript.sql) but blocked_by doesn't — surfaced by
+  // channel-mods-service.test.ts's "granted moderator blocks a viewer"
+  // case, where the moderator (blocked_by) is cleaned up in the same batch
+  // as the creator and target.
+  await pool.query(
+    `DELETE FROM channel_blocks WHERE creator_id = ANY($1) OR blocked_user_id = ANY($1) OR blocked_by = ANY($1)`,
+    [userIds]
+  );
   await pool.query(`DELETE FROM ledger_entries WHERE ledger_transaction_id = ANY($1)`, [ledgerTransactionIds]);
   await pool.query(`DELETE FROM ledger_transactions WHERE id = ANY($1)`, [ledgerTransactionIds]);
   await pool.query(

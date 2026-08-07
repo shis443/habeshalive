@@ -148,6 +148,7 @@ export function ChatPanel({
   const [gurshaModalOpen, setGurshaModalOpen] = useState(false);
   const [donateModalOpen, setDonateModalOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isGrantedChannelMod, setIsGrantedChannelMod] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const canModerate =
@@ -158,7 +159,24 @@ export function ChatPanel({
       currentUserRole === "super_admin" ||
       // Legacy value, still possible at runtime during the deploy window
       // — see the currentUserRole prop's own comment above.
-      currentUserRole === "admin");
+      currentUserRole === "admin" ||
+      isGrantedChannelMod);
+
+  // Module 5 — a viewer granted per-channel moderator status (moderation/
+  // channel-mods-service.ts) isn't reflected in currentUserRole (that's
+  // the platform-wide role only), so it needs its own check. Listing this
+  // channel's moderators only succeeds for the owner, platform staff, or
+  // an actual granted moderator (assertCanManageChannel) — a regular
+  // viewer gets a 403, silently leaving isGrantedChannelMod false.
+  useEffect(() => {
+    if (!isAuthed || !currentUserId || currentUserId === creatorId) return;
+    fetch(`/api/backend/moderation/channel/${creatorId}/moderators`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((mods: { userId: string }[]) => {
+        setIsGrantedChannelMod(mods.some((m) => m.userId === currentUserId));
+      })
+      .catch(() => {});
+  }, [isAuthed, currentUserId, creatorId]);
 
   // Real chatters to target with "Gursha a specific viewer" — drawn from
   // who's actually spoken in this session rather than a separate
@@ -228,9 +246,17 @@ export function ChatPanel({
     sub.on("publication", (ctx) => {
       const data = ctx.data as
         | { type: "message"; message: ChatMessage }
-        | { type: "pin"; pinnedMessage: PinnedMessage | null };
+        | { type: "pin"; pinnedMessage: PinnedMessage | null }
+        | { type: "delete"; messageId: string };
       if (data.type === "pin") {
         setPinnedMessage(data.pinnedMessage);
+        return;
+      }
+      if (data.type === "delete") {
+        // Live-remove for every other viewer — the moderator who triggered
+        // it already removes their own copy synchronously in handleDelete
+        // below, this is what closes the gap for everyone else's tab.
+        setMessages((prev) => prev.filter((entry) => entry.id !== data.messageId));
         return;
       }
       const m = data.message;
@@ -348,6 +374,20 @@ export function ChatPanel({
     }
   }
 
+  async function handleDelete(messageId: string) {
+    // Remove locally right away rather than waiting on the Centrifugo echo
+    // — same "don't make the actor wait on their own round-trip" reasoning
+    // as handleSend's immediate append above. Other viewers pick it up via
+    // the {type: "delete"} publication handled in the subscription effect.
+    setMessages((prev) => prev.filter((entry) => entry.id !== messageId));
+    try {
+      await fetch(`/api/backend/chat/${streamId}/messages/${messageId}`, { method: "DELETE" });
+    } catch {
+      // Best-effort, same posture as pin/unpin — a failure here just means
+      // the message reappears for this viewer on the next history sync.
+    }
+  }
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -434,6 +474,17 @@ export function ChatPanel({
                   title="Pin this message"
                 >
                   <PinIcon />
+                </button>
+              )}
+              {canModerate && (
+                <button
+                  type="button"
+                  className={styles.pinTrigger}
+                  onClick={() => handleDelete(entry.id)}
+                  aria-label="Delete this message"
+                  title="Delete this message"
+                >
+                  <CloseIcon />
                 </button>
               )}
             </p>

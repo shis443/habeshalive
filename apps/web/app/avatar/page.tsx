@@ -11,7 +11,7 @@ export default async function AvatarPage() {
 
   return (
     <>
-      <AvatarEditor manifest={manifest} initialSelection={selection ?? {}} />
+      <AvatarEditor manifest={manifest} initialSelection={selection ?? {}} initialAvatarUrl={user.avatarUrl} />
       <BottomNav />
     </>
   );

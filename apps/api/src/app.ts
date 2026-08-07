@@ -21,6 +21,7 @@ import { httpRequestDuration, httpRequestsTotal, registry } from "./common/metri
 import { pool } from "./common/db.js";
 import { redis } from "./common/redis.js";
 import { captureUnexpectedError } from "./common/sentry.js";
+import { channelModsRoutes } from "./moderation/channel-mods-routes.js";
 import { moderationRoutes } from "./moderation/routes.js";
 import { notificationRoutes } from "./notifications/routes.js";
 import { roleHasPermission, type PermissionKey } from "./common/rbac.js";
@@ -310,6 +311,7 @@ export function buildApp() {
   app.register(whepRoutes, { prefix: "/streams" });
   app.register(walletRoutes, { prefix: "/wallet" });
   app.register(moderationRoutes, { prefix: "/moderation" });
+  app.register(channelModsRoutes, { prefix: "/moderation/channel" });
   app.register(notificationRoutes, { prefix: "/notifications" });
   app.register(searchRoutes, { prefix: "/search" });
   app.register(adminRoutes, { prefix: "/admin" });

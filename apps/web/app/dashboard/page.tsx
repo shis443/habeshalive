@@ -86,7 +86,7 @@ export default async function DashboardPage() {
         {streamKey && myVods.length > 0 && <ClipCreatorPanel vods={myVods} />}
         <WalletPanel balanceSantim={balance?.balanceSantim ?? 0} />
         <AdsManagerPanel settings={adsSettings} />
-        <ModerationPanel />
+        <ModerationPanel creatorId={user.id} />
       </main>
       <BottomNav active="go-live" />
     </>
