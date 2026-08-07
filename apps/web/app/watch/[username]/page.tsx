@@ -5,7 +5,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { ChannelHeader } from "@/components/ChannelHeader";
 import { ChannelTabs, type ChannelTab } from "@/components/ChannelTabs";
 import { ChatPanel } from "@/components/ChatPanel";
-import { FeaturedClipsPlaceholder } from "@/components/FeaturedClipsPlaceholder";
+import { FeaturedClips } from "@/components/FeaturedClips";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
 import { OfflineNotice } from "@/components/OfflineNotice";
 import { PastBroadcasts } from "@/components/PastBroadcasts";
@@ -16,6 +16,7 @@ import { StreamMeta } from "@/components/StreamMeta";
 import { TopNav } from "@/components/TopNav";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import {
+  getClipsForUsername,
   getCreatorProfile,
   getCurrentUser,
   getFollowStatus,
@@ -51,7 +52,11 @@ export default async function WatchPage({
   ]);
 
   if (!stream) {
-    const [vods, profile] = await Promise.all([getVods(username), getCreatorProfile(username)]);
+    const [vods, profile, clips] = await Promise.all([
+      getVods(username),
+      getCreatorProfile(username),
+      getClipsForUsername(username),
+    ]);
 
     // Genuinely nonexistent username (not just "not live right now") —
     // getCreatorProfile (independent of live status) returns null only in
@@ -78,7 +83,7 @@ export default async function WatchPage({
         <ChannelTabs username={username} active={tab} />
         {tab === "home" && (
           <>
-            <FeaturedClipsPlaceholder />
+            <FeaturedClips clips={clips} />
             <RecentCategoriesPlaceholder displayName={profile.displayName} />
             <PastBroadcasts vods={vods.slice(0, HOME_TAB_VOD_PREVIEW_COUNT)} />
           </>

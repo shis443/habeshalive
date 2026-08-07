@@ -15,9 +15,10 @@ export type ChannelTab = (typeof TABS)[number]["value"];
 // entirely server-rendered for the offline path it's used on).
 //
 // Only three tabs, not the six in a typical Twitch layout (Home/About/
-// Clips/Videos/Schedule/Chat) — Clips has no backing system at all in this
-// codebase (shown as a placeholder section within Home instead, not a
-// full tab of its own — see FeaturedClipsPlaceholder.tsx), Schedule has no
+// Clips/Videos/Schedule/Chat) — Clips is real (Module 4's clip-service.ts)
+// but shown as a section within Home instead of a full tab of its own
+// (see FeaturedClips.tsx), same "small enough to not need its own tab"
+// judgment as Home already applying to Recent Categories. Schedule has no
 // backend concept whatsoever (omitted rather than adding a second
 // undiscussed placeholder), and Chat is already always visible inline
 // while a stream is live in this app's existing architecture, with no

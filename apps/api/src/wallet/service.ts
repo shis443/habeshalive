@@ -1245,6 +1245,14 @@ function buildTransactionTitle(row: TransactionRow): string {
   if (row.type === "refund") return "Refund";
   if (row.type === "boost") return row.direction === "debit" ? "Boosted your stream" : "Stream boost revenue";
   if (row.type === "platform_subscription") return "Birq ad-free subscription";
+  // No extra joins for donor/creator display names here (unlike gift's
+  // sender_u/creator_u above) — donations/PPV purchases don't currently
+  // need that level of detail in the transaction list, just a clear,
+  // correct label instead of the generic "Balance adjustment" fallback
+  // every one of these three used to fall through to.
+  if (row.type === "donation") return row.direction === "debit" ? "Sent a donation" : "Received a donation";
+  if (row.type === "ppv_purchase") return row.direction === "debit" ? "Bought stream access" : "PPV ticket sale";
+  if (row.type === "points_redemption") return "Redeemed Birq Points";
   return "Balance adjustment";
 }
 

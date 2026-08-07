@@ -297,6 +297,7 @@ export const ledgerTransactionTypeSchema = z.enum([
   "platform_subscription",
   "donation",
   "ppv_purchase",
+  "points_redemption",
 ]);
 
 export const transactionSchema = z.object({

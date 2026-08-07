@@ -83,6 +83,11 @@ const envSchema = z.object({
   // authentication docs (developer.paypal.com, verified 2026-08-07).
   // Overridable for sandbox testing (api-m.sandbox.paypal.com).
   PAYPAL_API_BASE: z.string().default("https://api-m.paypal.com"),
+  // Module 4 — go-live announcements to a platform-wide Telegram channel.
+  // Same empty-by-default stub-switch pattern as Chapa/Stripe/PayPal
+  // above; no real bot has been registered with @BotFather yet.
+  TELEGRAM_BOT_TOKEN: z.string().default(""),
+  TELEGRAM_CHANNEL_ID: z.string().default(""),
   // Fixed-at-request-time conversion (USD -> ETB santim) — this platform
   // has no live FX feed anywhere else, so a real deployment would need to
   // update this periodically (or add one) rather than trusting a stale

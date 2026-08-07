@@ -8,8 +8,8 @@ import styles from "./RecentCategoriesPlaceholder.module.css";
 // Showing the real category names rather than fake ones avoids inventing
 // data that doesn't exist, but the "coming soon" label and dashed
 // styling still make clear this specific section (a personalized recent-
-// history view) isn't functional yet, same reasoning as
-// FeaturedClipsPlaceholder.tsx.
+// history view) isn't functional yet — unlike Clips just above it on the
+// Home tab (see FeaturedClips.tsx), which is real as of Module 4.
 export function RecentCategoriesPlaceholder({ displayName }: { displayName: string }) {
   return (
     <section className={styles.section}>

@@ -25,6 +25,7 @@ import { notifyFollowersCreatorLive } from "../notifications/service.js";
 import { appendHlsToken } from "./hls-token.js";
 import { hasPpvAccess } from "./ppv-service.js";
 import { linkTagsToStream } from "./tags-service.js";
+import { sendGoLiveAnnouncement } from "./telegram-client.js";
 import { videoProvider } from "./video-provider.js";
 
 export function thumbnailPlaceholderSvg(category: string): string {
@@ -575,6 +576,13 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   notifyFollowersCreatorLive(userId, stream.creator.username, stream.creator.displayName).catch((err) => {
     console.error("[streams] notifyFollowersCreatorLive failed:", err);
   });
+  // Module 4 — no-ops until TELEGRAM_BOT_TOKEN/TELEGRAM_CHANNEL_ID are
+  // configured (see telegram-client.ts).
+  sendGoLiveAnnouncement(stream.creator.displayName, `${env.WEB_PUBLIC_URL}/watch/${stream.creator.username}`).catch(
+    (err) => {
+      console.error("[streams] sendGoLiveAnnouncement failed:", err);
+    }
+  );
   return stream;
 }
 

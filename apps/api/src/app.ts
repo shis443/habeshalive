@@ -28,6 +28,7 @@ import { searchRoutes } from "./search/routes.js";
 import { streamRoutes } from "./streams/routes.js";
 import { whepRoutes } from "./streams/whep-routes.js";
 import { subscriptionRoutes } from "./subscriptions/routes.js";
+import { pointsRoutes } from "./points/routes.js";
 import { vodRoutes } from "./vods/routes.js";
 import { walletRoutes } from "./wallet/routes.js";
 
@@ -314,6 +315,7 @@ export function buildApp() {
   app.register(adminRoutes, { prefix: "/admin" });
   app.register(subscriptionRoutes, { prefix: "/subscriptions" });
   app.register(vodRoutes, { prefix: "/vods" });
+  app.register(pointsRoutes, { prefix: "/points" });
 
   return app;
 }

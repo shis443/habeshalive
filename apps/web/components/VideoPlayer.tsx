@@ -1,5 +1,6 @@
 "use client";
 
+import { HEARTBEAT_INTERVAL_SECONDS } from "@habeshalive/shared";
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { WHEP_ENABLED } from "@/lib/config";
@@ -90,6 +91,27 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
   useEffect(() => {
     setPipSupported(typeof document !== "undefined" && document.pictureInPictureEnabled);
   }, []);
+
+  // Module 4 — Watch-to-Earn. Fires once on mount, then every
+  // HEARTBEAT_INTERVAL_SECONDS while this player is showing a live
+  // stream (VOD playback uses the separate VodPlayer component, not
+  // this one, so there's no need to distinguish live-vs-VOD here). No
+  // client-side auth check — an anonymous viewer's heartbeat just 401s
+  // and is silently dropped, same "let the server decide, degrade
+  // quietly" posture as everything else in this component.
+  useEffect(() => {
+    if (!streamId) return;
+    function beat() {
+      fetch("/api/backend/points/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ streamId }),
+      }).catch(() => {});
+    }
+    beat();
+    const interval = setInterval(beat, HEARTBEAT_INTERVAL_SECONDS * 1000);
+    return () => clearInterval(interval);
+  }, [streamId]);
 
   useEffect(() => {
     function onFullscreenChange() {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdsManagerPanel } from "@/components/AdsManagerPanel";
 import { BottomNav } from "@/components/BottomNav";
+import { ClipCreatorPanel } from "@/components/ClipCreatorPanel";
 import { GoLivePanel } from "@/components/GoLivePanel";
 import { ModerationPanel } from "@/components/ModerationPanel";
 import { StatCard } from "@/components/StatCard";
@@ -39,10 +40,14 @@ export default async function DashboardPage() {
   // (same gate GoLivePanel below already keys off streamKey for) — no
   // point fetching it for a viewer who can't stream yet.
   const adsSettings = streamKey ? await getCreatorAdsSettings() : null;
-  // Same gate — only a creator can have VODs at all. Filtered here, not
-  // inside StreamEndedPrompt, so that component only ever has to think
-  // about "here are drafts to show", not the isPublished distinction.
-  const draftVods = streamKey ? (await getMyVods()).filter((v) => !v.isPublished) : [];
+  // Same gate — only a creator can have VODs at all. Fetched once here,
+  // not separately per section: draftVods filters to !isPublished for
+  // StreamEndedPrompt (which only ever has to think about "here are
+  // drafts to show", not the isPublished distinction), myVods is the
+  // full list ClipCreatorPanel picks a source VOD from (a clip can come
+  // from a published or draft recording either way).
+  const myVods = streamKey ? await getMyVods() : [];
+  const draftVods = myVods.filter((v) => !v.isPublished);
 
   return (
     <>
@@ -78,6 +83,7 @@ export default async function DashboardPage() {
             initialIsLive={!!liveStream}
           />
         )}
+        {streamKey && myVods.length > 0 && <ClipCreatorPanel vods={myVods} />}
         <WalletPanel balanceSantim={balance?.balanceSantim ?? 0} />
         <AdsManagerPanel settings={adsSettings} />
         <ModerationPanel />

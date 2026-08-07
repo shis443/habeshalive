@@ -16,6 +16,7 @@ import {
   avatarSelectionSchema,
   blocklistTermSchema,
   boostRevenueByCreatorSchema,
+  clipSchema,
   creatorAdsSettingsSchema,
   creatorApplicationAdminItemSchema,
   creatorApplicationCapStatusSchema,
@@ -48,6 +49,7 @@ import {
   platformConfigSchema,
   platformSubscriptionSchema,
   platformWalletSummarySchema,
+  pointsBalanceSchema,
   reportSchema,
   searchResultsSchema,
   servedAdSchema,
@@ -84,6 +86,7 @@ import {
   type AvatarSelection,
   type BlocklistTerm,
   type BoostRevenueByCreator,
+  type Clip,
   type CreatorAdsSettings,
   type CreatorApplicationAdminItem,
   type CreatorApplicationCapStatus,
@@ -314,6 +317,15 @@ export async function getVods(username: string): Promise<Vod[]> {
   return vodSchema.array().parse(await res.json());
 }
 
+// Module 4 — degrade to an empty list on any error, same posture as
+// getVods above; FeaturedClips.tsx already renders nothing for an empty
+// list, so this never needs a distinct error state on the page.
+export async function getClipsForUsername(username: string): Promise<Clip[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/vods/${encodeURIComponent(username)}/clips`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return clipSchema.array().parse(await res.json());
+}
+
 // Authenticated — includes drafts, unlike getVods above (public, published-
 // only). Used by the dashboard's stream-ended publish prompt.
 export async function getMyVods(): Promise<Vod[]> {
@@ -342,6 +354,12 @@ export async function getWalletBalance(): Promise<WalletBalance | null> {
     return null;
   }
   return walletBalanceSchema.parse(await res.json());
+}
+
+export async function getPointsBalance(): Promise<number> {
+  const res = await fetchAuthed("/points/balance");
+  if (!res.ok) return 0;
+  return pointsBalanceSchema.parse(await res.json()).balance;
 }
 
 export async function getEarningsThisMonth(): Promise<EarningsThisMonth | null> {

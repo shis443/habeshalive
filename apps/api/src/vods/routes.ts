@@ -1,5 +1,6 @@
-import { publishVodSchema } from "@habeshalive/shared";
+import { createClipSchema, publishVodSchema } from "@habeshalive/shared";
 import type { FastifyPluginAsync } from "fastify";
+import { createClip, deleteClipOwned, listClipsForCreator } from "./clip-service.js";
 import {
   deleteVodOwned,
   incrementVodViews,
@@ -52,4 +53,28 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { username: string } }>("/:username", async (req) =>
     listVodsForCreator(req.params.username)
   );
+
+  // Module 4 — 9:16 clipper. Runs ffmpeg synchronously (bounded by
+  // createClipSchema's MAX_CLIP_DURATION_SECONDS cap so this stays fast
+  // enough for a normal HTTP request/response, not a background job).
+  app.post<{ Params: { id: string } }>(
+    "/:id/clips",
+    {
+      preHandler: [app.authenticate, app.rejectIfBanned],
+      config: { rateLimit: { max: 10, timeWindow: "1 hour", hook: "preHandler" } },
+    },
+    async (req) => {
+      const input = createClipSchema.parse(req.body);
+      return createClip(req.user.sub, req.params.id, input);
+    }
+  );
+
+  app.get<{ Params: { username: string } }>("/:username/clips", async (req) =>
+    listClipsForCreator(req.params.username)
+  );
+
+  app.delete<{ Params: { id: string } }>("/clips/:id", { preHandler: app.authenticate }, async (req, reply) => {
+    await deleteClipOwned(req.params.id, req.user.sub);
+    reply.status(204).send();
+  });
 };
