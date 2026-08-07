@@ -11,6 +11,7 @@ import {
 } from "@habeshalive/shared";
 import { useEffect, useRef, useState } from "react";
 import { SRS_WHIP_URL } from "@/lib/config";
+import { SquadPanel } from "./SquadPanel";
 import { StreamKeyRow } from "./StreamKeyRow";
 import { StreamTagsInput } from "./StreamTagsInput";
 import styles from "./GoLivePanel.module.css";
@@ -587,6 +588,8 @@ export function GoLivePanel({
           )}
         </div>
       )}
+
+      {isLive && <SquadPanel />}
 
       {method === "obs" && (
         <div className={styles.tabContent}>

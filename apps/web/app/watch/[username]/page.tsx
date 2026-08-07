@@ -11,6 +11,7 @@ import { OfflineNotice } from "@/components/OfflineNotice";
 import { PastBroadcasts } from "@/components/PastBroadcasts";
 import { PpvPaywall } from "@/components/PpvPaywall";
 import { RecentCategoriesPlaceholder } from "@/components/RecentCategoriesPlaceholder";
+import { SquadGrid } from "@/components/SquadGrid";
 import { StreamMeta } from "@/components/StreamMeta";
 import { TopNav } from "@/components/TopNav";
 import { VideoPlayer } from "@/components/VideoPlayer";
@@ -22,6 +23,7 @@ import {
   getLiveStreamByUsername,
   getLiveStreams,
   getServedAd,
+  getSquadForUsername,
   getStreamActivity,
   getSubscriptionTiers,
   getVods,
@@ -90,13 +92,17 @@ export default async function WatchPage({
     );
   }
 
-  const [giftTiers, tiers, activity, followStatus, displayAd] = await Promise.all([
+  const [giftTiers, tiers, activity, followStatus, displayAd, squad] = await Promise.all([
     getGiftTiers(),
     getSubscriptionTiers(),
     getStreamActivity(stream.id),
     getFollowStatus(stream.creator.id),
     getServedAd(stream.id, "display_banner"),
+    getSquadForUsername(username),
   ]);
+  // Only worth a grid at 2+ currently-live members — a "squad" of one
+  // (everyone else ended their stream) is just the normal single player.
+  const showSquadGrid = squad && squad.members.filter((m) => m.stream).length >= 2;
 
   return (
     <>
@@ -106,6 +112,8 @@ export default async function WatchPage({
         <div className={styles.playerColumn}>
           {stream.isPpv && !stream.hasPpvAccess ? (
             <PpvPaywall streamId={stream.id} priceSantim={stream.ppvPriceSantim ?? 0} isAuthed={!!user} />
+          ) : showSquadGrid ? (
+            <SquadGrid squad={squad} />
           ) : (
             <VideoPlayer src={stream.playbackUrl} streamId={stream.id} />
           )}

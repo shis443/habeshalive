@@ -1,4 +1,4 @@
-import { createStreamSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@habeshalive/shared";
+import { createSquadSchema, createStreamSchema, joinSquadSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@habeshalive/shared";
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getBoostPricing } from "../admin/config-service.js";
@@ -25,6 +25,7 @@ import {
   type LiveStreamSort,
 } from "./service.js";
 import { purchasePpvAccess } from "./ppv-service.js";
+import { createSquad, getMySquad, getSquadForUsername, joinSquad, leaveSquad } from "./squad-service.js";
 import { searchTagNames } from "./tags-service.js";
 
 // SRS's http_hooks can't send custom headers — only a fully-specified URL —
@@ -178,6 +179,32 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     await endStream(req.user.sub);
     reply.send({ ok: true });
   });
+
+  // Module 3 — squad co-streaming (grid-view, no new media infra — see
+  // squad-service.ts's own comment).
+  app.post("/squad", { preHandler: [app.authenticate, app.rejectIfBanned] }, async (req) => {
+    const input = createSquadSchema.parse(req.body);
+    return createSquad(req.user.sub, input.name);
+  });
+
+  app.post("/squad/join", { preHandler: [app.authenticate, app.rejectIfBanned] }, async (req) => {
+    const input = joinSquadSchema.parse(req.body);
+    return joinSquad(req.user.sub, input.inviteCode);
+  });
+
+  app.post("/squad/leave", { preHandler: app.authenticate }, async (req, reply) => {
+    await leaveSquad(req.user.sub);
+    reply.send({ ok: true });
+  });
+
+  app.get("/squad/mine", { preHandler: app.authenticate }, async (req) => getMySquad(req.user.sub));
+
+  // Public — the watch page's squad grid.
+  app.get<{ Params: { username: string } }>(
+    "/username/:username/squad",
+    { preHandler: app.tryAuthenticate },
+    async (req) => getSquadForUsername(req.params.username, req.user?.sub)
+  );
 
   app.post(
     "/boost",

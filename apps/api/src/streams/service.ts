@@ -330,6 +330,27 @@ export async function getLiveStreamByUsername(username: string, viewerId?: strin
   return toStreamDetail(row, await resolvePpvAccess(row, viewerId));
 }
 
+// Module 3 — squad-service.ts's per-member grid lookup. Unlike
+// getLiveStreamByUsername above, "not currently live" is an expected,
+// normal state for a squad member (their tile just renders offline),
+// not a 404 — and there's deliberately no is_sensitive gate here: a
+// squad's own member list already comes from an authenticated context
+// (streams/routes.ts's squad routes), not an anonymous content-browse
+// surface.
+export async function getLiveStreamByCreatorId(creatorId: string, viewerId?: string): Promise<StreamDetail | null> {
+  const { rows } = await pool.query<StreamRow>(
+    `SELECT ${STREAM_SELECT_COLUMNS}
+     FROM streams s
+     JOIN users u ON u.id = s.creator_id
+     WHERE s.creator_id = $1 AND s.status = 'live'
+     ORDER BY s.started_at DESC LIMIT 1`,
+    [creatorId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return toStreamDetail(row, await resolvePpvAccess(row, viewerId));
+}
+
 export async function getStreamActivity(streamId: string): Promise<StreamActivity> {
   const streamResult = await pool.query<{ creator_id: string; started_at: string | null }>(
     `SELECT creator_id, started_at FROM streams WHERE id = $1`,

@@ -51,6 +51,7 @@ import {
   reportSchema,
   searchResultsSchema,
   servedAdSchema,
+  squadSchema,
   streamActivitySchema,
   streamArchiveItemSchema,
   streamDefaultsSchema,
@@ -116,6 +117,7 @@ import {
   type Report,
   type SearchResults,
   type ServedAd,
+  type Squad,
   type StreamActivity,
   type StreamArchiveItem,
   type StreamDefaults,
@@ -186,6 +188,16 @@ export async function getLiveStreamByUsername(username: string, ticket?: string)
   }
   const data = await res.json();
   return streamDetailSchema.parse(data);
+}
+
+// Module 3 — null both when the creator has no active squad and on any
+// transient error, same degrade-not-crash posture as getLiveStreamByUsername.
+export async function getSquadForUsername(username: string): Promise<Squad | null> {
+  const res = await fetchAuthed(`/streams/username/${encodeURIComponent(username)}/squad`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data) return null;
+  return squadSchema.parse(data);
 }
 
 export async function getStreamActivity(streamId: string): Promise<StreamActivity> {

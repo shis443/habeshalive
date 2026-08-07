@@ -18,6 +18,7 @@ export * from "./schemas/reports.js";
 export * from "./schemas/search.js";
 export * from "./schemas/sessions.js";
 export * from "./schemas/social.js";
+export * from "./schemas/squads.js";
 export * from "./schemas/stream-activity.js";
 export * from "./schemas/streams.js";
 export * from "./schemas/subscriptions.js";
