@@ -105,6 +105,63 @@ export const giftAlertSchema = z.object({
 });
 export type GiftAlert = z.infer<typeof giftAlertSchema>;
 
+// Free-form cash tip, distinct from sendGiftSchema's catalog-item shape
+// (fixed price, quantity, animationKey) — a donor types in any amount.
+// 500 santim (5 ETB) floor keeps this above Chapa/ledger rounding noise;
+// no ceiling beyond the donor's actual wallet balance, checked server-side.
+export const donateSchema = z.object({
+  streamId: z.string().uuid(),
+  amountSantim: z.number().int().min(500),
+  message: z.string().max(200).optional(),
+  isAnonymous: z.boolean().optional(),
+});
+export type DonateInput = z.infer<typeof donateSchema>;
+
+export const donateResponseSchema = z.object({
+  id: z.string().uuid(),
+  badge: gifterBadgeSchema,
+  rank: userRankSchema,
+});
+export type DonateResponse = z.infer<typeof donateResponseSchema>;
+
+// Same live-overlay channel as giftAlertSchema (gift-alerts:<streamId>) —
+// senderUsername/senderDisplayName null when isAnonymous, same convention.
+export const donationAlertSchema = z.object({
+  id: z.string().uuid(),
+  streamId: z.string().uuid(),
+  donorId: z.string().uuid(),
+  donorUsername: z.string().nullable(),
+  donorDisplayName: z.string().nullable(),
+  isAnonymous: z.boolean(),
+  amountSantim: z.number().int().positive(),
+  message: z.string().max(200).nullable(),
+  createdAt: z.string(),
+});
+export type DonationAlert = z.infer<typeof donationAlertSchema>;
+
+// Both event kinds share one live-overlay channel/feed (a single on-stream
+// alert box, not two) — "kind" disambiguates which shape a given message
+// is, since donation and catalog-gift alerts don't carry the same fields.
+export const streamAlertSchema = z.discriminatedUnion("kind", [
+  giftAlertSchema.extend({ kind: z.literal("gift") }),
+  donationAlertSchema.extend({ kind: z.literal("donation") }),
+]);
+export type StreamAlert = z.infer<typeof streamAlertSchema>;
+
+// Module 2 — pay-per-view access to a single ticketed stream, purchased
+// from wallet balance (same funding source as gifts/donations — see
+// db/migrations/0033_donations_and_ppv.sql's own comment on why this
+// isn't a separate direct-Chapa-checkout path). accessToken is a
+// short-lived, stream-and-buyer-scoped JWT (apps/api/src/streams/
+// ppv-service.ts) — see that file's comment on why "single-use" is
+// enforced as "tied to one buyer+stream pair," not "expires after one
+// HTTP request" (which would break continuous HLS playback).
+export const purchasePpvAccessResponseSchema = z.object({
+  accessToken: z.string(),
+  expiresAt: z.string(),
+});
+export type PurchasePpvAccessResponse = z.infer<typeof purchasePpvAccessResponseSchema>;
+
 export const payoutMethodSchema = z.enum(["telebirr", "bank"]);
 export type PayoutMethod = z.infer<typeof payoutMethodSchema>;
 
@@ -170,6 +227,22 @@ export const topupResponseSchema = z.object({
 });
 export type TopupResponse = z.infer<typeof topupResponseSchema>;
 
+// Module 2 diaspora bridge — international-card top-ups via Stripe/
+// PayPal, for donors outside Ethiopia's mobile-money/bank-transfer
+// network. See wallet/diaspora-topup-service.ts's own comment on why
+// Telebirr/CBE Birr don't get an equivalent (already reachable through
+// Chapa's existing hosted checkout). Shipped dormant — real
+// STRIPE_SECRET_KEY/PAYPAL_CLIENT_ID/SECRET credentials aren't
+// provisioned; the route 503s cleanly until they are.
+export const diasporaProviderSchema = z.enum(["stripe", "paypal"]);
+export type DiasporaProvider = z.infer<typeof diasporaProviderSchema>;
+
+export const initiateDiasporaTopupSchema = z.object({
+  amountUsdCents: z.coerce.number().int().positive(),
+  provider: diasporaProviderSchema,
+});
+export type InitiateDiasporaTopupInput = z.infer<typeof initiateDiasporaTopupSchema>;
+
 // Platform-wide sliding-scale ad-free subscription — distinct from the
 // existing per-creator `subscriptions` (subscriptionTierSchema-adjacent
 // code elsewhere): no creator_id, no revenue split, 100% platform
@@ -222,6 +295,8 @@ export const ledgerTransactionTypeSchema = z.enum([
   "subscription",
   "boost",
   "platform_subscription",
+  "donation",
+  "ppv_purchase",
 ]);
 
 export const transactionSchema = z.object({

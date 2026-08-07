@@ -88,27 +88,29 @@ export function buildApp() {
     skipOnError: true,
   });
 
-  // A pending-2FA token (auth/totp-service.ts's PendingTotpClaims — issued
-  // mid-login to a user who's proven their password/OTP but still owes a
-  // TOTP code) is signed with the same secret as a real session token, so
-  // req.jwtVerify() accepts it just fine — this is what actually stops it
-  // from also working as one. Explicitly clearing req.user (not just
-  // throwing inside this preHandler's own try/catch) matters because
-  // jwtVerify() already wrote req.user as a side effect before this check
-  // runs — any downstream handler reading req.user directly (not just
-  // trusting this preHandler's pass/fail) would otherwise still see a
-  // real sub from the unfinished login.
-  function rejectPendingTotpToken(req: import("fastify").FastifyRequest): void {
-    if (req.user && "pending2fa" in req.user) {
+  // Two non-session token shapes are signed with the same secret as a
+  // real session token, so req.jwtVerify() accepts either just fine — this
+  // is what actually stops them from also working as one: a pending-2FA
+  // token (auth/totp-service.ts's PendingTotpClaims — issued mid-login to
+  // a user who's proven their password/OTP but still owes a TOTP code)
+  // and a PPV access token (streams/ppv-service.ts's PpvAccessClaims,
+  // {sub, streamId, ppvAccess: true, jti} — issued after a pay-per-view
+  // purchase). Explicitly clearing req.user (not just throwing inside
+  // this preHandler's own try/catch) matters because jwtVerify() already
+  // wrote req.user as a side effect before this check runs — any
+  // downstream handler reading req.user directly (not just trusting this
+  // preHandler's pass/fail) would otherwise still see a real-looking sub.
+  function rejectNonSessionToken(req: import("fastify").FastifyRequest): void {
+    if (req.user && ("pending2fa" in req.user || "ppvAccess" in req.user)) {
       req.user = undefined as unknown as typeof req.user;
-      throw new Error("pending 2FA token used as a session token");
+      throw new Error("non-session token used as a session token");
     }
   }
 
   app.decorate("authenticate", async (req, reply) => {
     try {
       await req.jwtVerify();
-      rejectPendingTotpToken(req);
+      rejectNonSessionToken(req);
     } catch {
       reply.status(401).send({ error: "unauthorized" });
     }
@@ -120,7 +122,7 @@ export function buildApp() {
   app.decorate("tryAuthenticate", async (req) => {
     try {
       await req.jwtVerify();
-      rejectPendingTotpToken(req);
+      rejectNonSessionToken(req);
     } catch {
       // No token, an invalid one, or a pending-2FA token — proceed
       // unauthenticated either way (req.user is already cleared above in
@@ -169,7 +171,7 @@ export function buildApp() {
   ): Promise<string | null> {
     try {
       await req.jwtVerify();
-      rejectPendingTotpToken(req);
+      rejectNonSessionToken(req);
     } catch {
       reply.status(401).send({ error: "unauthorized" });
       return null;

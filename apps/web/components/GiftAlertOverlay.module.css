@@ -1,0 +1,49 @@
+.alert {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 40px auto 0;
+  padding: 16px 32px;
+  border-radius: 12px;
+  background: rgba(20, 16, 30, 0.88);
+  border: 2px solid #d0bcff;
+  box-shadow: 0 0 32px rgba(208, 188, 255, 0.5);
+  animation: pop-in 0.3s ease-out;
+  max-width: 520px;
+  text-align: center;
+}
+
+.headline {
+  margin: 0;
+  font-family: var(--font-headline, sans-serif);
+  font-weight: 700;
+  font-size: 22px;
+  color: #ffffff;
+}
+
+.amount {
+  margin: 0;
+  font-family: var(--font-label, sans-serif);
+  font-weight: 700;
+  font-size: 16px;
+  color: #d0bcff;
+}
+
+.message {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: #e8e0ff;
+  font-style: italic;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

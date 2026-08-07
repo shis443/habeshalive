@@ -2,7 +2,15 @@ import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { pool } from "../common/db.js";
 import { resolveStreamKey } from "../common/crypto.js";
 import { cleanupTestUsers, createTestCreator, createTestViewer, type TestUser } from "../test/fixtures.js";
-import { getStreamKey, markEndedByProviderStreamId, markLiveByProviderStreamId, reapStaleStreams, rotateStreamKey } from "./service.js";
+import {
+  getLiveStreamByUsername,
+  getStreamById,
+  getStreamKey,
+  markEndedByProviderStreamId,
+  markLiveByProviderStreamId,
+  reapStaleStreams,
+  rotateStreamKey,
+} from "./service.js";
 
 const createdUserIds: string[] = [];
 
@@ -23,15 +31,23 @@ afterEach(() => {
 interface CreateStreamOptions {
   playbackUrl?: string | null;
   startedAt?: Date;
+  isPpv?: boolean;
+  ppvPriceSantim?: number;
 }
 
 async function createLiveStream(creatorId: string, options: CreateStreamOptions = {}): Promise<string> {
   const startedAt = options.startedAt ?? new Date();
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO streams (creator_id, title, playback_url, status, started_at)
-     VALUES ($1, 'Test Stream', $2, 'live', $3)
+    `INSERT INTO streams (creator_id, title, playback_url, status, started_at, is_ppv, ppv_price_santim)
+     VALUES ($1, 'Test Stream', $2, 'live', $3, $4, $5)
      RETURNING id`,
-    [creatorId, options.playbackUrl ?? "https://video.example.com/stream.m3u8", startedAt]
+    [
+      creatorId,
+      options.playbackUrl ?? "https://video.example.com/stream.m3u8",
+      startedAt,
+      options.isPpv ?? false,
+      options.ppvPriceSantim ?? null,
+    ]
   );
   return rows[0]!.id;
 }
@@ -202,5 +218,71 @@ describe("stream key encryption at rest + rotation", () => {
     expect(streamKey.split("?key=")[1]).toBe(legacyPlaintext);
 
     await expect(markLiveByProviderStreamId(creator.id, legacyPlaintext)).resolves.toBeUndefined();
+  });
+});
+
+describe("PPV access gating (toStreamDetail/resolvePpvAccess)", () => {
+  it("a non-PPV stream's playbackUrl is visible to anyone, including anonymous viewers", async () => {
+    const creator = await trackUser(await createTestViewer());
+    await createLiveStream(creator.id);
+
+    const stream = await getLiveStreamByUsername(creator.username);
+    expect(stream.isPpv).toBe(false);
+    expect(stream.hasPpvAccess).toBe(true);
+    expect(stream.playbackUrl).not.toBeNull();
+  });
+
+  it("a PPV stream's playbackUrl is null for an anonymous viewer", async () => {
+    const creator = await trackUser(await createTestViewer());
+    await createLiveStream(creator.id, { isPpv: true, ppvPriceSantim: 5000 });
+
+    const stream = await getLiveStreamByUsername(creator.username);
+    expect(stream.isPpv).toBe(true);
+    expect(stream.ppvPriceSantim).toBe(5000);
+    expect(stream.hasPpvAccess).toBe(false);
+    expect(stream.playbackUrl).toBeNull();
+  });
+
+  it("a PPV stream's playbackUrl is null for a logged-in viewer with no purchase", async () => {
+    const creator = await trackUser(await createTestViewer());
+    const viewer = await trackUser(await createTestViewer());
+    await createLiveStream(creator.id, { isPpv: true, ppvPriceSantim: 5000 });
+
+    const stream = await getLiveStreamByUsername(creator.username, viewer.id);
+    expect(stream.hasPpvAccess).toBe(false);
+    expect(stream.playbackUrl).toBeNull();
+  });
+
+  it("the creator always sees their own PPV stream's playbackUrl", async () => {
+    const creator = await trackUser(await createTestViewer());
+    await createLiveStream(creator.id, { isPpv: true, ppvPriceSantim: 5000 });
+
+    const stream = await getLiveStreamByUsername(creator.username, creator.id);
+    expect(stream.hasPpvAccess).toBe(true);
+    expect(stream.playbackUrl).not.toBeNull();
+  });
+
+  it("a viewer with a completed ppv_purchases row sees the playbackUrl", async () => {
+    const creator = await trackUser(await createTestViewer());
+    const viewer = await trackUser(await createTestViewer());
+    const streamId = await createLiveStream(creator.id, { isPpv: true, ppvPriceSantim: 5000 });
+
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO ledger_transactions (type, stream_id, status, completed_at) VALUES ('ppv_purchase', $1, 'completed', now()) RETURNING id`,
+      [streamId]
+    );
+    await pool.query(
+      `INSERT INTO ppv_purchases (ledger_transaction_id, stream_id, buyer_id, amount_santim, access_token_jti)
+       VALUES ($1, $2, $3, 5000, uuid_generate_v4())`,
+      [rows[0]!.id, streamId, viewer.id]
+    );
+
+    const stream = await getLiveStreamByUsername(creator.username, viewer.id);
+    expect(stream.hasPpvAccess).toBe(true);
+    expect(stream.playbackUrl).not.toBeNull();
+
+    // getStreamById threads the same check.
+    const byId = await getStreamById(streamId, viewer.id);
+    expect(byId.hasPpvAccess).toBe(true);
   });
 });

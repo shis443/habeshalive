@@ -14,6 +14,13 @@ export const liveStreamSchema = z.object({
   isBoosted: z.boolean(),
   isSensitive: z.boolean(),
   tags: z.array(z.string()),
+  // Module 2 — pay-per-view. playbackUrl above is null whenever isPpv is
+  // true and hasPpvAccess is false (see streams/service.ts's
+  // toStreamDetail), same "gate the field, not a separate endpoint"
+  // approach as the rest of this schema.
+  isPpv: z.boolean(),
+  ppvPriceSantim: z.number().int().positive().nullable(),
+  hasPpvAccess: z.boolean(),
   creator: z.object({
     id: z.string().uuid(),
     username: z.string(),
@@ -68,6 +75,10 @@ export const createStreamSchema = z.object({
   isSensitive: z.boolean().optional(),
   // "A small set per stream," per the spec — capped at 5, not left open.
   tags: z.array(z.string().min(1).max(30)).max(5).optional(),
+  // Module 2 — per-event PPV pricing, a per-broadcast decision (not a
+  // standing creator setting) since whether a given stream is ticketed
+  // varies event to event. Omitted/absent means a normal, free stream.
+  ppvPriceSantim: z.number().int().positive().optional(),
 });
 export type CreateStreamInput = z.infer<typeof createStreamSchema>;
 

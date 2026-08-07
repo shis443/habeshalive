@@ -1,6 +1,8 @@
 import {
   chapaTransferWebhookSchema,
   chapaWebhookSchema,
+  donateSchema,
+  initiateDiasporaTopupSchema,
   initiateTopupSchema,
   rejectPayoutSchema,
   requestPayoutSchema,
@@ -10,6 +12,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { env } from "../common/env.js";
 import { AppError } from "../common/errors.js";
+import { initiateDiasporaTopup } from "./diaspora-topup-service.js";
+import { verifyPaypalWebhook } from "./paypal-client.js";
 import {
   approvePayout,
   completePayoutFromWebhook,
@@ -27,8 +31,10 @@ import {
   listTransactions,
   rejectPayout,
   requestPayout,
+  sendDonation,
   sendGift,
 } from "./service.js";
+import { verifyStripeSignature } from "./stripe-client.js";
 
 // User-keyed, not IP-keyed: apps/web's Server Components and its
 // /api/backend proxy both call this API server-to-server from the web
@@ -128,6 +134,76 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
     reply.send({ ok: true });
   });
 
+  // Module 2 diaspora bridge — see diaspora-topup-service.ts's own
+  // comment on why Telebirr/CBE Birr have no equivalent route here.
+  app.post(
+    "/topups/diaspora",
+    {
+      preHandler: [app.authenticate, app.rejectIfBanned],
+      config: { rateLimit: { max: 10, timeWindow: "1 hour", hook: "preHandler", keyGenerator: keyByUser } },
+    },
+    async (req) => {
+      const input = initiateDiasporaTopupSchema.parse(req.body);
+      return initiateDiasporaTopup(req.user.sub, input.amountUsdCents, input.provider);
+    }
+  );
+
+  app.post("/webhooks/stripe", async (req, reply) => {
+    if (!env.STRIPE_WEBHOOK_SECRET) {
+      throw new AppError(501, "Stripe webhook verification not configured");
+    }
+    const rawBody = (req as FastifyRequest & { rawBody?: string }).rawBody;
+    if (!verifyStripeSignature(rawBody ?? "", req.headers["stripe-signature"] as string | undefined)) {
+      throw new AppError(401, "Invalid webhook signature");
+    }
+    const event = req.body as {
+      type?: string;
+      data?: { object?: { client_reference_id?: string; amount_total?: number; payment_status?: string } };
+    };
+    const session = event.data?.object;
+    if (event.type === "checkout.session.completed" && session?.client_reference_id) {
+      await completeTopupFromWebhook({
+        tx_ref: session.client_reference_id,
+        status: session.payment_status === "paid" ? "success" : "failed",
+        amount: (session.amount_total ?? 0) / 100,
+        currency: "usd",
+      });
+    }
+    reply.send({ ok: true });
+  });
+
+  app.post("/webhooks/paypal", async (req, reply) => {
+    if (!env.PAYPAL_WEBHOOK_ID) {
+      throw new AppError(501, "PayPal webhook verification not configured");
+    }
+    const verified = await verifyPaypalWebhook(
+      {
+        transmissionId: req.headers["paypal-transmission-id"] as string | undefined,
+        transmissionTime: req.headers["paypal-transmission-time"] as string | undefined,
+        certUrl: req.headers["paypal-cert-url"] as string | undefined,
+        transmissionSig: req.headers["paypal-transmission-sig"] as string | undefined,
+      },
+      req.body
+    );
+    if (!verified) {
+      throw new AppError(401, "Invalid webhook signature");
+    }
+    const event = req.body as {
+      event_type?: string;
+      resource?: { purchase_units?: { reference_id?: string }[]; amount?: { value?: string } };
+    };
+    const referenceId = event.resource?.purchase_units?.[0]?.reference_id;
+    if (event.event_type === "PAYMENT.CAPTURE.COMPLETED" && referenceId) {
+      await completeTopupFromWebhook({
+        tx_ref: referenceId,
+        status: "success",
+        amount: Number(event.resource?.amount?.value ?? 0),
+        currency: "usd",
+      });
+    }
+    reply.send({ ok: true });
+  });
+
   app.post(
     "/gifts",
     {
@@ -137,6 +213,18 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
     async (req) => {
       const input = sendGiftSchema.parse(req.body);
       return sendGift(req.user.sub, input);
+    }
+  );
+
+  app.post(
+    "/donations",
+    {
+      preHandler: [app.authenticate, app.rejectIfBanned],
+      config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler", keyGenerator: keyByUser } },
+    },
+    async (req) => {
+      const input = donateSchema.parse(req.body);
+      return sendDonation(req.user.sub, input);
     }
   );
 

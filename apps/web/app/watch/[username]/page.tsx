@@ -9,6 +9,7 @@ import { FeaturedClipsPlaceholder } from "@/components/FeaturedClipsPlaceholder"
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
 import { OfflineNotice } from "@/components/OfflineNotice";
 import { PastBroadcasts } from "@/components/PastBroadcasts";
+import { PpvPaywall } from "@/components/PpvPaywall";
 import { RecentCategoriesPlaceholder } from "@/components/RecentCategoriesPlaceholder";
 import { StreamMeta } from "@/components/StreamMeta";
 import { TopNav } from "@/components/TopNav";
@@ -103,7 +104,11 @@ export default async function WatchPage({
       <LiveChannelsSidebar streams={sidebarStreams} defaultCollapsed />
       <main className={styles.main}>
         <div className={styles.playerColumn}>
-          <VideoPlayer src={stream.playbackUrl} streamId={stream.id} />
+          {stream.isPpv && !stream.hasPpvAccess ? (
+            <PpvPaywall streamId={stream.id} priceSantim={stream.ppvPriceSantim ?? 0} isAuthed={!!user} />
+          ) : (
+            <VideoPlayer src={stream.playbackUrl} streamId={stream.id} />
+          )}
           <div className={styles.body}>
             <AdDisplayBanner ad={displayAd} />
             <StreamMeta stream={stream} />

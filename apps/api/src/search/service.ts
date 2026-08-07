@@ -1,5 +1,6 @@
 import type { CreatorSearchResult, StreamDetail } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
+import { hasPpvAccess } from "../streams/ppv-service.js";
 
 // Builds a prefix-matching tsquery ("gam" -> "gam:*") so search-as-you-type
 // works — plain to_tsquery/websearch_to_tsquery only match whole lexemes.
@@ -37,6 +38,8 @@ interface StreamSearchRow {
   is_boosted: boolean;
   is_sensitive: boolean;
   tags: string[];
+  is_ppv: boolean;
+  ppv_price_santim: number | null;
 }
 
 // viewerId gates labeled (is_sensitive) streams the same way
@@ -47,7 +50,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
 
   const { rows } = await pool.query<StreamSearchRow>(
     `SELECT s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
-            s.started_at, s.status, s.peak_viewers, s.is_sensitive,
+            s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim,
             u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
             EXISTS (
               SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
@@ -68,28 +71,37 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
     [tsquery, limit, viewerId ?? null]
   );
 
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    category: row.category,
-    language: row.language,
-    thumbnailUrl: row.thumbnail_url,
-    playbackUrl: row.playback_url,
-    startedAt: row.started_at,
-    status: row.status as StreamDetail["status"],
-    viewerCount: row.peak_viewers,
-    isBoosted: row.is_boosted,
-    isSensitive: row.is_sensitive,
-    tags: row.tags,
-    creator: {
-      id: row.creator_id,
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-      bio: row.bio,
-      isVerified: row.is_verified,
-    },
-  }));
+  return Promise.all(
+    rows.map(async (row) => {
+      const hasAccess =
+        !row.is_ppv || row.creator_id === viewerId || (await hasPpvAccess(row.id, viewerId));
+      return {
+        id: row.id,
+        title: row.title,
+        category: row.category,
+        language: row.language,
+        thumbnailUrl: row.thumbnail_url,
+        playbackUrl: hasAccess ? row.playback_url : null,
+        startedAt: row.started_at,
+        status: row.status as StreamDetail["status"],
+        viewerCount: row.peak_viewers,
+        isBoosted: row.is_boosted,
+        isSensitive: row.is_sensitive,
+        tags: row.tags,
+        isPpv: row.is_ppv,
+        ppvPriceSantim: row.ppv_price_santim,
+        hasPpvAccess: hasAccess,
+        creator: {
+          id: row.creator_id,
+          username: row.username,
+          displayName: row.display_name,
+          avatarUrl: row.avatar_url,
+          bio: row.bio,
+          isVerified: row.is_verified,
+        },
+      };
+    })
+  );
 }
 
 interface CreatorSearchRow {

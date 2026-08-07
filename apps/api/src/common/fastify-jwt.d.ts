@@ -1,20 +1,32 @@
 import "@fastify/jwt";
 import type { PermissionKey } from "./rbac.js";
 
-// Two distinct token shapes now flow through this one plugin instance: a
-// real session token ({sub, role}), and a short-lived pending-2FA token
+// Three distinct token shapes now flow through this one plugin instance:
+// a real session token ({sub, role}), a short-lived pending-2FA token
 // (auth/totp-service.ts's PendingTotpClaims, {sub, pending2fa: true}) —
 // issued mid-login to a user who's proven their password/OTP but still
-// owes a TOTP code, and explicitly rejected by app.ts's authenticate/
-// tryAuthenticate/authenticateAndGetRole before any route handler ever
-// runs (see rejectPendingTotpToken there). No route handler in this
-// codebase reads req.user.role without narrowing first — confirmed via a
-// repo-wide grep before widening this type — so this union doesn't ripple
-// into unrelated files needing new narrowing.
+// owes a TOTP code — and a PPV access token (streams/ppv-service.ts's
+// PpvAccessClaims, {sub, streamId, ppvAccess: true, jti}) issued after a
+// successful pay-per-view purchase, verified directly via app.jwt.verify
+// in streams/routes.ts rather than through app.authenticate (its sub is
+// the buyer, not necessarily "the logged-in session," matters for the
+// embed route — see that file's comment). Both non-session shapes are
+// explicitly rejected by app.ts's authenticate/tryAuthenticate/
+// authenticateAndGetRole before any route handler ever runs (see
+// rejectNonSessionToken there). No route handler in this codebase reads
+// req.user.role without narrowing first — confirmed via a repo-wide grep
+// before widening this type — so this union doesn't ripple into
+// unrelated files needing new narrowing.
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: { sub: string; role: string } | { sub: string; pending2fa: true };
-    user: { sub: string; role: string } | { sub: string; pending2fa: true };
+    payload:
+      | { sub: string; role: string }
+      | { sub: string; pending2fa: true }
+      | { sub: string; streamId: string; ppvAccess: true; jti: string };
+    user:
+      | { sub: string; role: string }
+      | { sub: string; pending2fa: true }
+      | { sub: string; streamId: string; ppvAccess: true; jti: string };
   }
 }
 

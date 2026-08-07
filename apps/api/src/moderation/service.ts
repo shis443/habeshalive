@@ -39,7 +39,12 @@ export async function scanText(text: string): Promise<string[]> {
   return matched;
 }
 
-export type ModerationContentType = "stream_title" | "gift_message" | "chat_message" | "stream_thumbnail";
+export type ModerationContentType =
+  | "stream_title"
+  | "gift_message"
+  | "chat_message"
+  | "stream_thumbnail"
+  | "donation_message";
 
 // Flags content for human review — never blocks or deletes it. The
 // content itself already went through by the time this runs (called

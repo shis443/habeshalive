@@ -19,6 +19,7 @@ import {
   getBalance,
   initiateTopup,
   requestPayout,
+  sendDonation,
   sendGift,
 } from "./service.js";
 
@@ -185,6 +186,71 @@ describe("gift split", () => {
     // the creator's share is a genuine partial amount, not 0 or the full total.
     expect(creatorBalance).toBeGreaterThan(0);
     expect(creatorBalance).toBeLessThan(25_000); // Tier 2's price — see comment above
+  });
+});
+
+describe("sendDonation", () => {
+  it("splits a free-form amount between creator and platform per revenue_share_bps", async () => {
+    const creator = await trackUser(await createTestCreator(7500)); // 75% to creator
+    const donor = await trackUser(await createTestViewer());
+    await fundWallet(donor.id, 20_000);
+
+    const platformWalletId = await getPlatformWalletId();
+    const platformBefore = await getWalletBalance(platformWalletId);
+
+    const { id: ledgerTransactionId } = await sendDonation(donor.id, {
+      streamId: creator.streamId,
+      amountSantim: 10_000,
+      message: "Love the stream!",
+    });
+
+    await assertTransactionBalanced(ledgerTransactionId);
+    expect(await getWalletBalance(donor.walletId)).toBe(10_000); // 20,000 - 10,000
+    expect(await getWalletBalance(creator.walletId)).toBe(7_500); // 75% of 10,000
+    expect(await getWalletBalance(platformWalletId)).toBe(platformBefore + 2_500); // 25%
+
+    const { rows } = await pool.query<{ donor_id: string; amount_santim: number; message: string | null }>(
+      `SELECT donor_id, amount_santim, message FROM donations WHERE ledger_transaction_id = $1`,
+      [ledgerTransactionId]
+    );
+    expect(rows[0]).toMatchObject({ donor_id: donor.id, amount_santim: 10_000, message: "Love the stream!" });
+  });
+
+  it("rejects a donation when the donor's balance is insufficient", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const donor = await trackUser(await createTestViewer());
+
+    await expect(
+      sendDonation(donor.id, { streamId: creator.streamId, amountSantim: 5_000 })
+    ).rejects.toMatchObject({ statusCode: 400 } satisfies Partial<AppError>);
+    expect(await getWalletBalance(donor.walletId)).toBe(0);
+  });
+
+  it("rejects donating to your own stream", async () => {
+    const creator = await trackUser(await createTestCreator());
+    await fundWallet(creator.id, 10_000);
+
+    await expect(
+      sendDonation(creator.id, { streamId: creator.streamId, amountSantim: 5_000 })
+    ).rejects.toThrow(/own stream/);
+  });
+
+  it("records isAnonymous correctly on the donations row", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const donor = await trackUser(await createTestViewer());
+    await fundWallet(donor.id, 10_000);
+
+    const { id: ledgerTransactionId } = await sendDonation(donor.id, {
+      streamId: creator.streamId,
+      amountSantim: 5_000,
+      isAnonymous: true,
+    });
+
+    const { rows } = await pool.query<{ is_anonymous: boolean }>(
+      `SELECT is_anonymous FROM donations WHERE ledger_transaction_id = $1`,
+      [ledgerTransactionId]
+    );
+    expect(rows[0]!.is_anonymous).toBe(true);
   });
 });
 

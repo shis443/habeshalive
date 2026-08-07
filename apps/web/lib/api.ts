@@ -169,9 +169,13 @@ export async function getLiveStreams(
   return liveStreamSchema.array().parse(data);
 }
 
-// Same fetchAuthed reasoning as getLiveStreams above.
-export async function getLiveStreamByUsername(username: string): Promise<StreamDetail | null> {
-  const res = await fetchAuthed(`/streams/username/${encodeURIComponent(username)}`);
+// Same fetchAuthed reasoning as getLiveStreams above. ticket: an optional
+// PPV access token (see streams/routes.ts's ?ticket= handling) — the
+// embed page's alternate proof of access when the session cookie itself
+// isn't available (third-party iframe context).
+export async function getLiveStreamByUsername(username: string, ticket?: string): Promise<StreamDetail | null> {
+  const qs = ticket ? `?ticket=${encodeURIComponent(ticket)}` : "";
+  const res = await fetchAuthed(`/streams/username/${encodeURIComponent(username)}${qs}`);
   if (res.status === 404) return null;
   if (!res.ok) {
     // Same degrade-not-crash reasoning as getLiveStreams — the watch page

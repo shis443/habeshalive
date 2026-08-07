@@ -24,6 +24,7 @@ import {
   thumbnailPlaceholderSvg,
   type LiveStreamSort,
 } from "./service.js";
+import { purchasePpvAccess } from "./ppv-service.js";
 import { searchTagNames } from "./tags-service.js";
 
 // SRS's http_hooks can't send custom headers — only a fully-specified URL —
@@ -96,21 +97,71 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     reply.header("Content-Type", "image/svg+xml").send(thumbnailPlaceholderSvg(decodeURIComponent(category)));
   });
 
-  app.get<{ Params: { username: string } }>(
+  // ?ticket=<jwt>: an alternate proof of PPV access for the /embed/
+  // [username] page — that page is our own Next.js route, but when
+  // loaded inside a third-party <iframe> the viewer's session cookie
+  // (SameSite=lax) typically isn't sent, so req.user?.sub above is often
+  // undefined there even for a logged-in, already-purchased viewer. A
+  // ticket minted by POST /:id/ppv/purchase carries the buyer's identity
+  // directly instead. Re-checked against ppv_purchases by streamId+sub
+  // (not trusted on the token's claims alone) via a second
+  // getLiveStreamByUsername call — see common/fastify-jwt.d.ts's
+  // PpvAccessClaims comment for why this is a distinct token type that
+  // app.tryAuthenticate itself already refuses to treat as a session.
+  app.get<{ Params: { username: string }; Querystring: { ticket?: string } }>(
     "/username/:username",
     { preHandler: app.tryAuthenticate },
-    async (req) => getLiveStreamByUsername(req.params.username, req.user?.sub)
+    async (req) => {
+      const stream = await getLiveStreamByUsername(req.params.username, req.user?.sub);
+      if (stream.hasPpvAccess || !req.query.ticket) return stream;
+
+      try {
+        const decoded = app.jwt.verify<{ sub: string; streamId: string; ppvAccess?: boolean }>(req.query.ticket);
+        if (decoded.ppvAccess === true && decoded.streamId === stream.id) {
+          return await getLiveStreamByUsername(req.params.username, decoded.sub);
+        }
+      } catch {
+        // Invalid/expired ticket — fall through, stream stays gated.
+      }
+      return stream;
+    }
   );
 
   app.get("/creator-stats", { preHandler: app.authenticate }, async (req) =>
     getCreatorStats(req.user.sub)
   );
 
-  app.get<{ Params: { id: string } }>("/:id", async (req) => getStreamById(req.params.id));
+  app.get<{ Params: { id: string } }>(
+    "/:id",
+    { preHandler: app.tryAuthenticate },
+    async (req) => getStreamById(req.params.id, req.user?.sub)
+  );
 
   app.get<{ Params: { id: string } }>("/:id/activity", async (req) => getStreamActivity(req.params.id));
 
   app.get<{ Params: { id: string } }>("/:id/viewers", async (req) => getViewerList(req.params.id));
+
+  // Module 2 — PPV purchase. Charges the buyer's wallet balance
+  // (purchasePpvAccess) then issues a short-lived, stream-and-buyer-scoped
+  // JWT — see common/fastify-jwt.d.ts's PpvAccessClaims comment for why
+  // this token type exists distinctly from a real session token. Every
+  // call after the first one for the same (streamId, buyerId) is a free
+  // no-op re-issue (purchasePpvAccess itself is idempotent), so a client
+  // that lost its token can just call this again rather than needing a
+  // separate "reissue my ticket" endpoint.
+  app.post<{ Params: { id: string } }>(
+    "/:id/ppv/purchase",
+    { preHandler: [app.authenticate, app.rejectIfBanned] },
+    async (req, reply) => {
+      const { jti } = await purchasePpvAccess(req.user.sub, req.params.id);
+      const accessToken = await reply.jwtSign(
+        { sub: req.user.sub, streamId: req.params.id, ppvAccess: true, jti },
+        { expiresIn: "24h" }
+      );
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      reply.send({ accessToken, expiresAt });
+    }
+  );
 
   app.get("/key", { preHandler: app.authenticate }, async (req) => getStreamKey(req.user.sub));
 

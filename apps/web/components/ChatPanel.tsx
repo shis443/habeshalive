@@ -11,9 +11,10 @@ import { useChatSettings } from "@/lib/useChatSettings";
 import { usernameColor } from "@/lib/userColor";
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { ChatSettingsPanel } from "./ChatSettingsPanel";
+import { DonateModal } from "./DonateModal";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { GurshaModal } from "./GurshaModal";
-import { CloseIcon, GiftIcon, PinIcon, SendIcon } from "./icons";
+import { CloseIcon, GiftIcon, PinIcon, SendIcon, WalletIcon } from "./icons";
 import styles from "./ChatPanel.module.css";
 import { PinnedMessageBar } from "./PinnedMessageBar";
 import { RecentGiftersStrip } from "./RecentGiftersStrip";
@@ -145,6 +146,7 @@ export function ChatPanel({
   const [balanceSantim, setBalanceSantim] = useState<number | null>(null);
   const [input, setInput] = useState("");
   const [gurshaModalOpen, setGurshaModalOpen] = useState(false);
+  const [donateModalOpen, setDonateModalOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -315,6 +317,14 @@ export function ChatPanel({
     setGurshaModalOpen(true);
   }
 
+  function handleDonateClick() {
+    if (!isAuthed) {
+      openAuthModal();
+      return;
+    }
+    setDonateModalOpen(true);
+  }
+
   async function handlePin(messageId: string) {
     try {
       const res = await fetch(`/api/backend/chat/${streamId}/pinned`, {
@@ -456,6 +466,14 @@ export function ChatPanel({
           >
             <GiftIcon />
           </button>
+          <button
+            type="button"
+            className={`${styles.iconButton} ${styles.giftButton}`}
+            aria-label="Send a donation"
+            onClick={handleDonateClick}
+          >
+            <WalletIcon />
+          </button>
           <button type="submit" className={`${styles.iconButton} ${styles.sendButton}`} aria-label="Send" disabled={sending}>
             <SendIcon />
           </button>
@@ -475,6 +493,10 @@ export function ChatPanel({
           recentChatters={recentChatters}
           onClose={() => setGurshaModalOpen(false)}
         />
+      )}
+
+      {donateModalOpen && (
+        <DonateModal streamId={streamId} isAuthed={isAuthed} onClose={() => setDonateModalOpen(false)} />
       )}
     </div>
   );

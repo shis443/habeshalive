@@ -2,8 +2,9 @@ import type {
   ChapaTransferWebhook,
   ChapaWebhook,
   CreatorPayoutContext,
+  DonateInput,
+  DonateResponse,
   EarningsThisMonth,
-  GiftAlert,
   GifterBadge,
   GifterBadgeTier,
   GiftTier,
@@ -16,6 +17,7 @@ import type {
   RequestPayoutInput,
   SendGiftInput,
   SendGiftResponse,
+  StreamAlert,
   Transaction,
   TopupResponse,
   UserRank,
@@ -50,10 +52,12 @@ function channelForGiftAlerts(streamId: string): string {
 }
 
 // Best-effort fan-out, same philosophy as chat/service.ts's
-// publishToCentrifugo: the gift is already durably recorded in gifts_sent
-// and the ledger by the time this runs, so a publish failure here only
-// costs the live on-stream alert, not the money movement.
-async function publishGiftAlert(alert: GiftAlert): Promise<void> {
+// publishToCentrifugo: the gift/donation is already durably recorded
+// (gifts_sent/donations) and the ledger by the time this runs, so a
+// publish failure here only costs the live on-stream alert, not the
+// money movement. One channel for both alert kinds (see StreamAlert's
+// own comment) — a stream's overlay only needs to subscribe once.
+async function publishStreamAlert(alert: StreamAlert): Promise<void> {
   // Whole fetch wrapped, not just the !res.ok branch — a network-level
   // failure (Centrifugo unreachable) throws out of a bare fetch() before
   // there's a response to check, which the comment above ("a publish
@@ -504,7 +508,8 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
     const alertInfo = alertRows[0];
     if (alertInfo) {
       const isAnonymous = input.isAnonymous ?? false;
-      await publishGiftAlert({
+      await publishStreamAlert({
+        kind: "gift",
         id: ledgerTransactionId,
         streamId: input.streamId,
         senderId,
@@ -528,6 +533,115 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
         "gursha_received",
         isAnonymousForNotify ? "You received a Gursha" : `${alertInfo.display_name} sent you a Gursha`,
         { body: `${alertInfo.gift_name} x${input.quantity}`, linkUrl: "/wallet" }
+      );
+    }
+
+    return { id: ledgerTransactionId, badge, rank };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Module 2 — a free-form cash tip, funded from the donor's existing
+// wallet balance (topped up via the real Chapa checkout integration
+// above) rather than a separate direct-charge path — see
+// db/migrations/0033_donations_and_ppv.sql's comment. Mirrors sendGift's
+// shape (ledger split by revenue_share_bps, gifter badge/rank update,
+// same gift-alerts:<streamId> channel) since a donation is real money
+// support for a creator, same as a catalog gift — just without a catalog
+// item attached.
+export async function sendDonation(donorId: string, input: DonateInput): Promise<DonateResponse> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const streamResult = await client.query<{ creator_id: string }>(
+      `SELECT creator_id FROM streams WHERE id = $1`,
+      [input.streamId]
+    );
+    const stream = streamResult.rows[0];
+    if (!stream) throw new AppError(404, "Stream not found");
+    if (stream.creator_id === donorId) throw new AppError(400, "You can't donate to your own stream");
+
+    const profileResult = await client.query<{ revenue_share_bps: number }>(
+      `SELECT revenue_share_bps FROM creator_profiles WHERE user_id = $1`,
+      [stream.creator_id]
+    );
+    const profile = profileResult.rows[0];
+    if (!profile) throw new AppError(404, "Creator has no payout profile");
+
+    const donorWalletId = await getUserWalletId(client, donorId);
+    const creatorWalletId = await getUserWalletId(client, stream.creator_id);
+    const platformWalletId = await getPlatformWalletId(client);
+
+    const balanceResult = await client.query<{ balance_santim: number }>(
+      `SELECT balance_santim FROM wallet_balances_cache WHERE wallet_id = $1 FOR UPDATE`,
+      [donorWalletId]
+    );
+    const donorBalance = balanceResult.rows[0]?.balance_santim ?? 0;
+    if (donorBalance < input.amountSantim) throw new AppError(400, "Insufficient balance");
+
+    const creatorShare = Math.trunc((input.amountSantim * profile.revenue_share_bps) / 10_000);
+    const platformShare = input.amountSantim - creatorShare;
+
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO ledger_transactions (type, stream_id, status, completed_at)
+       VALUES ('donation', $1, 'completed', now()) RETURNING id`,
+      [input.streamId]
+    );
+    const ledgerTransactionId = rows[0]!.id;
+
+    await insertEntry(client, ledgerTransactionId, donorWalletId, "debit", input.amountSantim);
+    await insertEntry(client, ledgerTransactionId, creatorWalletId, "credit", creatorShare);
+    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", platformShare);
+
+    await applyBalanceDelta(client, donorWalletId, -input.amountSantim);
+    await applyBalanceDelta(client, creatorWalletId, creatorShare);
+    await applyBalanceDelta(client, platformWalletId, platformShare);
+
+    const isAnonymous = input.isAnonymous ?? false;
+    await client.query(
+      `INSERT INTO donations (ledger_transaction_id, donor_id, creator_id, stream_id, amount_santim, message, is_anonymous)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [ledgerTransactionId, donorId, stream.creator_id, input.streamId, input.amountSantim, input.message ?? null, isAnonymous]
+    );
+
+    const badge = await upsertGifterBadge(client, donorId, stream.creator_id, input.amountSantim);
+    const rank = await upsertUserRank(client, donorId, input.amountSantim);
+
+    await client.query("COMMIT");
+
+    if (input.message) {
+      await flagIfMatched("donation_message", ledgerTransactionId, donorId, input.message);
+    }
+
+    const { rows: donorRows } = await pool.query<{ username: string; display_name: string }>(
+      `SELECT username, display_name FROM users WHERE id = $1`,
+      [donorId]
+    );
+    const donorInfo = donorRows[0];
+    if (donorInfo) {
+      await publishStreamAlert({
+        kind: "donation",
+        id: ledgerTransactionId,
+        streamId: input.streamId,
+        donorId,
+        donorUsername: isAnonymous ? null : donorInfo.username,
+        donorDisplayName: isAnonymous ? null : donorInfo.display_name,
+        isAnonymous,
+        amountSantim: input.amountSantim,
+        message: input.message ?? null,
+        createdAt: new Date().toISOString(),
+      });
+
+      await notify(
+        stream.creator_id,
+        "donation_received",
+        isAnonymous ? "You received a donation" : `${donorInfo.display_name} sent you a donation`,
+        { body: `${(input.amountSantim / 100).toFixed(2)} ETB`, linkUrl: "/wallet" }
       );
     }
 

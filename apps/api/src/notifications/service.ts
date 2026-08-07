@@ -80,6 +80,8 @@ const PREFERENCE_COLUMN: Record<NotificationType, keyof NotificationPreferences 
   ad_revenue_paid: "payoutEvents",
   kyc_approved: null,
   kyc_rejected: null,
+  donation_received: "gurshaReceived",
+  ppv_purchase_received: "gurshaReceived",
 };
 
 // Single-recipient notification (everything except creator_live, which

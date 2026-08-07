@@ -23,6 +23,7 @@ import { killActiveRtmpPublishers } from "../moderation/actions-service.js";
 import { isApprovedCreator } from "../creator-applications/service.js";
 import { notifyFollowersCreatorLive } from "../notifications/service.js";
 import { appendHlsToken } from "./hls-token.js";
+import { hasPpvAccess } from "./ppv-service.js";
 import { linkTagsToStream } from "./tags-service.js";
 import { videoProvider } from "./video-provider.js";
 
@@ -75,9 +76,26 @@ interface StreamRow {
   is_boosted: boolean;
   is_sensitive: boolean;
   tags: string[];
+  is_ppv: boolean;
+  ppv_price_santim: number | null;
 }
 
-function toStreamDetail(row: StreamRow): StreamDetail {
+// Module 2 — the creator always has access to their own stream; anyone
+// else needs a completed ppv_purchases row. A non-PPV stream trivially
+// has "access" for everyone, same as before this module existed.
+async function resolvePpvAccess(row: StreamRow, viewerId: string | undefined): Promise<boolean> {
+  if (!row.is_ppv) return true;
+  if (viewerId && viewerId === row.creator_id) return true;
+  return hasPpvAccess(row.id, viewerId);
+}
+
+// hasAccess gates playbackUrl only — every other field (title, thumbnail,
+// price) stays visible so a non-purchaser still sees enough to decide
+// whether to buy a ticket, same "show metadata, gate the stream itself"
+// posture as an offline stream's playbackUrl already being null.
+function toStreamDetail(row: StreamRow, hasAccess: boolean): StreamDetail {
+  const playbackUrl =
+    row.playback_url && hasAccess ? appendHlsToken(row.playback_url, row.creator_id) : null;
   return {
     id: row.id,
     title: row.title,
@@ -90,13 +108,16 @@ function toStreamDetail(row: StreamRow): StreamDetail {
     // would expire while the stream is still live. Same reasoning as
     // vods/service.ts's getSignedVodUrl being called at read time, not
     // write time. No-op until HLS_TOKEN_HMAC_SECRET is configured.
-    playbackUrl: row.playback_url ? appendHlsToken(row.playback_url, row.creator_id) : row.playback_url,
+    playbackUrl,
     startedAt: row.started_at,
     status: row.status as StreamDetail["status"],
     viewerCount: row.peak_viewers,
     isBoosted: row.is_boosted,
     isSensitive: row.is_sensitive,
     tags: row.tags,
+    isPpv: row.is_ppv,
+    ppvPriceSantim: row.ppv_price_santim,
+    hasPpvAccess: hasAccess,
     creator: {
       id: row.creator_id,
       username: row.username,
@@ -114,7 +135,7 @@ function toStreamDetail(row: StreamRow): StreamDetail {
 // four separate queries.
 const STREAM_SELECT_COLUMNS = `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
-  s.started_at, s.status, s.peak_viewers, s.is_sensitive,
+  s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim,
   u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
   EXISTS (
     SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
@@ -250,7 +271,12 @@ export async function listLiveStreams(filters: {
      ORDER BY is_boosted DESC, ${sortClause}`,
     [filters.category ?? null, filters.language ?? null, filters.tag ?? null, filters.viewerId ?? null]
   );
-  return rows.map(toStreamDetail);
+  // The browse grid never renders playbackUrl (only VideoPlayer/embed do —
+  // see apps/web/components/VideoPlayer.tsx), so there's no real access
+  // check to run per-card here; passing !row.is_ppv just means a PPV
+  // card's (unused) playbackUrl field comes back null rather than a live
+  // URL, which is the safe default regardless.
+  return rows.map((row) => toStreamDetail(row, !row.is_ppv));
 }
 
 // Admin operational view — every live stream regardless of category or
@@ -265,10 +291,12 @@ export async function listAllLiveStreamsForAdmin(): Promise<StreamDetail[]> {
      WHERE s.status = 'live'
      ORDER BY s.started_at DESC`
   );
-  return rows.map(toStreamDetail);
+  // Admin ops view — always the real playbackUrl, PPV or not; moderation
+  // needs to see what's actually airing regardless of who's paid for it.
+  return rows.map((row) => toStreamDetail(row, true));
 }
 
-export async function getStreamById(streamId: string): Promise<StreamDetail> {
+export async function getStreamById(streamId: string, viewerId?: string): Promise<StreamDetail> {
   const { rows } = await pool.query<StreamRow>(
     `SELECT ${STREAM_SELECT_COLUMNS}
      FROM streams s
@@ -278,7 +306,7 @@ export async function getStreamById(streamId: string): Promise<StreamDetail> {
   );
   const row = rows[0];
   if (!row) throw new AppError(404, "Stream not found");
-  return toStreamDetail(row);
+  return toStreamDetail(row, await resolvePpvAccess(row, viewerId));
 }
 
 export async function getLiveStreamByUsername(username: string, viewerId?: string): Promise<StreamDetail> {
@@ -299,7 +327,7 @@ export async function getLiveStreamByUsername(username: string, viewerId?: strin
   // revealing "there's something here, you just can't see it" is the
   // safer behavior for a content-sensitivity gate.
   if (!row) throw new AppError(404, "This creator is not live right now");
-  return toStreamDetail(row);
+  return toStreamDetail(row, await resolvePpvAccess(row, viewerId));
 }
 
 export async function getStreamActivity(streamId: string): Promise<StreamActivity> {
@@ -490,10 +518,21 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   const thumbnailUrl = input.thumbnailUrl ?? thumbnailPlaceholderUrl(input.category);
 
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8)
+    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive, is_ppv, ppv_price_santim)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8, $9, $10)
      RETURNING id`,
-    [userId, input.title, input.category, input.language, thumbnailUrl, playbackUrl, userId, input.isSensitive ?? false]
+    [
+      userId,
+      input.title,
+      input.category,
+      input.language,
+      thumbnailUrl,
+      playbackUrl,
+      userId,
+      input.isSensitive ?? false,
+      Boolean(input.ppvPriceSantim),
+      input.ppvPriceSantim ?? null,
+    ]
   );
   const streamId = rows[0]!.id;
 
@@ -509,7 +548,7 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   }
   await logStreamEvent(streamId, "started");
 
-  const stream = await getStreamById(streamId);
+  const stream = await getStreamById(streamId, userId);
   // Detached (no await) — see notifyFollowersCreatorLive's own comment on
   // why a slow/large follower fan-out shouldn't delay this response.
   notifyFollowersCreatorLive(userId, stream.creator.username, stream.creator.displayName).catch((err) => {

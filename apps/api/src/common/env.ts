@@ -68,6 +68,27 @@ const envSchema = z.object({
   // there's no real Chapa sandbox account behind this yet.
   CHAPA_SECRET_KEY: z.string().default(""),
   CHAPA_WEBHOOK_SECRET: z.string().default(""),
+  // Module 2 diaspora bridge — international-card top-ups for donors
+  // outside Ethiopia (Chapa's own hosted checkout already covers Telebirr/
+  // CBE Birr/HelloCash/local cards natively, so those two don't get a
+  // separate client — see wallet/diaspora-topup-service.ts's own comment).
+  // Same empty-by-default stub-switch pattern as Chapa above; no real
+  // Stripe/PayPal business account exists yet.
+  STRIPE_SECRET_KEY: z.string().default(""),
+  STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  PAYPAL_CLIENT_ID: z.string().default(""),
+  PAYPAL_CLIENT_SECRET: z.string().default(""),
+  PAYPAL_WEBHOOK_ID: z.string().default(""),
+  // "api-m" host — PayPal's current REST API gateway, per their own
+  // authentication docs (developer.paypal.com, verified 2026-08-07).
+  // Overridable for sandbox testing (api-m.sandbox.paypal.com).
+  PAYPAL_API_BASE: z.string().default("https://api-m.paypal.com"),
+  // Fixed-at-request-time conversion (USD -> ETB santim) — this platform
+  // has no live FX feed anywhere else, so a real deployment would need to
+  // update this periodically (or add one) rather than trusting a stale
+  // hardcoded default; 0 here doubles as "not configured," matching the
+  // rest of this block.
+  DIASPORA_USD_TO_ETB_RATE: z.coerce.number().nonnegative().default(0),
   // Social auth (E.3): empty in dev on purpose, same switch pattern as
   // Chapa above — auth/social-service.ts checks these before attempting
   // ID-token verification and returns a clear "not configured" error

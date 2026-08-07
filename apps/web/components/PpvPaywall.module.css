@@ -1,0 +1,70 @@
+.wrap {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-container-low);
+  border-radius: 8px;
+}
+
+.card {
+  text-align: center;
+  padding: var(--space-4);
+  max-width: 360px;
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+
+.title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-headline);
+  font-size: 20px;
+  color: var(--on-background);
+}
+
+.price {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-headline);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--on-background);
+}
+
+.buyButton {
+  width: 100%;
+  padding: 12px var(--space-3);
+  border-radius: 4px;
+  border: none;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.buyButton:disabled {
+  opacity: 0.6;
+}
+
+.hint {
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.error {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--error, #ffb4ab);
+}

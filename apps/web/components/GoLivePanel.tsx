@@ -3,6 +3,7 @@
 import {
   STREAM_CATEGORIES,
   STREAM_LANGUAGES,
+  birrToSantim,
   boostStreamResponseSchema,
   formatSantimAsBirr,
   streamDefaultsSchema,
@@ -137,6 +138,10 @@ export function GoLivePanel({
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [setupIsSensitive, setSetupIsSensitive] = useState(false);
   const [setupTags, setSetupTags] = useState<string[]>([]);
+  // Module 2 — per-broadcast PPV pricing (ETB, converted to santim at
+  // submit time). Empty string means "not ticketed," same free-form-input
+  // convention as the amount fields in DonateModal/GurshaModal.
+  const [setupPpvPriceEtb, setSetupPpvPriceEtb] = useState("");
 
   useEffect(() => {
     if (initialIsLive) return;
@@ -226,6 +231,7 @@ export function GoLivePanel({
           thumbnailUrl: setupThumbnail ?? undefined,
           isSensitive: setupIsSensitive,
           tags: setupTags.length > 0 ? setupTags : undefined,
+          ppvPriceSantim: setupPpvPriceEtb ? birrToSantim(parseFloat(setupPpvPriceEtb)) : undefined,
         }),
       });
       const data = await res.json();
@@ -275,6 +281,7 @@ export function GoLivePanel({
           thumbnailUrl: setupThumbnail ?? undefined,
           isSensitive: setupIsSensitive,
           tags: setupTags.length > 0 ? setupTags : undefined,
+          ppvPriceSantim: setupPpvPriceEtb ? birrToSantim(parseFloat(setupPpvPriceEtb)) : undefined,
         }),
       });
       const goLiveData = await goLiveRes.json();
@@ -456,6 +463,27 @@ export function GoLivePanel({
           <div className={styles.field}>
             <span className={styles.fieldLabel}>Tags (optional, up to 5)</span>
             <StreamTagsInput tags={setupTags} onChange={setSetupTags} />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="setup-ppv-price">
+              Ticket price (optional — leave blank for a free stream)
+            </label>
+            <input
+              id="setup-ppv-price"
+              type="number"
+              min="1"
+              step="0.5"
+              className={styles.textInput}
+              placeholder="Price in ETB, e.g. 25"
+              value={setupPpvPriceEtb}
+              onChange={(e) => setSetupPpvPriceEtb(e.target.value)}
+            />
+            {setupPpvPriceEtb && (
+              <p className={styles.subtext}>
+                Viewers pay {formatSantimAsBirr(birrToSantim(parseFloat(setupPpvPriceEtb) || 0))} from their wallet
+                balance to unlock this stream.
+              </p>
+            )}
           </div>
           <div className={styles.field}>
             <span className={styles.fieldLabel}>Thumbnail (optional)</span>
