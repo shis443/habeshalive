@@ -147,7 +147,7 @@ export function NotificationBell({ isAuthed }: { isAuthed: boolean }) {
             <span className={styles.spacer} />
             <h3 className={styles.title}>Notifications</h3>
             <div className={styles.headerActions}>
-              <Link href="/settings" className={styles.iconButton} aria-label="Notification settings" title="Notification settings">
+              <Link href="/settings?tab=notifications" className={styles.iconButton} aria-label="Notification settings" title="Notification settings">
                 <GearIcon />
               </Link>
               <button type="button" className={styles.iconButton} aria-label="Close" onClick={() => setOpen(false)}>

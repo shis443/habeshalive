@@ -1,0 +1,28 @@
+.tabBar {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--outline-variant);
+  margin-bottom: var(--space-4);
+}
+
+.tab {
+  flex-shrink: 0;
+  padding: var(--space-2) 0;
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--on-background);
+}
+
+.tabActive {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}

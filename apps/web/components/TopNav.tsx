@@ -324,12 +324,10 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
               <div className={styles.dropdown}>
                 {/* E.1: Dashboard and Wallet were duplicating what's
                     already in the primary nav (BottomNav) — this dropdown
-                    is just Account/Settings now. Log out and Switch
-                    account moved inside Settings, deliberately not one
-                    accidental click away from here. */}
-                <Link href="/account" className={styles.menuItem}>
-                  Account
-                </Link>
+                    is just Settings now (Account merged into it as a tab,
+                    see SettingsTabs.tsx). Log out and Switch account live
+                    inside Settings, deliberately not one accidental click
+                    away from here. */}
                 <Link href="/settings" className={styles.menuItem}>
                   Settings
                 </Link>
