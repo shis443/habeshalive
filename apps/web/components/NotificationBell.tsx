@@ -1,11 +1,12 @@
 "use client";
 
-import type { Notification } from "@habeshalive/shared";
+import type { Notification, NotificationType } from "@habeshalive/shared";
 import { Centrifuge } from "centrifuge";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { CENTRIFUGO_WS_URL } from "@/lib/config";
-import styles from "./TopNav.module.css";
-import { BellIcon } from "./icons";
+import styles from "./NotificationBell.module.css";
+import { BellIcon, CloseIcon, GearIcon, GoLiveIcon } from "./icons";
 
 // Unlike ChatPanel's fetchChatToken (deliberately calls the API directly
 // so anonymous viewers get a connection token too — public chat needs no
@@ -24,6 +25,37 @@ async function fetchToken(): Promise<string> {
   return data.token as string;
 }
 
+// Twitch-style two-tab split ("Following" vs "My Channel"), derived from
+// the real notificationTypeSchema enum rather than a fabricated second
+// field — 'creator_live' is the only type about someone else's channel;
+// every other type (gifts, subscriptions, payouts, moderation,
+// applications, KYC, ad revenue, donations, PPV) is about the signed-in
+// user's own account/channel.
+const FOLLOWING_TYPES = new Set<NotificationType>(["creator_live"]);
+
+function formatRelativeTime(iso: string): string {
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function NotificationIcon({ type }: { type: NotificationType }) {
+  return FOLLOWING_TYPES.has(type) ? <GoLiveIcon /> : <BellIcon />;
+}
+
+function SmileyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M7.5 10h3M13.5 10h3" />
+      <path d="M8 14.5c1.5 1.5 6.5 1.5 8 0" />
+    </svg>
+  );
+}
+
 // E.6: real unread count (replacing the hardcoded 0) with live push over
 // the existing Centrifugo connection — a `#<userId>`-suffixed channel is
 // Centrifugo's built-in per-user channel restriction (see
@@ -33,6 +65,7 @@ async function fetchToken(): Promise<string> {
 // subscribe-proxy logic needed.
 export function NotificationBell({ isAuthed }: { isAuthed: boolean }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"following" | "channel">("following");
   const [items, setItems] = useState<Notification[] | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   // Fetched here rather than threaded as a prop through every TopNav call
@@ -92,8 +125,13 @@ export function NotificationBell({ isAuthed }: { isAuthed: boolean }) {
     await fetch(`/api/backend/notifications/${id}/read`, { method: "POST" }).catch(() => {});
   }
 
+  const followingItems = useMemo(() => items?.filter((n) => FOLLOWING_TYPES.has(n.type)) ?? [], [items]);
+  const channelItems = useMemo(() => items?.filter((n) => !FOLLOWING_TYPES.has(n.type)) ?? [], [items]);
+  const activeItems = tab === "following" ? followingItems : channelItems;
+  const hasUnread = items !== null && items.some((n) => !n.readAt);
+
   return (
-    <div className={styles.dropdownWrap}>
+    <div className={styles.wrap}>
       <button
         type="button"
         className={`${styles.iconButton} ${styles.badgeWrap}`}
@@ -104,32 +142,91 @@ export function NotificationBell({ isAuthed }: { isAuthed: boolean }) {
         {unreadCount > 0 && <span className={styles.badge}>{unreadCount > 99 ? "99+" : unreadCount}</span>}
       </button>
       {open && (
-        <div className={`${styles.dropdown} ${styles.dropdownWide}`}>
-          {!isAuthed || items === null ? (
-            <p className={styles.emptyState}>No new notifications</p>
-          ) : items.length === 0 ? (
-            <p className={styles.emptyState}>No new notifications</p>
-          ) : (
-            <>
-              {unreadCount > 0 && (
-                <button type="button" className={styles.rowItem} onClick={markAllRead}>
-                  <span className={styles.rowLabel}>Mark all as read</span>
-                </button>
-              )}
-              {items.map((n) => (
-                <a
-                  key={n.id}
-                  href={n.linkUrl ?? "#"}
-                  className={styles.menuItem}
-                  onClick={() => !n.readAt && markRead(n.id)}
-                  style={{ opacity: n.readAt ? 0.6 : 1 }}
-                >
-                  <strong>{n.title}</strong>
-                  {n.body && <div style={{ fontSize: 12 }}>{n.body}</div>}
-                </a>
-              ))}
-            </>
-          )}
+        <div className={styles.panel}>
+          <div className={styles.header}>
+            <span className={styles.spacer} />
+            <h3 className={styles.title}>Notifications</h3>
+            <div className={styles.headerActions}>
+              <Link href="/settings" className={styles.iconButton} aria-label="Notification settings" title="Notification settings">
+                <GearIcon />
+              </Link>
+              <button type="button" className={styles.iconButton} aria-label="Close" onClick={() => setOpen(false)}>
+                <CloseIcon />
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.tabs}>
+            <button
+              type="button"
+              className={`${styles.tab} ${tab === "following" ? styles.tabActive : ""}`}
+              onClick={() => setTab("following")}
+            >
+              Following
+            </button>
+            <button
+              type="button"
+              className={`${styles.tab} ${tab === "channel" ? styles.tabActive : ""}`}
+              onClick={() => setTab("channel")}
+            >
+              My Channel
+            </button>
+          </div>
+
+          <div className={styles.body}>
+            {!isAuthed || items === null || activeItems.length === 0 ? (
+              tab === "following" ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>
+                    <SmileyIcon />
+                  </div>
+                  <p className={styles.emptyTitle}>You&apos;re all caught up. What a pro!</p>
+                  <p className={styles.emptyBody}>You have no messages.</p>
+                </div>
+              ) : (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>
+                    <GoLiveIcon />
+                  </div>
+                  <p className={styles.emptyTitle}>New to streaming? Try it out!</p>
+                  <p className={styles.emptyBody}>Share your hobbies and meet new friends.</p>
+                  <Link href="/dashboard" className={styles.emptyAction}>
+                    Go to Creator Dashboard
+                  </Link>
+                </div>
+              )
+            ) : (
+              <>
+                {hasUnread && (
+                  <div className={styles.markAllRow}>
+                    <button type="button" className={styles.markAllButton} onClick={markAllRead}>
+                      Mark all as read
+                    </button>
+                  </div>
+                )}
+                <div className={styles.list}>
+                  {activeItems.map((n) => (
+                    <a
+                      key={n.id}
+                      href={n.linkUrl ?? "#"}
+                      className={`${styles.row} ${!n.readAt ? styles.rowUnread : ""}`}
+                      onClick={() => !n.readAt && markRead(n.id)}
+                    >
+                      <span className={styles.rowIcon}>
+                        <NotificationIcon type={n.type} />
+                      </span>
+                      <span className={styles.rowContent}>
+                        <p className={styles.rowTitle}>{n.title}</p>
+                        {n.body && <p className={styles.rowBody}>{n.body}</p>}
+                        <span className={styles.rowTime}>{formatRelativeTime(n.createdAt)}</span>
+                      </span>
+                      {!n.readAt && <span className={styles.unreadDot} />}
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
