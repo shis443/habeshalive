@@ -1,0 +1,140 @@
+.empty {
+  padding: var(--space-3);
+  text-align: center;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: 10px;
+  padding: var(--space-2);
+}
+
+.thumb {
+  width: 96px;
+  height: 54px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.thumbPlaceholder {
+  width: 96px;
+  height: 54px;
+  border-radius: 6px;
+  background: var(--surface-container-high);
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--on-background);
+  margin: 0 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin: 0;
+}
+
+.error {
+  font-size: 12px;
+  color: var(--error, #ffb4ab);
+  margin: 4px 0 0;
+}
+
+.badgePublished {
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-primary);
+  background: var(--primary);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.badgeDraft {
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-high);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.publishButton {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.secondaryButton {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-background);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.deleteButton {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--error, #ffb4ab);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error, #ffb4ab) 10%, transparent);
+}
+
+.publishButton:disabled,
+.secondaryButton:disabled,
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

@@ -23,3 +23,15 @@ export const creatorProfileSchema = z.object({
   isFollowing: z.boolean(),
 });
 export type CreatorProfile = z.infer<typeof creatorProfileSchema>;
+
+// Creator Dashboard's Community > Followers tab — the reverse direction
+// of getFollowedCreators (who a user follows), listing who follows a
+// creator's own channel instead.
+export const followerListItemSchema = z.object({
+  userId: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  avatarUrl: z.string().nullable(),
+  followedAt: z.string(),
+});
+export type FollowerListItem = z.infer<typeof followerListItemSchema>;

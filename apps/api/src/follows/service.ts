@@ -1,4 +1,4 @@
-import type { CreatorProfile, CreatorSearchResult, FollowStatus } from "@habeshalive/shared";
+import type { CreatorProfile, CreatorSearchResult, FollowerListItem, FollowStatus } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
@@ -46,6 +46,36 @@ export async function getFollowerCount(creatorId: string): Promise<number> {
     [creatorId]
   );
   return rows[0]?.count ?? 0;
+}
+
+interface FollowerRow {
+  user_id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  followed_at: string;
+}
+
+// Creator Dashboard's Community > Followers — the reverse direction of
+// getFollowedCreators above (who follows THIS creator, not who they
+// follow). Newest first, matching every other "recent activity" list in
+// this codebase (chat, gifters, moderation queue).
+export async function listMyFollowers(creatorId: string): Promise<FollowerListItem[]> {
+  const { rows } = await pool.query<FollowerRow>(
+    `SELECT u.id AS user_id, u.username, u.display_name, u.avatar_url, f.created_at AS followed_at
+     FROM follows f
+     JOIN users u ON u.id = f.follower_id
+     WHERE f.creator_id = $1
+     ORDER BY f.created_at DESC`,
+    [creatorId]
+  );
+  return rows.map((row) => ({
+    userId: row.user_id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    followedAt: row.followed_at,
+  }));
 }
 
 interface CreatorProfileRow {

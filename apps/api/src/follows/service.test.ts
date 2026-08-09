@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { pool } from "../common/db.js";
 import { cleanupTestUsers, createTestCreator, createTestViewer } from "../test/fixtures.js";
-import { getCreatorProfile, toggleFollow } from "./service.js";
+import { getCreatorProfile, listMyFollowers, toggleFollow } from "./service.js";
 
 const createdUserIds: string[] = [];
 
@@ -44,5 +44,25 @@ describe("getCreatorProfile", () => {
     const asAnonymous = await getCreatorProfile(creator.username, null);
     expect(asAnonymous!.isFollowing).toBe(false); // personalization only, count is still public
     expect(asAnonymous!.followerCount).toBe(1);
+  });
+});
+
+describe("listMyFollowers", () => {
+  it("lists real followers newest first, and is empty with none", async () => {
+    const creator = await createTestCreator();
+    createdUserIds.push(creator.id);
+
+    expect(await listMyFollowers(creator.id)).toEqual([]);
+
+    const first = await createTestViewer();
+    createdUserIds.push(first.id);
+    const second = await createTestViewer();
+    createdUserIds.push(second.id);
+    await toggleFollow(first.id, creator.id);
+    await toggleFollow(second.id, creator.id);
+
+    const followers = await listMyFollowers(creator.id);
+    expect(followers.map((f) => f.userId)).toEqual([second.id, first.id]);
+    expect(followers[0]).toMatchObject({ username: second.username });
   });
 });

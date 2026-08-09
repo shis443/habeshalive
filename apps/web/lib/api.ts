@@ -25,6 +25,7 @@ import {
   creatorSearchResultSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
+  followerListItemSchema,
   followStatusSchema,
   giftCardAdminItemSchema,
   giftCardPreviewSchema,
@@ -36,6 +37,7 @@ import {
   ledgerTransactionLookupSchema,
   linkedSocialAccountSchema,
   liveStreamSchema,
+  moderatedChannelSchema,
   moderationActionRecordSchema,
   moderationFlagSchema,
   myAccountSchema,
@@ -95,6 +97,7 @@ import {
   type CreatorSearchResult,
   type CreatorStats,
   type EarningsThisMonth,
+  type FollowerListItem,
   type FollowStatus,
   type GiftCardAdminItem,
   type GiftCardPreview,
@@ -104,6 +107,7 @@ import {
   type LedgerTransactionLookup,
   type LinkedSocialAccount,
   type LiveStream,
+  type ModeratedChannel,
   type ModerationActionRecord,
   type ModerationFlag,
   type MyAccount,
@@ -335,6 +339,26 @@ export async function getMyVods(): Promise<Vod[]> {
     return [];
   }
   return vodSchema.array().parse(await res.json());
+}
+
+// Creator Dashboard's Community > Followers.
+export async function getMyFollowers(): Promise<FollowerListItem[]> {
+  const res = await fetchAuthed("/follows/followers");
+  if (!res.ok) {
+    console.error(`Failed to load followers (${res.status})`);
+    return [];
+  }
+  return followerListItemSchema.array().parse(await res.json());
+}
+
+// Creator Dashboard's Community > My Assigned Roles.
+export async function getChannelsIModerate(): Promise<ModeratedChannel[]> {
+  const res = await fetchAuthed("/moderation/channel/mine");
+  if (!res.ok) {
+    console.error(`Failed to load moderated channels (${res.status})`);
+    return [];
+  }
+  return moderatedChannelSchema.array().parse(await res.json());
 }
 
 export async function getStreamDefaults(): Promise<StreamDefaults | null> {

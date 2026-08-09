@@ -137,6 +137,23 @@ export function ShareIcon({ className }: IconProps) {
   );
 }
 
+export function HomeIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="20" height="20" className={className}>
+      <path d="M4 11.5L12 4l8 7.5" />
+      <path d="M6 10v9.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10" />
+    </svg>
+  );
+}
+
+export function ShieldIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="20" height="20" className={className}>
+      <path d="M12 3.5l7 3v5c0 5-3 8.2-7 9.5-4-1.3-7-4.5-7-9.5v-5z" />
+    </svg>
+  );
+}
+
 export function GroupIcon({ className }: IconProps) {
   return (
     <svg {...baseProps} width="16" height="16" className={className}>

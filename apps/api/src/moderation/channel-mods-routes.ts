@@ -5,6 +5,7 @@ import {
   grantChannelModerator,
   listChannelBlocks,
   listChannelModerators,
+  listChannelsIModerate,
   revokeChannelModerator,
   unblockViewerFromChannel,
 } from "./channel-mods-service.js";
@@ -16,6 +17,13 @@ import {
 // blocks (assertCanManageChannel), so "mine" alone wouldn't cover that
 // caller.
 export const channelModsRoutes: FastifyPluginAsync = async (app) => {
+  // Creator Dashboard's Community > My Assigned Roles. Registered before
+  // the parametric "/:creatorId/moderators" below — same static-before-
+  // parametric registration-order note as vods/routes.ts's "/mine": not
+  // load-bearing (Fastify prioritizes static segments regardless), just
+  // there for a future reader.
+  app.get("/mine", { preHandler: app.authenticate }, async (req) => listChannelsIModerate(req.user.sub));
+
   app.get<{ Params: { creatorId: string } }>(
     "/:creatorId/moderators",
     { preHandler: app.authenticate },

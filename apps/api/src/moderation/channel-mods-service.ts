@@ -1,4 +1,4 @@
-import type { ChannelBlock, ChannelModerator } from "@habeshalive/shared";
+import type { ChannelBlock, ChannelModerator, ModeratedChannel } from "@habeshalive/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
@@ -47,6 +47,39 @@ export async function isBlockedFromChannel(creatorId: string, userId: string): P
     userId,
   ]);
   return rows.length > 0;
+}
+
+interface ModeratedChannelRow {
+  creator_id: string;
+  creator_username: string;
+  creator_display_name: string;
+  creator_avatar_url: string | null;
+  granted_at: string;
+}
+
+// Creator Dashboard's Community > My Assigned Roles — the reverse
+// direction of listChannelModerators below (channels that granted userId
+// moderator status, not who userId has granted it to on their own
+// channel). No assertCanManageChannel gate needed here — this is always
+// "my own" list, keyed on the caller's own id, same as listMyVods/
+// getMySquad's "mine" pattern elsewhere in this codebase.
+export async function listChannelsIModerate(userId: string): Promise<ModeratedChannel[]> {
+  const { rows } = await pool.query<ModeratedChannelRow>(
+    `SELECT u.id AS creator_id, u.username AS creator_username, u.display_name AS creator_display_name,
+            u.avatar_url AS creator_avatar_url, g.granted_at
+     FROM channel_moderator_grants g
+     JOIN users u ON u.id = g.creator_id
+     WHERE g.moderator_id = $1
+     ORDER BY g.granted_at DESC`,
+    [userId]
+  );
+  return rows.map((r) => ({
+    creatorId: r.creator_id,
+    creatorUsername: r.creator_username,
+    creatorDisplayName: r.creator_display_name,
+    creatorAvatarUrl: r.creator_avatar_url,
+    grantedAt: r.granted_at,
+  }));
 }
 
 interface ModeratorRow {

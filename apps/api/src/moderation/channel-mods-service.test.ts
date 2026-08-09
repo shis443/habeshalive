@@ -9,6 +9,7 @@ import {
   isChannelModerator,
   listChannelBlocks,
   listChannelModerators,
+  listChannelsIModerate,
   revokeChannelModerator,
   unblockViewerFromChannel,
 } from "./channel-mods-service.js";
@@ -99,6 +100,22 @@ describe("listChannelModerators", () => {
     await expect(listChannelModerators(creator.id, stranger.id)).rejects.toMatchObject({
       statusCode: 403,
     } satisfies Partial<AppError>);
+  });
+});
+
+describe("listChannelsIModerate", () => {
+  it("lists channels that granted me moderator status, newest first, and is my-own — no access gate", async () => {
+    const mod = await trackedViewer();
+    expect(await listChannelsIModerate(mod.id)).toEqual([]);
+
+    const firstCreator = await trackedViewer();
+    const secondCreator = await trackedViewer();
+    await grantChannelModerator(firstCreator.id, firstCreator.id, mod.username);
+    await grantChannelModerator(secondCreator.id, secondCreator.id, mod.username);
+
+    const channels = await listChannelsIModerate(mod.id);
+    expect(channels.map((c) => c.creatorId)).toEqual([secondCreator.id, firstCreator.id]);
+    expect(channels[0]).toMatchObject({ creatorUsername: secondCreator.username });
   });
 });
 

@@ -34,3 +34,15 @@ export const blockViewerSchema = z.object({
   username: z.string().min(1),
 });
 export type BlockViewerInput = z.infer<typeof blockViewerSchema>;
+
+// Creator Dashboard's Community > My Assigned Roles — the reverse
+// direction of channelModeratorSchema above (channels that granted ME
+// moderator status, not who I've granted it to on my own channel).
+export const moderatedChannelSchema = z.object({
+  creatorId: z.string().uuid(),
+  creatorUsername: z.string(),
+  creatorDisplayName: z.string(),
+  creatorAvatarUrl: z.string().nullable(),
+  grantedAt: z.string(),
+});
+export type ModeratedChannel = z.infer<typeof moderatedChannelSchema>;
