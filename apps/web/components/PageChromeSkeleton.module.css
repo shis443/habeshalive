@@ -1,0 +1,36 @@
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--shell-top-height);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  background: color-mix(in srgb, var(--surface-container) 60%, transparent);
+  border-bottom: 1px solid var(--outline-variant);
+  z-index: 50;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.bottomNav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--shell-bottom-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 var(--space-3);
+  background: color-mix(in srgb, var(--surface-container) 60%, transparent);
+  border-top: 1px solid var(--outline-variant);
+  z-index: 50;
+}

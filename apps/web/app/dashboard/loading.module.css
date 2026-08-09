@@ -1,0 +1,37 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 220px;
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-2);
+}
+
+.navRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-2);
+}
+
+.navRowText {
+  flex: 1;
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: 12px;
+  border: 1px solid var(--outline-variant);
+  margin-bottom: var(--space-3);
+}
