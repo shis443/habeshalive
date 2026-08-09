@@ -8,6 +8,7 @@ import { adminRoutes } from "./admin/routes.js";
 import { adRoutes } from "./ads/routes.js";
 import { announcementRoutes } from "./announcements/routes.js";
 import { authRoutes } from "./auth/routes.js";
+import { touchAndCheckSession } from "./auth/session-service.js";
 import { avatarRoutes } from "./avatars/routes.js";
 import { chatRoutes } from "./chat/routes.js";
 import { env } from "./common/env.js";
@@ -113,6 +114,17 @@ export function buildApp() {
     try {
       await req.jwtVerify();
       rejectNonSessionToken(req);
+      // jti is only absent on tokens issued before session-service.ts's
+      // sessions table existed — those are grandfathered through
+      // unchecked rather than treated as suddenly invalid the moment this
+      // deploys. A present jti with no matching active row (revoked, or
+      // never existed) fails closed.
+      if (req.user && "jti" in req.user && req.user.jti) {
+        const active = await touchAndCheckSession(req.user.jti);
+        if (!active) {
+          throw new Error("session revoked");
+        }
+      }
     } catch {
       reply.status(401).send({ error: "unauthorized" });
     }
@@ -125,6 +137,11 @@ export function buildApp() {
     try {
       await req.jwtVerify();
       rejectNonSessionToken(req);
+      if (req.user && "jti" in req.user && req.user.jti && !(await touchAndCheckSession(req.user.jti))) {
+        // A revoked/signed-out session shouldn't be treated as "logged in"
+        // even for this soft, optional-auth path.
+        req.user = undefined as unknown as typeof req.user;
+      }
     } catch {
       // No token, an invalid one, or a pending-2FA token — proceed
       // unauthenticated either way (req.user is already cleared above in

@@ -2,7 +2,11 @@ import "@fastify/jwt";
 import type { PermissionKey } from "./rbac.js";
 
 // Three distinct token shapes now flow through this one plugin instance:
-// a real session token ({sub, role}), a short-lived pending-2FA token
+// a real session token ({sub, role, jti?} — jti links back to a row in
+// auth/session-service.ts's sessions table, checked by app.ts's
+// `authenticate` decorator on every request; optional because tokens
+// issued before that table existed carry none and are grandfathered
+// through unchecked), a short-lived pending-2FA token
 // (auth/totp-service.ts's PendingTotpClaims, {sub, pending2fa: true}) —
 // issued mid-login to a user who's proven their password/OTP but still
 // owes a TOTP code — and a PPV access token (streams/ppv-service.ts's
@@ -20,11 +24,11 @@ import type { PermissionKey } from "./rbac.js";
 declare module "@fastify/jwt" {
   interface FastifyJWT {
     payload:
-      | { sub: string; role: string }
+      | { sub: string; role: string; jti?: string }
       | { sub: string; pending2fa: true }
       | { sub: string; streamId: string; ppvAccess: true; jti: string };
     user:
-      | { sub: string; role: string }
+      | { sub: string; role: string; jti?: string }
       | { sub: string; pending2fa: true }
       | { sub: string; streamId: string; ppvAccess: true; jti: string };
   }

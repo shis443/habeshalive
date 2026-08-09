@@ -79,6 +79,14 @@ export const createStreamSchema = z.object({
   // standing creator setting) since whether a given stream is ticketed
   // varies event to event. Omitted/absent means a normal, free stream.
   ppvPriceSantim: z.number().int().positive().optional(),
+  // Real enforcement, not just a UI nicety — z.literal(true) means the
+  // server rejects a go-live request without this, same as any other
+  // required field. Recorded as streams.copyright_certified_at, a
+  // per-broadcast record (not a one-time account-level setting), since a
+  // creator affirms this fresh for each stream, matching how real DMCA
+  // certification practice works. No legal claim is made by this field
+  // alone — it's the data layer, not a Terms-of-Service statement.
+  copyrightCertified: z.literal(true),
 });
 export type CreateStreamInput = z.infer<typeof createStreamSchema>;
 

@@ -18,6 +18,7 @@ import {
   approvePayout,
   completePayoutFromWebhook,
   completeTopupFromWebhook,
+  exportEarningsCsv,
   getBalance,
   getCreatorPayoutContext,
   getEarningsThisMonth,
@@ -106,6 +107,14 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
   app.get("/transactions", { preHandler: app.authenticate }, async (req) =>
     listTransactions(req.user.sub)
   );
+
+  // Real ledger data only — see exportEarningsCsv's own comment for why
+  // this deliberately doesn't claim to implement any specific tax
+  // jurisdiction's compliance rules.
+  app.get("/earnings-export", { preHandler: app.authenticate }, async (req, reply) => {
+    const csv = await exportEarningsCsv(req.user.sub);
+    reply.header("Content-Type", "text/csv").header("Content-Disposition", "attachment; filename=\"birq-earnings.csv\"").send(csv);
+  });
 
   app.post(
     "/topups",

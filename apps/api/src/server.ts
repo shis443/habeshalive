@@ -1,5 +1,7 @@
 import { buildApp } from "./app.js";
 import { settleAdRevenue } from "./ads/service.js";
+import { processAccountDeletions } from "./auth/account-deletion-service.js";
+import { purgeOldChatMessages } from "./chat/service.js";
 import { env } from "./common/env.js";
 import { captureUnexpectedError, initSentry } from "./common/sentry.js";
 import { sendScheduledGiftCards } from "./gift-cards/service.js";
@@ -35,6 +37,15 @@ const AD_SETTLEMENT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 // enough that "deliver on this date" reads as roughly accurate to a
 // purchaser without needing exact-minute precision.
 const GIFT_CARD_DELIVERY_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+// Same "daily in spirit" reasoning as subscription renewal/VOD cleanup —
+// a few hours' delay on either of these costs nothing real.
+const CHAT_RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// account-deletion-service.ts's processAccountDeletions existed but was
+// never actually invoked anywhere in this file — found while wiring up
+// the new chat-retention job below. A user who completed the 30-day
+// grace period never actually got anonymized without this; fixed as part
+// of the same pass since it's the same "PII retention" concern.
+const ACCOUNT_DELETION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // Wrapped so a rejection inside reapStaleStreams (e.g. a DB blip) never
 // becomes an unhandled rejection that could crash the process — this runs
@@ -81,6 +92,20 @@ function runGiftCardDelivery(): void {
   });
 }
 
+function runChatRetention(): void {
+  purgeOldChatMessages().catch((err) => {
+    app.log.error(err, "purgeOldChatMessages failed");
+    captureUnexpectedError(err);
+  });
+}
+
+function runAccountDeletions(): void {
+  processAccountDeletions().catch((err) => {
+    app.log.error(err, "processAccountDeletions failed");
+    captureUnexpectedError(err);
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -96,6 +121,10 @@ app
     setInterval(runAdSettlement, AD_SETTLEMENT_INTERVAL_MS);
     runGiftCardDelivery();
     setInterval(runGiftCardDelivery, GIFT_CARD_DELIVERY_INTERVAL_MS);
+    runChatRetention();
+    setInterval(runChatRetention, CHAT_RETENTION_INTERVAL_MS);
+    runAccountDeletions();
+    setInterval(runAccountDeletions, ACCOUNT_DELETION_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);

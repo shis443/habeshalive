@@ -299,6 +299,59 @@ export async function getEarningsThisMonth(userId: string): Promise<EarningsThis
   return { amountSantim: rows[0]?.total ?? 0 };
 }
 
+// Real ledger_transactions.type values that represent genuine revenue
+// earned FROM this platform's monetization systems, credited to a
+// creator's own wallet — deliberately excludes 'topup' (self-funding),
+// 'payout' (a debit when they cash out, not earnings), 'refund'/
+// 'adjustment' (reversals/corrections), 'points_redemption' (converting
+// platform-issued Watch-to-Earn points to spendable balance — not real
+// viewer-to-creator revenue), and 'boost'/'gift_card' (a creator paying
+// for their own promotion, and the gift-card purchase mechanism itself,
+// neither of which is creator income). 'platform_subscription' never
+// credits a creator's wallet at all (100% platform revenue by design,
+// see subscriptions/platform-service.ts), so it's moot here either way.
+const EARNING_TRANSACTION_TYPES = ["gift", "donation", "subscription", "ppv_purchase", "ad"];
+
+function csvCell(value: string): string {
+  // Minimal real CSV escaping (RFC 4180) — quote and double-up embedded
+  // quotes whenever a value could contain a comma/quote/newline. Every
+  // value this function actually receives (a month label, a plain
+  // decimal amount, an integer count) never needs it in practice, but
+  // this is the one field (Birr amount) that flows from arithmetic, not
+  // a hardcoded label, so it stays real escaping rather than an assumption.
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+// Module: creator earnings data export. Deliberately just real ledger
+// data with an explicit, honest label — this does NOT claim to implement
+// any specific tax proclamation or jurisdiction's compliance rules (not
+// something this codebase can verify), it hands a creator the real gross
+// Birr they earned per month so THEY (or their own accountant) can file
+// with it.
+export async function exportEarningsCsv(userId: string): Promise<string> {
+  const walletId = await getUserWalletId(pool, userId);
+  const { rows } = await pool.query<{ month: string; total_santim: string; transaction_count: string }>(
+    `SELECT to_char(date_trunc('month', lt.created_at), 'YYYY-MM') AS month,
+            SUM(le.amount_santim)::text AS total_santim,
+            count(*)::text AS transaction_count
+     FROM ledger_entries le
+     JOIN ledger_transactions lt ON lt.id = le.ledger_transaction_id
+     WHERE le.wallet_id = $1
+       AND le.direction = 'credit'
+       AND lt.type = ANY($2)
+       AND lt.status = 'completed'
+     GROUP BY date_trunc('month', lt.created_at)
+     ORDER BY date_trunc('month', lt.created_at) ASC`,
+    [walletId, EARNING_TRANSACTION_TYPES]
+  );
+
+  const header = ["Month", "Gross Birr Earned", "Transaction Count"];
+  const lines = rows.map((row) =>
+    [row.month, (Number(row.total_santim) / 100).toFixed(2), row.transaction_count].map(csvCell).join(",")
+  );
+  return [header.join(","), ...lines].join("\n");
+}
+
 export async function initiateTopup(userId: string, amountSantim: number): Promise<TopupResponse> {
   const reference = `topup_${randomUUID()}`;
 

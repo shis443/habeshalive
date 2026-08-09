@@ -138,6 +138,7 @@ export function GoLivePanel({
   const [thumbnailProcessing, setThumbnailProcessing] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [setupIsSensitive, setSetupIsSensitive] = useState(false);
+  const [setupCopyrightCertified, setSetupCopyrightCertified] = useState(false);
   const [setupTags, setSetupTags] = useState<string[]>([]);
   // Module 2 — per-broadcast PPV pricing (ETB, converted to santim at
   // submit time). Empty string means "not ticketed," same free-form-input
@@ -233,6 +234,7 @@ export function GoLivePanel({
           isSensitive: setupIsSensitive,
           tags: setupTags.length > 0 ? setupTags : undefined,
           ppvPriceSantim: setupPpvPriceEtb ? birrToSantim(parseFloat(setupPpvPriceEtb)) : undefined,
+          copyrightCertified: setupCopyrightCertified,
         }),
       });
       const data = await res.json();
@@ -283,6 +285,7 @@ export function GoLivePanel({
           isSensitive: setupIsSensitive,
           tags: setupTags.length > 0 ? setupTags : undefined,
           ppvPriceSantim: setupPpvPriceEtb ? birrToSantim(parseFloat(setupPpvPriceEtb)) : undefined,
+          copyrightCertified: setupCopyrightCertified,
         }),
       });
       const goLiveData = await goLiveRes.json();
@@ -400,7 +403,8 @@ export function GoLivePanel({
   // the RTMP key, all of it stay hidden until title/category/language are
   // actually filled in.
   if (!setupDone) {
-    const canContinue = setupTitle.trim().length > 0 && setupCategory.length > 0 && setupLanguage.length > 0;
+    const canContinue =
+      setupTitle.trim().length > 0 && setupCategory.length > 0 && setupLanguage.length > 0 && setupCopyrightCertified;
     return (
       <section className={styles.panel}>
         <h2 className={styles.heading}>Go live</h2>
@@ -514,6 +518,15 @@ export function GoLivePanel({
               Settings will see this stream in browse/search.
             </p>
           )}
+          <label className={styles.checkboxField}>
+            <input
+              type="checkbox"
+              checked={setupCopyrightCertified}
+              onChange={(e) => setSetupCopyrightCertified(e.target.checked)}
+            />
+            I certify that my broadcast does not contain copyrighted background music or other
+            content I don&apos;t have the rights to use without authorization.
+          </label>
           <button
             type="button"
             className={styles.primaryButton}

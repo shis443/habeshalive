@@ -540,8 +540,8 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   const thumbnailUrl = input.thumbnailUrl ?? thumbnailPlaceholderUrl(input.category);
 
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive, is_ppv, ppv_price_santim)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8, $9, $10)
+    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive, is_ppv, ppv_price_santim, copyright_certified_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8, $9, $10, now())
      RETURNING id`,
     [
       userId,

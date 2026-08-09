@@ -261,6 +261,21 @@ export async function deleteChatMessage(actorId: string, streamId: string, messa
   await publishToCentrifugo(channelForStream(streamId), { type: "delete", messageId });
 }
 
+// Data-retention purge — independent of account deletion (account-
+// deletion-service.ts's processAccountDeletions already deletes a
+// deleted user's own chat_messages, but that only fires for accounts
+// actually being deleted; this is the standing "we don't keep chat PII
+// around forever" policy for everyone else). A real DELETE, not the
+// is_deleted soft-delete flag above — that flag means "hidden from chat
+// for moderation reasons," a different concept from "purged from the
+// database for retention reasons." pinned_messages.message_id cascades
+// on delete (0023_watch_experience.sql), so an old pinned message is
+// correctly unpinned as a side effect, not a special case to handle here.
+export async function purgeOldChatMessages(): Promise<number> {
+  const { rowCount } = await pool.query(`DELETE FROM chat_messages WHERE created_at < now() - interval '30 days'`);
+  return rowCount ?? 0;
+}
+
 // D.2 recent-gifter strip. Grouped by (sender, is_anonymous) rather than
 // just sender: someone who sent both an anonymous and a named gift in the
 // same stream shows as two separate entries — merging them would either

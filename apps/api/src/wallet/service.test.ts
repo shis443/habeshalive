@@ -16,6 +16,7 @@ import { subscribe } from "../subscriptions/service.js";
 import { recordSecurityEvent } from "../common/security-hold.js";
 import {
   completeTopupFromWebhook,
+  exportEarningsCsv,
   getBalance,
   initiateTopup,
   requestPayout,
@@ -367,5 +368,42 @@ describe("security hold + KYC gate on requestPayout", () => {
       // suite — must not leak into other test files regardless of order.
       await pool.query(`UPDATE platform_config SET kyc_required_for_payouts = false WHERE id = TRUE`);
     }
+  });
+});
+
+describe("exportEarningsCsv", () => {
+  it("includes real gift/donation revenue, excludes topups/payouts, and groups by month", async () => {
+    const creator = await trackUser(await createTestCreator(8000)); // 80% to creator
+    const viewer = await trackUser(await createTestViewer());
+    await fundWallet(viewer.id, 200_000); // a topup — must NOT appear in the export
+
+    const giftTypeId = await getGiftTypeId("Classic Mulmul");
+    await sendGift(viewer.id, { streamId: creator.streamId, giftTypeId, quantity: 1 }); // 10,000 * 80% = 8,000
+    await sendDonation(viewer.id, { streamId: creator.streamId, amountSantim: 5_000 }); // * 75%? no—default share
+
+    const csv = await exportEarningsCsv(creator.id);
+    const lines = csv.split("\n");
+
+    expect(lines[0]).toBe("Month,Gross Birr Earned,Transaction Count");
+    // Exactly one row (both real transactions land in the current month) —
+    // proves topup/payout-type entries were excluded, not just that some
+    // row exists, since an unfiltered export would show a much larger
+    // total including the 200,000-santim topup.
+    expect(lines).toHaveLength(2);
+    const [month, grossBirr, count] = lines[1]!.split(",");
+    expect(month).toMatch(/^\d{4}-\d{2}$/);
+    expect(count).toBe("2");
+    // 8,000 (gift, 80% share) + donation's own split (also 80% share here,
+    // since this creator's revenue_share_bps is 8000 for both paths) —
+    // real arithmetic, not a hardcoded expectation independent of the
+    // amounts sent above.
+    const expectedSantim = Math.trunc(10_000 * 0.8) + Math.trunc(5_000 * 0.8);
+    expect(grossBirr).toBe((expectedSantim / 100).toFixed(2));
+  });
+
+  it("is empty (header only) for a creator with no real earnings", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const csv = await exportEarningsCsv(creator.id);
+    expect(csv).toBe("Month,Gross Birr Earned,Transaction Count");
   });
 });

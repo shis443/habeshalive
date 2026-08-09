@@ -225,3 +225,23 @@ export const accountDeletionStatusSchema = z.object({
   gracePeriodEndsAt: z.string().nullable(),
 });
 export type AccountDeletionStatus = z.infer<typeof accountDeletionStatusSchema>;
+
+// --- Active device sessions (see apps/api/src/auth/session-service.ts) ---
+
+export const sessionSchema = z.object({
+  id: z.string(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  createdAt: z.string(),
+  lastSeenAt: z.string(),
+  // Set by the API by comparing each row's id to the calling request's own
+  // jti — not a stored column — so the client can label "this device"
+  // distinctly from other sessions in the same list.
+  isCurrent: z.boolean(),
+});
+export type Session = z.infer<typeof sessionSchema>;
+
+export const revokeSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+});
+export type RevokeSessionInput = z.infer<typeof revokeSessionSchema>;

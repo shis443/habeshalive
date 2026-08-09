@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const reportTargetTypeSchema = z.enum(["stream", "user", "gift_message"]);
-export const reportReasonSchema = z.enum(["harassment", "hate_speech", "spam", "nudity", "other"]);
+export const reportReasonSchema = z.enum(["harassment", "hate_speech", "spam", "nudity", "copyright", "other"]);
 
 export const submitReportSchema = z.object({
   targetType: reportTargetTypeSchema,

@@ -1,5 +1,10 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getFollowedCreators, getFollowStatus, listMyFollowers, toggleFollow } from "./service.js";
+
+// Same keying rationale as wallet/routes.ts's keyByUser.
+function keyByUser(req: FastifyRequest): string {
+  return req.user?.sub ? `user:${req.user.sub}` : req.ip;
+}
 
 export const followRoutes: FastifyPluginAsync = async (app) => {
   app.get("/mine", { preHandler: app.authenticate }, async (req) => getFollowedCreators(req.user.sub));
@@ -24,9 +29,16 @@ export const followRoutes: FastifyPluginAsync = async (app) => {
     return getFollowStatus(followerId, req.params.creatorId);
   });
 
+  // Relied on the global 2000/min-per-IP default only (docs/SECURITY.md's
+  // known-gaps list) — this is a real toggle a viewer might click quickly
+  // by mistake, so this stays generous; it's a backstop against a
+  // follow-bombing script, not something a real user could hit.
   app.post<{ Params: { creatorId: string } }>(
     "/:creatorId",
-    { preHandler: app.authenticate },
+    {
+      preHandler: app.authenticate,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler", keyGenerator: keyByUser } },
+    },
     async (req) => toggleFollow(req.user.sub, req.params.creatorId)
   );
 };

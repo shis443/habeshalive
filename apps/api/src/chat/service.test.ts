@@ -3,7 +3,7 @@ import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { cleanupTestUsers, createTestCreator, createTestViewer, type TestCreator, type TestUser } from "../test/fixtures.js";
 import { grantChannelModerator } from "../moderation/channel-mods-service.js";
-import { deleteChatMessage, getChatHistory, sendChatMessage } from "./service.js";
+import { deleteChatMessage, getChatHistory, purgeOldChatMessages, sendChatMessage } from "./service.js";
 
 const createdUserIds: string[] = [];
 
@@ -108,5 +108,46 @@ describe("deleteChatMessage", () => {
     await expect(
       deleteChatMessage(creator.id, creator.streamId, "00000000-0000-0000-0000-000000000000")
     ).rejects.toMatchObject({ statusCode: 404 } satisfies Partial<AppError>);
+  });
+});
+
+describe("purgeOldChatMessages", () => {
+  it("deletes messages older than 30 days, leaves recent ones", async () => {
+    const creator = await trackedCreator();
+    const viewer = await trackedViewer();
+    stubFetch();
+    const oldMessage = await sendChatMessage(viewer.id, creator.streamId, "ancient history");
+    const recentMessage = await sendChatMessage(viewer.id, creator.streamId, "still relevant");
+
+    await pool.query(`UPDATE chat_messages SET created_at = now() - interval '31 days' WHERE id = $1`, [
+      oldMessage.id,
+    ]);
+
+    const deletedCount = await purgeOldChatMessages();
+    expect(deletedCount).toBeGreaterThanOrEqual(1);
+
+    const { rows } = await pool.query<{ id: string }>(`SELECT id FROM chat_messages WHERE id = ANY($1)`, [
+      [oldMessage.id, recentMessage.id],
+    ]);
+    expect(rows.map((r) => r.id)).toEqual([recentMessage.id]);
+  });
+
+  it("unpins a message when it ages out — pinned_messages cascades on delete", async () => {
+    const creator = await trackedCreator();
+    const viewer = await trackedViewer();
+    stubFetch();
+    const message = await sendChatMessage(viewer.id, creator.streamId, "pin me then age me out");
+    await pool.query(
+      `INSERT INTO pinned_messages (stream_id, message_id, pinned_by) VALUES ($1, $2, $3)`,
+      [creator.streamId, message.id, creator.id]
+    );
+    await pool.query(`UPDATE chat_messages SET created_at = now() - interval '31 days' WHERE id = $1`, [
+      message.id,
+    ]);
+
+    await purgeOldChatMessages();
+
+    const { rows } = await pool.query(`SELECT 1 FROM pinned_messages WHERE stream_id = $1`, [creator.streamId]);
+    expect(rows).toHaveLength(0);
   });
 });

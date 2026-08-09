@@ -9,6 +9,7 @@ const REASONS = [
   { value: "hate_speech", label: "Hate speech" },
   { value: "spam", label: "Spam" },
   { value: "nudity", label: "Nudity or sexual content" },
+  { value: "copyright", label: "Copyright / DMCA" },
   { value: "other", label: "Other" },
 ] as const;
 

@@ -10,11 +10,18 @@ import {
 } from "./service.js";
 
 export const adRoutes: FastifyPluginAsync = async (app) => {
-  // Public — the /advertisers landing page's inquiry form.
-  app.post("/leads", async (req) => {
-    const input = submitAdLeadSchema.parse(req.body);
-    return submitAdLead(input);
-  });
+  // Public, unauthenticated — relied on the global 2000/min-per-IP default
+  // only (docs/SECURITY.md's "Rate limiting" known-gaps list). A form-spam
+  // bot has no identifier to key on besides IP; 5/hour is generous for a
+  // real advertiser inquiry but stops a scripted flood.
+  app.post(
+    "/leads",
+    { config: { rateLimit: { max: 5, timeWindow: "1 hour", hook: "preHandler" } } },
+    async (req) => {
+      const input = submitAdLeadSchema.parse(req.body);
+      return submitAdLead(input);
+    }
+  );
 
   // Not auth-gated: anonymous viewers see ads too (they just don't get
   // per-viewer frequency capping — see getAdForStream's comment). Uses
@@ -38,10 +45,17 @@ export const adRoutes: FastifyPluginAsync = async (app) => {
     async (req) => getSponsoredCard(req.query.category ?? null, req.query.language ?? null, req.user?.sub ?? null)
   );
 
-  app.post<{ Params: { impressionId: string } }>("/:impressionId/click", async (req) => {
-    await recordAdClick(req.params.impressionId);
-    return { ok: true };
-  });
+  // Same known gap — a real click is a single event per impression, so
+  // this stays generous (30/min per IP) purely as a backstop against a
+  // scripted click-fraud loop, not a limit a real viewer could hit.
+  app.post<{ Params: { impressionId: string } }>(
+    "/:impressionId/click",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler" } } },
+    async (req) => {
+      await recordAdClick(req.params.impressionId);
+      return { ok: true };
+    }
+  );
 
   app.get("/creator-settings", { preHandler: app.authenticate }, async (req) =>
     getCreatorAdsSettings(req.user.sub)

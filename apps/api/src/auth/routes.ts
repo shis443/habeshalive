@@ -13,6 +13,7 @@ import {
   requestOtpSchema,
   requestPhoneChangeSchema,
   resetPasswordSchema,
+  revokeSessionSchema,
   socialAuthSchema,
   socialProviderSchema,
   totpLoginVerifySchema,
@@ -33,6 +34,7 @@ import {
   setupTotp,
   verifyTotpForLogin,
 } from "./totp-service.js";
+import { createSession, listSessions, revokeSession } from "./session-service.js";
 import {
   linkSocialAccount,
   listLinkedSocialAccounts,
@@ -92,6 +94,12 @@ function keyByIdentifier(req: FastifyRequest): string {
   return typeof body?.identifier === "string" ? `identifier:${body.identifier}` : req.ip;
 }
 
+// Same keying rationale as wallet/routes.ts's keyByUser — used below by
+// the authenticated social-link/unlink routes.
+function keyByUser(req: FastifyRequest): string {
+  return req.user?.sub ? `user:${req.user.sub}` : req.ip;
+}
+
 // Shared by every route that reaches "primary credential (password/OTP)
 // verified, user identified" — /login, /verify-otp, /verify-email-otp.
 // If the user has 2FA enabled, this does NOT complete the login: it
@@ -104,6 +112,16 @@ function keyByIdentifier(req: FastifyRequest): string {
 // proxy, not Fly's own edge IP) — used for both the login_events audit
 // row and the new-device email; 'unknown' user-agent is a real, if rare,
 // possibility (a bare curl/script call), not treated as an error.
+// Shared by every path that actually mints a real session token — this
+// completeLoginOrChallenge, /2fa/login-verify, and /social/:provider —
+// so a sessions row (session-service.ts) always exists for a jti before
+// the token that carries it goes out, matching the row app.ts's
+// `authenticate` decorator will look up on every subsequent request.
+async function issueSessionToken(req: FastifyRequest, reply: FastifyReply, user: AuthUser): Promise<string> {
+  const sessionId = await createSession(user.id, req.ip, req.headers["user-agent"] ?? "unknown");
+  return reply.jwtSign({ sub: user.id, role: user.role, jti: sessionId });
+}
+
 async function completeLoginOrChallenge(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -115,7 +133,7 @@ async function completeLoginOrChallenge(
     return;
   }
 
-  const token = await reply.jwtSign({ sub: user.id, role: user.role });
+  const token = await issueSessionToken(req, reply, user);
   await recordLoginAndNotifyIfNewDevice(user.id, req.ip, req.headers["user-agent"] ?? "unknown");
   reply.send({ token, user });
 }
@@ -336,7 +354,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const user = await getUserById(decoded.sub);
-      const token = await reply.jwtSign({ sub: user.id, role: user.role });
+      const token = await issueSessionToken(req, reply, user);
       await recordLoginAndNotifyIfNewDevice(user.id, req.ip, req.headers["user-agent"] ?? "unknown");
       reply.send({ token, user });
     }
@@ -345,6 +363,27 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   app.patch("/preferences", { preHandler: app.authenticate }, async (req) => {
     const input = updatePreferencesSchema.parse(req.body);
     return updatePreferences(req.user.sub, input.showSensitiveContent);
+  });
+
+  // --- Active device sessions (see session-service.ts) ---
+
+  app.get("/sessions", { preHandler: app.authenticate }, async (req) => {
+    const currentJti = "jti" in req.user ? req.user.jti : undefined;
+    const sessions = await listSessions(req.user.sub);
+    return sessions.map((session) => ({ ...session, isCurrent: session.id === currentJti }));
+  });
+
+  // Deliberately allows revoking the current session too (equivalent to a
+  // remote logout) — the client is expected to discard its local token and
+  // treat that the same as a normal sign-out, not to distinguish it as an
+  // error case.
+  app.post("/revoke-session", { preHandler: app.authenticate }, async (req, reply) => {
+    const input = revokeSessionSchema.parse(req.body);
+    const revoked = await revokeSession(req.user.sub, input.sessionId);
+    if (!revoked) {
+      throw new AppError(404, "Session not found");
+    }
+    reply.send({ ok: true });
   });
 
   // --- E.1: account identity ---
@@ -411,21 +450,37 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // --- E.3: social auth ---
+  // Relied on the global 2000/min-per-IP default only (docs/SECURITY.md's
+  // known-gaps list) — this is the credential-stuffing-shaped endpoint of
+  // this group (an attacker submitting a flood of forged/stolen id
+  // tokens), same risk class /login already gets a strict limit for. No
+  // phone/email/identifier field exists pre-verification here, so this
+  // keys by IP (the plugin's default keyGenerator) rather than a custom one.
 
-  app.post<{ Params: { provider: string } }>("/social/:provider", async (req, reply) => {
-    const provider = socialProviderSchema.parse(req.params.provider);
-    const input = socialAuthSchema.parse(req.body);
-    const { user } = await socialAuth(provider, input.idToken, input.fullName);
-    await clearPendingDeletion(user.id);
-    const token = await reply.jwtSign({ sub: user.id, role: user.role });
-    reply.send({ token, user });
-  });
+  app.post<{ Params: { provider: string } }>(
+    "/social/:provider",
+    { config: { rateLimit: { max: 10, timeWindow: "15 minutes", hook: "preHandler", skipOnError: false } } },
+    async (req, reply) => {
+      const provider = socialProviderSchema.parse(req.params.provider);
+      const input = socialAuthSchema.parse(req.body);
+      const { user } = await socialAuth(provider, input.idToken, input.fullName);
+      await clearPendingDeletion(user.id);
+      const token = await issueSessionToken(req, reply, user);
+      reply.send({ token, user });
+    }
+  );
 
   app.get("/social", { preHandler: app.authenticate }, async (req) => listLinkedSocialAccounts(req.user.sub));
 
+  // Linking/unlinking are authenticated and lower-volume than the login
+  // route above, but still real account-security actions — user-keyed,
+  // matching wallet/routes.ts's keyByUser pattern.
   app.post<{ Params: { provider: string } }>(
     "/social/:provider/link",
-    { preHandler: app.authenticate },
+    {
+      preHandler: app.authenticate,
+      config: { rateLimit: { max: 10, timeWindow: "1 hour", hook: "preHandler", keyGenerator: keyByUser } },
+    },
     async (req, reply) => {
       const provider = socialProviderSchema.parse(req.params.provider);
       const input = socialAuthSchema.parse(req.body);
@@ -436,7 +491,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { provider: string } }>(
     "/social/:provider",
-    { preHandler: app.authenticate },
+    {
+      preHandler: app.authenticate,
+      config: { rateLimit: { max: 10, timeWindow: "1 hour", hook: "preHandler", keyGenerator: keyByUser } },
+    },
     async (req, reply) => {
       const provider = socialProviderSchema.parse(req.params.provider);
       await unlinkSocialAccount(req.user.sub, provider);
