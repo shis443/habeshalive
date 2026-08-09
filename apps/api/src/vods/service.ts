@@ -49,7 +49,7 @@ export async function listVodsForCreator(username: string): Promise<Vod[]> {
      FROM stream_vods v
      JOIN streams s ON s.id = v.stream_id
      JOIN users u ON u.id = s.creator_id
-     WHERE u.username = $1 AND v.expires_at > now() AND v.is_published = true
+     WHERE u.username = $1 AND v.expires_at > now() AND v.is_published = true AND v.dmca_removed_at IS NULL
      ORDER BY v.created_at DESC`,
     [username]
   );
@@ -139,7 +139,10 @@ export async function deleteVodOwned(vodId: string, userId: string): Promise<voi
 // nobody can even see yet can't accumulate views, and so this can't be
 // used as a side channel to probe whether an arbitrary VOD id exists.
 export async function incrementVodViews(vodId: string): Promise<void> {
-  await pool.query(`UPDATE stream_vods SET views = views + 1 WHERE id = $1 AND is_published = true`, [vodId]);
+  await pool.query(
+    `UPDATE stream_vods SET views = views + 1 WHERE id = $1 AND is_published = true AND dmca_removed_at IS NULL`,
+    [vodId]
+  );
 }
 
 // Called from the SRS on_dvr webhook (streams/routes.ts's

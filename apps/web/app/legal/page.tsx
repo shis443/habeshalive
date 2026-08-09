@@ -21,6 +21,7 @@ const LEGAL_DOCS = [
     description: "Our commitment to usability with assistive technology.",
   },
   { label: "Security", href: "/security", description: "How to report a vulnerability, and our safe harbor." },
+  { label: "Copyright (DMCA)", href: "/dmca", description: "How to report copyright infringement." },
   { label: "Safety Center", href: "/safety-center", description: "How to report something, and what happens next." },
 ];
 

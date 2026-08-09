@@ -15,6 +15,7 @@ import { env } from "./common/env.js";
 import { AppError } from "./common/errors.js";
 import { creatorApplicationRoutes } from "./creator-applications/routes.js";
 import { creatorRoutes } from "./creators/routes.js";
+import { dmcaRoutes } from "./dmca/routes.js";
 import { followRoutes } from "./follows/routes.js";
 import { giftCardRoutes } from "./gift-cards/routes.js";
 import { kycRoutes } from "./kyc/routes.js";
@@ -335,6 +336,7 @@ export function buildApp() {
   app.register(subscriptionRoutes, { prefix: "/subscriptions" });
   app.register(vodRoutes, { prefix: "/vods" });
   app.register(pointsRoutes, { prefix: "/points" });
+  app.register(dmcaRoutes, { prefix: "/dmca" });
 
   return app;
 }

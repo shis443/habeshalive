@@ -119,7 +119,7 @@ export async function listClipsForCreator(username: string): Promise<Clip[]> {
     `SELECT c.id, c.vod_id, c.title, c.object_key, c.start_seconds, c.duration_seconds, c.created_at
      FROM clips c
      JOIN users u ON u.id = c.creator_id
-     WHERE u.username = $1
+     WHERE u.username = $1 AND c.dmca_removed_at IS NULL
      ORDER BY c.created_at DESC
      LIMIT 20`,
     [username]

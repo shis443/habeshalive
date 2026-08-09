@@ -11,6 +11,7 @@ export * from "./schemas/channel-moderation.js";
 export * from "./schemas/chat.js";
 export * from "./schemas/clips.js";
 export * from "./schemas/creator-applications.js";
+export * from "./schemas/dmca.js";
 export * from "./schemas/follows.js";
 export * from "./schemas/gift-cards.js";
 export * from "./schemas/kyc.js";
