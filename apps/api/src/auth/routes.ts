@@ -15,6 +15,7 @@ import {
   resetPasswordSchema,
   revokeSessionSchema,
   socialAuthSchema,
+  webBridgeExchangeSchema,
   socialProviderSchema,
   totpLoginVerifySchema,
   updatePreferencesSchema,
@@ -35,6 +36,7 @@ import {
   verifyTotpForLogin,
 } from "./totp-service.js";
 import { createSession, listSessions, revokeSession } from "./session-service.js";
+import { consumeWebBridgeCode, createWebBridgeCode } from "./web-bridge-service.js";
 import {
   linkSocialAccount,
   listLinkedSocialAccounts,
@@ -385,6 +387,66 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
     reply.send({ ok: true });
   });
+
+  // --- Mobile-to-web session bridge (see web-bridge-service.ts) ---
+  //
+  // Lets the mobile app open an already-authenticated web view (the /wallet
+  // top-up flow, so real payment methods run through the real web checkout
+  // instead of native IAP) without ever putting the session JWT in a URL.
+
+  app.post(
+    "/web-bridge-code",
+    {
+      preHandler: app.authenticate,
+      // Generous but not unlimited — this mints a real (if short-lived and
+      // single-use) credential-equivalent, same posture as the topup/payout
+      // limits in wallet/routes.ts.
+      config: { rateLimit: { max: 20, timeWindow: "5 minutes", hook: "preHandler", keyGenerator: keyByUser } },
+    },
+    async (req) => {
+      // Fastify's own JWT plugin decorates req.headers.authorization itself;
+      // re-reading it here (rather than re-signing a fresh token) means the
+      // bridged web session shares this exact token's jti/session row — if
+      // this session gets revoked (POST /revoke-session, or from Active
+      // Devices on another device), the bridged web session dies with it,
+      // not a parallel unrevoked credential.
+      const rawToken = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+      if (!rawToken) {
+        throw new AppError(401, "unauthorized");
+      }
+      const account = await getMyAccount(req.user.sub);
+      const code = await createWebBridgeCode(req.user.sub, account.username, rawToken);
+      return { code };
+    }
+  );
+
+  // Deliberately NOT behind app.authenticate, same reasoning as
+  // /2fa/login-verify above — the caller doesn't have a session yet, the
+  // single-use code itself (256 bits, redis-backed, 60s TTL) is the
+  // credential. Called server-side by apps/web's bridge route, never
+  // exposed to a browser directly.
+  app.post(
+    "/web-bridge-code/exchange",
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: "5 minutes",
+          hook: "preHandler",
+          skipOnError: false,
+          keyGenerator: (req: FastifyRequest) => req.ip,
+        },
+      },
+    },
+    async (req) => {
+      const input = webBridgeExchangeSchema.parse(req.body);
+      const payload = await consumeWebBridgeCode(input.code);
+      if (!payload) {
+        throw new AppError(401, "Invalid or expired code");
+      }
+      return payload;
+    }
+  );
 
   // --- E.1: account identity ---
 

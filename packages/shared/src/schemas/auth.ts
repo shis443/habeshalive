@@ -245,3 +245,15 @@ export const revokeSessionSchema = z.object({
   sessionId: z.string().uuid(),
 });
 export type RevokeSessionInput = z.infer<typeof revokeSessionSchema>;
+
+// --- Mobile-to-web session bridge (see apps/api/src/auth/web-bridge-service.ts) ---
+
+export const webBridgeCodeResponseSchema = z.object({
+  code: z.string(),
+});
+export type WebBridgeCodeResponse = z.infer<typeof webBridgeCodeResponseSchema>;
+
+export const webBridgeExchangeSchema = z.object({
+  code: z.string(),
+});
+export type WebBridgeExchangeInput = z.infer<typeof webBridgeExchangeSchema>;

@@ -43,6 +43,8 @@ export default async function WalletPage() {
         <PointsCard balance={pointsBalance} />
         <p className={styles.subtext}>
           <Link href="/gift-cards">Buy a gift card</Link> · <Link href="/gift-cards/redeem">Redeem a gift card</Link>
+          {" · "}
+          <a href="/api/backend/wallet/earnings-export">Download earnings report (CSV)</a>
         </p>
         <MyGiftCardsList giftCards={giftCards} />
         <SubscriptionsList subscriptions={subscriptions ?? []} />

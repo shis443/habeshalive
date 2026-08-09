@@ -595,6 +595,22 @@ export async function endStream(userId: string): Promise<void> {
   );
   if (!rows[0]) throw new AppError(404, "No live stream to end");
   await logStreamEvent(rows[0].id, "ended");
+  // Rotate the RTMP key on every stream end, not just on-demand
+  // (rotateStreamKey's own manual-rotation call site above still exists for
+  // "I think my key leaked, right now"). A stream key was otherwise valid
+  // indefinitely — anyone who'd captured it (a scraped OBS profile export,
+  // a compromised device, a support screenshot) could publish as this
+  // creator at literally any future time, not just during the stream where
+  // it leaked. This closes that window down to "only during a live
+  // broadcast." Best-effort: a rotation failure here shouldn't turn a
+  // successful stream-end into a user-facing error — the stream is already
+  // correctly marked ended either way, and rotateStreamKey remains
+  // available on demand if this silently failed.
+  try {
+    await rotateStreamKey(userId);
+  } catch (err) {
+    console.error(`[streams] auto-rotate on end failed for ${userId}:`, err);
+  }
 }
 
 // The heavier, rarer emergency shutdown — unlike endStream() above (a
