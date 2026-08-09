@@ -1,10 +1,12 @@
 "use client";
 
+import { formatSantimAsBirr } from "@habeshalive/shared";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { useDropdown } from "@/lib/useDropdown";
 import { UI_LANGUAGES, useLanguage } from "@/lib/useLanguage";
@@ -14,12 +16,22 @@ import {
   CheckIcon,
   ChevronRightIcon,
   GearIcon,
+  GiftIcon,
+  GoLiveIcon,
   MoreIcon,
   ProfileIcon,
   SearchIcon,
+  WalletIcon,
 } from "./icons";
 import { NotificationBell } from "./NotificationBell";
 import styles from "./TopNav.module.css";
+
+interface AccountMenuData {
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: string;
+}
 
 type SettingsView = "main" | "language" | "labeled-content";
 
@@ -52,6 +64,7 @@ const MORE_LEGAL = [
 
 export function TopNav({ isAuthed }: { isAuthed: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const t = useTranslations("nav");
   const tGeneral = useTranslations("moreGeneral");
   const tLegal = useTranslations("moreLegal");
@@ -66,6 +79,8 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
   const [settingsView, setSettingsView] = useState<SettingsView>("main");
   const [sensitivePref, setSensitivePref] = useState<boolean | null>(null);
   const [sensitiveSaving, setSensitiveSaving] = useState(false);
+  const [accountData, setAccountData] = useState<AccountMenuData | null>(null);
+  const [walletBalanceSantim, setWalletBalanceSantim] = useState<number | null>(null);
 
   // Reset to the top-level list every time the dropdown is reopened, so it
   // never reopens on a stale sub-panel from last time.
@@ -85,6 +100,28 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
         // indefinitely rather than a broken toggle with an unknown state.
       });
   }, [settingsView, isAuthed, sensitivePref]);
+
+  // Lazy, same pattern as the labeled-content fetch above — the account
+  // dropdown trigger only ever needs to show a generic avatar/icon until a
+  // visitor actually opens it, so there's no reason to fetch on every page
+  // load. Real avatar/displayName/role (for the "Creator" badge — role
+  // genuinely flips to 'creator' server-side on first go-live, see
+  // streams/service.ts) plus the wallet balance for the Wallet row.
+  useEffect(() => {
+    if (!account.open || !isAuthed || accountData !== null) return;
+    fetch("/api/backend/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setAccountData({ username: data.username, displayName: data.displayName, avatarUrl: data.avatarUrl, role: data.role });
+      })
+      .catch(() => {});
+    fetch("/api/backend/wallet/balance")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setWalletBalanceSantim(data.balanceSantim);
+      })
+      .catch(() => {});
+  }, [account.open, isAuthed, accountData]);
 
   async function handleToggleSensitive() {
     if (sensitivePref === null) return;
@@ -314,23 +351,86 @@ export function TopNav({ isAuthed }: { isAuthed: boolean }) {
           <div className={styles.dropdownWrap} ref={account.ref}>
             <button
               type="button"
-              className={styles.iconButton}
+              className={`${styles.iconButton} ${styles.avatarTrigger}`}
               aria-label={t("yourAccount")}
               onClick={() => account.setOpen((o) => !o)}
             >
-              <ProfileIcon />
+              {accountData?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={resolveAvatarUrl(accountData.avatarUrl) ?? undefined} alt="" className={styles.avatarImg} />
+              ) : (
+                <ProfileIcon />
+              )}
             </button>
             {account.open && (
-              <div className={styles.dropdown}>
-                {/* E.1: Dashboard and Wallet were duplicating what's
-                    already in the primary nav (BottomNav) — this dropdown
-                    is just Settings now (Account merged into it as a tab,
-                    see SettingsTabs.tsx). Log out and Switch account live
-                    inside Settings, deliberately not one accidental click
-                    away from here. */}
-                <Link href="/settings" className={styles.menuItem}>
-                  Settings
+              <div className={`${styles.dropdown} ${styles.dropdownWide}`}>
+                {accountData && (
+                  <div className={styles.accountHeader}>
+                    {accountData.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={resolveAvatarUrl(accountData.avatarUrl) ?? undefined} alt="" className={styles.accountHeaderAvatar} />
+                    ) : (
+                      <span className={styles.accountHeaderAvatarFallback}>
+                        <ProfileIcon />
+                      </span>
+                    )}
+                    <div>
+                      <p className={styles.accountHeaderName}>{accountData.displayName}</p>
+                      {accountData.role !== "viewer" && <p className={styles.accountHeaderRole}>{accountData.role}</p>}
+                    </div>
+                  </div>
+                )}
+
+                {pathname?.startsWith("/dashboard") && (
+                  <Link href="/" className={styles.menuItem}>
+                    <BackIcon className={styles.menuItemIcon} />
+                    Back to Birq
+                  </Link>
+                )}
+                {accountData && (
+                  <Link href={`/watch/${accountData.username}`} className={styles.menuItem}>
+                    <ProfileIcon className={styles.menuItemIcon} />
+                    Your Channel
+                  </Link>
+                )}
+                <Link href="/dashboard" className={styles.menuItem}>
+                  <GoLiveIcon className={styles.menuItemIcon} />
+                  Creator Dashboard
                 </Link>
+
+                <div className={styles.divider} />
+
+                <Link href="/wallet" className={styles.rowItem}>
+                  <span className={styles.rowLabel}>
+                    <WalletIcon className={styles.menuItemIcon} />
+                    Wallet
+                  </span>
+                  {walletBalanceSantim !== null && (
+                    <span className={styles.rowValue}>{formatSantimAsBirr(walletBalanceSantim)}</span>
+                  )}
+                </Link>
+                <Link href="/dashboard/viewer-rewards" className={styles.menuItem}>
+                  <GiftIcon className={styles.menuItemIcon} />
+                  Viewer Rewards
+                </Link>
+
+                <div className={styles.divider} />
+
+                <button type="button" className={styles.rowItem} onClick={toggleTheme}>
+                  <span className={styles.rowLabel}>{t("darkTheme")}</span>
+                  <span className={`${styles.toggle} ${theme === "dark" ? styles.toggleOn : ""}`}>
+                    <span className={`${styles.toggleKnob} ${theme === "dark" ? styles.toggleKnobOn : ""}`} />
+                  </span>
+                </button>
+                <Link href="/settings" className={styles.menuItem}>
+                  Account Settings
+                </Link>
+
+                <div className={styles.divider} />
+
+                <button type="button" className={styles.menuItem} onClick={handleLogout} disabled={loggingOut}>
+                  {loggingOut ? t("loggingOut") : t("logOut")}
+                </button>
               </div>
             )}
           </div>
