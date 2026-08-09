@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChatMessage, GifterBadgeTier, GiftTier, PinnedMessage, Rank, StreamActivity } from "@habeshalive/shared";
+import type { ChatMessage, GifterBadgeTier, GiftTier, PinnedMessage, Rank, StreamActivity } from "@birq/shared";
 import { Centrifuge } from "centrifuge";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";

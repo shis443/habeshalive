@@ -1,4 +1,4 @@
-import type { ActiveBoost, AdminAuditAction, AdminSummary } from "@habeshalive/shared";
+import type { ActiveBoost, AdminAuditAction, AdminSummary } from "@birq/shared";
 import { pool } from "../common/db.js";
 
 // Eleven real counts, one query each — no caching layer, this endpoint is

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ViewerList } from "@habeshalive/shared";
+import type { ViewerList } from "@birq/shared";
 import { useEffect, useState } from "react";
 import { useDropdown } from "@/lib/useDropdown";
 import { resolveAvatarUrl } from "@/lib/avatar";

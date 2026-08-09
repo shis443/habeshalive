@@ -1,6 +1,6 @@
 "use client";
 
-import type { LiveStream } from "@habeshalive/shared";
+import type { LiveStream } from "@birq/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { resolveAvatarUrl } from "@/lib/avatar";

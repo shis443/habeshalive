@@ -1,6 +1,6 @@
 "use client";
 
-import type { Announcement } from "@habeshalive/shared";
+import type { Announcement } from "@birq/shared";
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "@/lib/config";
 import styles from "./AnnouncementBanner.module.css";

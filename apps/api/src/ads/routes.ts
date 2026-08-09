@@ -1,4 +1,4 @@
-import { adFormatSchema, submitAdLeadSchema, updateCreatorAdsSettingsSchema } from "@habeshalive/shared";
+import { adFormatSchema, submitAdLeadSchema, updateCreatorAdsSettingsSchema } from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import {
   getAdForStream,

@@ -1,4 +1,4 @@
-import type { SearchResults } from "@habeshalive/shared";
+import type { SearchResults } from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { searchCreators, searchStreams } from "./service.js";
 

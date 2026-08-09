@@ -1,4 +1,4 @@
-import { removeAccountSchema } from "@habeshalive/shared";
+import { removeAccountSchema } from "@birq/shared";
 import { NextResponse } from "next/server";
 import { clearSessionCookie, getSessionCookie, writeSessionCookie } from "@/lib/session";
 

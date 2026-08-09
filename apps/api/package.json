@@ -1,5 +1,5 @@
 {
-  "name": "@habeshalive/api",
+  "name": "@birq/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "@fastify/jwt": "^10.2.0",
     "@fastify/multipart": "^10.1.0",
     "@fastify/rate-limit": "^11.1.0",
-    "@habeshalive/shared": "*",
+    "@birq/shared": "*",
     "@sentry/node": "^8.55.0",
     "@temporalio/activity": "^1.21.1",
     "@temporalio/client": "^1.21.1",

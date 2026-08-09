@@ -1,4 +1,4 @@
-import type { DmcaContentType, DmcaReport, SubmitCounterNoticeInput, SubmitDmcaReportInput } from "@habeshalive/shared";
+import type { DmcaContentType, DmcaReport, SubmitCounterNoticeInput, SubmitDmcaReportInput } from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { AppError } from "../common/errors.js";
 import { pool } from "../common/db.js";

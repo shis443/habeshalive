@@ -1,4 +1,4 @@
-import { STREAM_CATEGORIES } from "@habeshalive/shared";
+import { STREAM_CATEGORIES } from "@birq/shared";
 import Link from "next/link";
 import styles from "./CategoryPills.module.css";
 

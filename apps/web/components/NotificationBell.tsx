@@ -1,6 +1,6 @@
 "use client";
 
-import type { Notification, NotificationType } from "@habeshalive/shared";
+import type { Notification, NotificationType } from "@birq/shared";
 import { Centrifuge } from "centrifuge";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";

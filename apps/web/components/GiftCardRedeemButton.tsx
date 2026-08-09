@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr } from "@habeshalive/shared";
+import { formatSantimAsBirr } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { openAuthModal } from "@/lib/useAuthModal";

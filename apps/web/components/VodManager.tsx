@@ -1,6 +1,6 @@
 "use client";
 
-import type { Vod } from "@habeshalive/shared";
+import type { Vod } from "@birq/shared";
 import { useState } from "react";
 import styles from "./VodManager.module.css";
 

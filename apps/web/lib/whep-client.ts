@@ -1,4 +1,4 @@
-import { whepBrokerResponseSchema } from "@habeshalive/shared";
+import { whepBrokerResponseSchema } from "@birq/shared";
 
 // Native RTCPeerConnection WHEP (WebRTC-HTTP Egress Protocol) client —
 // talks to apps/api's broker (streams/whep-routes.ts) at

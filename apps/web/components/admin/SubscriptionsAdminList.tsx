@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type SubscriptionAdminItem } from "@habeshalive/shared";
+import { formatSantimAsBirr, type SubscriptionAdminItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

@@ -1,4 +1,4 @@
-import type { ModerationActionRecord } from "@habeshalive/shared";
+import type { ModerationActionRecord } from "@birq/shared";
 import styles from "./AdminQueue.module.css";
 
 const ACTION_LABEL: Record<ModerationActionRecord["action"], string> = {

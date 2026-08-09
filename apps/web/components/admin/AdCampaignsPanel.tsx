@@ -9,7 +9,7 @@ import {
   type AdCreativeAdminItem,
   type AdFormat,
   type Advertiser,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

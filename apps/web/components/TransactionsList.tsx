@@ -1,4 +1,4 @@
-import { formatSantimAsBirr, type Transaction } from "@habeshalive/shared";
+import { formatSantimAsBirr, type Transaction } from "@birq/shared";
 import styles from "./TransactionsList.module.css";
 
 const STATUS_LABEL: Record<Transaction["status"], string> = {

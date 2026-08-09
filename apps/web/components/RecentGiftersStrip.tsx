@@ -1,6 +1,6 @@
 "use client";
 
-import type { RecentGifter } from "@habeshalive/shared";
+import type { RecentGifter } from "@birq/shared";
 import { useEffect, useState } from "react";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { API_BASE_URL } from "@/lib/config";

@@ -1,4 +1,4 @@
-import type { AvatarCategory, AvatarPart, AvatarValues } from "@habeshalive/shared";
+import type { AvatarCategory, AvatarPart, AvatarValues } from "@birq/shared";
 import { formatAvatarOptionLabel } from "@/lib/avatar";
 import styles from "./AvatarPartGrid.module.css";
 import { BlockedIcon } from "./icons";

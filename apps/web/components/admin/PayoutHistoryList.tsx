@@ -1,4 +1,4 @@
-import { formatSantimAsBirr, type PayoutHistoryItem } from "@habeshalive/shared";
+import { formatSantimAsBirr, type PayoutHistoryItem } from "@birq/shared";
 import styles from "./AdminQueue.module.css";
 
 const STATUS_LABEL: Record<PayoutHistoryItem["status"], string> = {

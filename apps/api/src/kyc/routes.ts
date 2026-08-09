@@ -1,4 +1,4 @@
-import { kycIdTypeSchema } from "@habeshalive/shared";
+import { kycIdTypeSchema } from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { AppError } from "../common/errors.js";
 import { getMyKycStatus, submitKyc } from "./service.js";

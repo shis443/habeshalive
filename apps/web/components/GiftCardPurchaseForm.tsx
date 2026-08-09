@@ -1,6 +1,6 @@
 "use client";
 
-import { birrToSantim, type GiftCardDeliveryMethod, type GiftCardDesignTheme } from "@habeshalive/shared";
+import { birrToSantim, type GiftCardDeliveryMethod, type GiftCardDesignTheme } from "@birq/shared";
 import { useState } from "react";
 import styles from "./GiftCardPurchaseForm.module.css";
 

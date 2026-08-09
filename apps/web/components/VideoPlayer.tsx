@@ -1,6 +1,6 @@
 "use client";
 
-import { HEARTBEAT_INTERVAL_SECONDS } from "@habeshalive/shared";
+import { HEARTBEAT_INTERVAL_SECONDS } from "@birq/shared";
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { WHEP_ENABLED } from "@/lib/config";

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr } from "@habeshalive/shared";
+import { formatSantimAsBirr } from "@birq/shared";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";

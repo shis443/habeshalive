@@ -1,6 +1,6 @@
 "use client";
 
-import type { AccountDeletionStatus } from "@habeshalive/shared";
+import type { AccountDeletionStatus } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AccountSection.module.css";

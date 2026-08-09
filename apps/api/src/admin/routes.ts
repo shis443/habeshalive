@@ -15,7 +15,7 @@ import {
   updateCreatorSchema,
   updatePlatformConfigSchema,
   updateUserRoleSchema,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import {
   approveAdCreative,
   createAdCampaign,

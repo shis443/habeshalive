@@ -1,5 +1,5 @@
 {
-  "name": "@habeshalive/cloudflare-hls-worker",
+  "name": "@birq/cloudflare-hls-worker",
   "version": "0.0.0",
   "private": true,
   "scripts": {

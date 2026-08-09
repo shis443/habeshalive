@@ -1,4 +1,4 @@
-import type { CreatorProfile, CreatorSearchResult, FollowerListItem, FollowStatus } from "@habeshalive/shared";
+import type { CreatorProfile, CreatorSearchResult, FollowerListItem, FollowStatus } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 

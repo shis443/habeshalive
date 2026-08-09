@@ -1,4 +1,4 @@
-import { pinMessageSchema, sendChatMessageSchema } from "@habeshalive/shared";
+import { pinMessageSchema, sendChatMessageSchema } from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { createCentrifugoConnectionToken } from "./token.js";
 import {

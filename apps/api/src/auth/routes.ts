@@ -23,7 +23,7 @@ import {
   verifyEmailOtpSchema,
   verifyOtpSchema,
   type AuthUser,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { AppError } from "../common/errors.js";
 import {

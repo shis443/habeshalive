@@ -4,7 +4,7 @@ import type {
   SubscribeResponse,
   SubscriptionAdminItem,
   SubscriptionTier,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import type { PoolClient } from "pg";
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";

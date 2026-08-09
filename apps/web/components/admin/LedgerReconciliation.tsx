@@ -1,4 +1,4 @@
-import { formatSantimAsBirr, type LedgerReconciliation } from "@habeshalive/shared";
+import { formatSantimAsBirr, type LedgerReconciliation } from "@birq/shared";
 import styles from "./LedgerPanels.module.css";
 
 export function LedgerReconciliationCard({ data }: { data: LedgerReconciliation | null }) {

@@ -5,7 +5,7 @@ import {
   type AvatarPart,
   type AvatarSelection,
   type AvatarValues,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { deleteObject, getObjectBuffer, isObjectStorageConfigured, uploadObject } from "../common/object-storage.js";

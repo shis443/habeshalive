@@ -1,4 +1,4 @@
-import { formatSantimAsBirr } from "@habeshalive/shared";
+import { formatSantimAsBirr } from "@birq/shared";
 import { BottomNav } from "@/components/BottomNav";
 import { GiftCardRedeemButton } from "@/components/GiftCardRedeemButton";
 import { TopNav } from "@/components/TopNav";

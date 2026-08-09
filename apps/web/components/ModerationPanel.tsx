@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChannelBlock, ChannelModerator } from "@habeshalive/shared";
+import type { ChannelBlock, ChannelModerator } from "@birq/shared";
 import { useEffect, useState } from "react";
 import styles from "./ModerationPanel.module.css";
 

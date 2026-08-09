@@ -1,4 +1,4 @@
-import { blockViewerSchema, grantChannelModeratorSchema } from "@habeshalive/shared";
+import { blockViewerSchema, grantChannelModeratorSchema } from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import {
   blockViewerFromChannel,

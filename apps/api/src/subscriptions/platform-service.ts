@@ -1,4 +1,4 @@
-import type { PlatformSubscription, PlatformSubscriptionStatus } from "@habeshalive/shared";
+import type { PlatformSubscription, PlatformSubscriptionStatus } from "@birq/shared";
 import type { PoolClient } from "pg";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

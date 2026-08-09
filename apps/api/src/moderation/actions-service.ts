@@ -1,4 +1,4 @@
-import type { ModerationActionRecord } from "@habeshalive/shared";
+import type { ModerationActionRecord } from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { disconnectUserRealtime } from "../chat/token.js";
 import { pool } from "../common/db.js";

@@ -1,4 +1,4 @@
-import { formatSantimAsBirr, type PlatformWalletSummary } from "@habeshalive/shared";
+import { formatSantimAsBirr, type PlatformWalletSummary } from "@birq/shared";
 import styles from "./LedgerPanels.module.css";
 
 export function PlatformWalletSummaryCard({ data }: { data: PlatformWalletSummary | null }) {

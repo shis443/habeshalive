@@ -1,4 +1,4 @@
-import type { ChannelBlock, ChannelModerator, ModeratedChannel } from "@habeshalive/shared";
+import type { ChannelBlock, ChannelModerator, ModeratedChannel } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 

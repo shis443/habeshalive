@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type CreatorPayoutContext, type PayoutQueueItem } from "@habeshalive/shared";
+import { formatSantimAsBirr, type CreatorPayoutContext, type PayoutQueueItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

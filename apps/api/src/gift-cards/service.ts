@@ -5,7 +5,7 @@ import type {
   MyGiftCard,
   PurchaseGiftCardInput,
   PurchaseGiftCardResponse,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { getGiftCardExpiryMonths } from "../admin/config-service.js";
 import { emailGateway } from "../auth/email-gateway.js";

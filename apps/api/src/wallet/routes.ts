@@ -7,7 +7,7 @@ import {
   rejectPayoutSchema,
   requestPayoutSchema,
   sendGiftSchema,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { env } from "../common/env.js";

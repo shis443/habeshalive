@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type AnchorCandidate } from "@habeshalive/shared";
+import { formatSantimAsBirr, type AnchorCandidate } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

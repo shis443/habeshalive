@@ -1,4 +1,4 @@
-import type { StreamActivityEvent } from "@habeshalive/shared";
+import type { StreamActivityEvent } from "@birq/shared";
 import styles from "./StreamActivityStrip.module.css";
 
 export function StreamActivityStrip({ events }: { events: StreamActivityEvent[] }) {

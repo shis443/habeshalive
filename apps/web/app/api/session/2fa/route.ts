@@ -1,4 +1,4 @@
-import { authResponseSchema, totpLoginVerifySchema } from "@habeshalive/shared";
+import { authResponseSchema, totpLoginVerifySchema } from "@birq/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
 import { completeSessionFromAuthResponse } from "../route";

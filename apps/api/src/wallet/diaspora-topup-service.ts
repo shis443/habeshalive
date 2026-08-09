@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { DiasporaProvider, TopupResponse } from "@habeshalive/shared";
+import type { DiasporaProvider, TopupResponse } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { env } from "../common/env.js";
 import { AppError } from "../common/errors.js";

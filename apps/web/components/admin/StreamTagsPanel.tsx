@@ -1,6 +1,6 @@
 "use client";
 
-import type { StreamTagAdminItem } from "@habeshalive/shared";
+import type { StreamTagAdminItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

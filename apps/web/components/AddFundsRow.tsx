@@ -1,6 +1,6 @@
 "use client";
 
-import { topupResponseSchema } from "@habeshalive/shared";
+import { topupResponseSchema } from "@birq/shared";
 import { useState, type FormEvent, type ReactNode } from "react";
 import styles from "./AddFundsRow.module.css";
 

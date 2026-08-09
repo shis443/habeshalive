@@ -1,4 +1,4 @@
-import { createClipSchema, publishVodSchema } from "@habeshalive/shared";
+import { createClipSchema, publishVodSchema } from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { createClip, deleteClipOwned, listClipsForCreator } from "./clip-service.js";
 import {

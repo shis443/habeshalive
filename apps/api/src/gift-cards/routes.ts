@@ -1,4 +1,4 @@
-import { purchaseGiftCardSchema, redeemGiftCardSchema } from "@habeshalive/shared";
+import { purchaseGiftCardSchema, redeemGiftCardSchema } from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getGiftCardPreview, getMyGiftCards, purchaseGiftCard, redeemGiftCard } from "./service.js";
 

@@ -1,4 +1,4 @@
-import type { ModeratedChannel } from "@habeshalive/shared";
+import type { ModeratedChannel } from "@birq/shared";
 import Link from "next/link";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import styles from "./PeopleList.module.css";

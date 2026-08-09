@@ -138,7 +138,7 @@ import {
   type UserRank,
   type Vod,
   type WalletBalance,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 // Every function in this file runs server-side only (Server Components), so
 // it uses API_INTERNAL_URL — see config.ts for why that differs from
 // API_BASE_URL when containerized.

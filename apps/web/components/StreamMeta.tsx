@@ -1,4 +1,4 @@
-import type { StreamDetail } from "@habeshalive/shared";
+import type { StreamDetail } from "@birq/shared";
 import Link from "next/link";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { formatViewerCount } from "@/lib/format";

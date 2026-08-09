@@ -1,6 +1,6 @@
 "use client";
 
-import type { LinkedSocialAccount, SocialProvider } from "@habeshalive/shared";
+import type { LinkedSocialAccount, SocialProvider } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AccountSection.module.css";

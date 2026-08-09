@@ -1,4 +1,4 @@
-import { loginResultSchema, loginSchema, verifyEmailOtpSchema, verifyOtpSchema, type AuthResponse } from "@habeshalive/shared";
+import { loginResultSchema, loginSchema, verifyEmailOtpSchema, verifyOtpSchema, type AuthResponse } from "@birq/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
 import { clearSessionCookie, getSessionCookie, MAX_ACCOUNTS, writeSessionCookie } from "@/lib/session";

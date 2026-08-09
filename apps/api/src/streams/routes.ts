@@ -1,4 +1,4 @@
-import { createSquadSchema, createStreamSchema, joinSquadSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@habeshalive/shared";
+import { createSquadSchema, createStreamSchema, joinSquadSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@birq/shared";
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getBoostPricing } from "../admin/config-service.js";

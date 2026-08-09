@@ -1,4 +1,4 @@
-import type { AccountDeletionStatus } from "@habeshalive/shared";
+import type { AccountDeletionStatus } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { getBalance } from "../wallet/service.js";

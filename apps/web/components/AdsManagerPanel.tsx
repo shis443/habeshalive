@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type CreatorAdsSettings } from "@habeshalive/shared";
+import { formatSantimAsBirr, type CreatorAdsSettings } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdsManagerPanel.module.css";

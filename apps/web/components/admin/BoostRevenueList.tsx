@@ -1,4 +1,4 @@
-import { formatSantimAsBirr, type BoostRevenueByCreator } from "@habeshalive/shared";
+import { formatSantimAsBirr, type BoostRevenueByCreator } from "@birq/shared";
 import styles from "./AdminQueue.module.css";
 
 export function BoostRevenueList({ items }: { items: BoostRevenueByCreator[] }) {

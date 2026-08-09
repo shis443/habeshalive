@@ -1,4 +1,4 @@
-import type { PublishVodInput, Vod } from "@habeshalive/shared";
+import type { PublishVodInput, Vod } from "@birq/shared";
 import { getVodRetentionDays } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

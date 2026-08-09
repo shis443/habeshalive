@@ -1,4 +1,4 @@
-import type { Announcement, AnnouncementAdminItem, CreateAnnouncementInput } from "@habeshalive/shared";
+import type { Announcement, AnnouncementAdminItem, CreateAnnouncementInput } from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

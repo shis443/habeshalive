@@ -1,4 +1,4 @@
-import { submitCreatorApplicationSchema } from "@habeshalive/shared";
+import { submitCreatorApplicationSchema } from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getCapStatus, getMyApplication, submitApplication } from "./service.js";
 

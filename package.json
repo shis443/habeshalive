@@ -1,5 +1,5 @@
 {
-  "name": "habeshalive",
+  "name": "birq",
   "private": true,
   "workspaces": [
     "apps/*",

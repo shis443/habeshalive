@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, subscribeResponseSchema, type SubscriptionTier } from "@habeshalive/shared";
+import { formatSantimAsBirr, subscribeResponseSchema, type SubscriptionTier } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useDropdown } from "@/lib/useDropdown";

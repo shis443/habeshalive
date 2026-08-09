@@ -1,4 +1,4 @@
-import type { AvatarCategory } from "@habeshalive/shared";
+import type { AvatarCategory } from "@birq/shared";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

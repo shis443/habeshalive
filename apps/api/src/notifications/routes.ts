@@ -1,4 +1,4 @@
-import { updateNotificationPreferencesSchema } from "@habeshalive/shared";
+import { updateNotificationPreferencesSchema } from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import {
   getPreferences,

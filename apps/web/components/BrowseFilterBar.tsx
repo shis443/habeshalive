@@ -1,6 +1,6 @@
 "use client";
 
-import { STREAM_LANGUAGES } from "@habeshalive/shared";
+import { STREAM_LANGUAGES } from "@birq/shared";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import styles from "./BrowseFilterBar.module.css";

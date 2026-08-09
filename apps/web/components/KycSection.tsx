@@ -1,6 +1,6 @@
 "use client";
 
-import type { KycIdType, KycStatus } from "@habeshalive/shared";
+import type { KycIdType, KycStatus } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import styles from "./AccountSection.module.css";

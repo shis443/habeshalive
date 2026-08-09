@@ -1,4 +1,4 @@
-import type { CreatorProfile } from "@habeshalive/shared";
+import type { CreatorProfile } from "@birq/shared";
 import { FollowButton } from "./FollowButton";
 import { VerifiedIcon } from "./icons";
 import { resolveAvatarUrl } from "@/lib/avatar";

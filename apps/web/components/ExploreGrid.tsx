@@ -1,4 +1,4 @@
-import type { LiveStream, ServedAd } from "@habeshalive/shared";
+import type { LiveStream, ServedAd } from "@birq/shared";
 import { CategoryPills } from "./CategoryPills";
 import { SponsoredStreamCard } from "./SponsoredStreamCard";
 import { StreamCard } from "./StreamCard";

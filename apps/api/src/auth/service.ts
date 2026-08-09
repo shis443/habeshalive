@@ -5,7 +5,7 @@ import type {
   UpdateProfileInput,
   VerifyEmailOtpInput,
   VerifyOtpInput,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { recordSecurityEvent } from "../common/security-hold.js";

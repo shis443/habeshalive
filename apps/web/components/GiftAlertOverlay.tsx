@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type StreamAlert } from "@habeshalive/shared";
+import { formatSantimAsBirr, type StreamAlert } from "@birq/shared";
 import { Centrifuge } from "centrifuge";
 import { useEffect, useState } from "react";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";

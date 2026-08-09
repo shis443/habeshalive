@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type MySubscription } from "@habeshalive/shared";
+import { formatSantimAsBirr, type MySubscription } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./SubscriptionsList.module.css";

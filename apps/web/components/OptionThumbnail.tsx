@@ -1,4 +1,4 @@
-import { renderAvatarSvg, type AvatarCategory, type AvatarValues } from "@habeshalive/shared";
+import { renderAvatarSvg, type AvatarCategory, type AvatarValues } from "@birq/shared";
 import { useMemo } from "react";
 import styles from "./OptionThumbnail.module.css";
 

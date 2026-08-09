@@ -1,6 +1,6 @@
 "use client";
 
-import { streamDetailSchema } from "@habeshalive/shared";
+import { streamDetailSchema } from "@birq/shared";
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "@/lib/config";
 import { GiftAlertOverlay } from "./GiftAlertOverlay";

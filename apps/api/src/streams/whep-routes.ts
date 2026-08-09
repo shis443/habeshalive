@@ -2,7 +2,7 @@ import {
   whepBrokerRequestSchema,
   whepTeardownRequestSchema,
   type WhepBrokerResponse,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { pool } from "../common/db.js";
 import { env } from "../common/env.js";

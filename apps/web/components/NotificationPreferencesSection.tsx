@@ -1,6 +1,6 @@
 "use client";
 
-import type { NotificationPreferences } from "@habeshalive/shared";
+import type { NotificationPreferences } from "@birq/shared";
 import { useState } from "react";
 import styles from "./AccountSection.module.css";
 

@@ -1,4 +1,4 @@
-import type { CreatorSearchResult, StreamDetail } from "@habeshalive/shared";
+import type { CreatorSearchResult, StreamDetail } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { hasPpvAccess } from "../streams/ppv-service.js";
 

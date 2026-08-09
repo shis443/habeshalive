@@ -1,6 +1,6 @@
 "use client";
 
-import type { AdLeadAdminItem } from "@habeshalive/shared";
+import type { AdLeadAdminItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import styles from "./AdminQueue.module.css";
 

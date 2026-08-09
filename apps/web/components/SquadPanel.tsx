@@ -1,6 +1,6 @@
 "use client";
 
-import type { Squad } from "@habeshalive/shared";
+import type { Squad } from "@birq/shared";
 import { useEffect, useState } from "react";
 import styles from "./GoLivePanel.module.css";
 

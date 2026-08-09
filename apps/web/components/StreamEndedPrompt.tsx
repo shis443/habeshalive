@@ -1,6 +1,6 @@
 "use client";
 
-import { STREAM_CATEGORIES, type Vod } from "@habeshalive/shared";
+import { STREAM_CATEGORIES, type Vod } from "@birq/shared";
 import { useState } from "react";
 import styles from "./StreamEndedPrompt.module.css";
 

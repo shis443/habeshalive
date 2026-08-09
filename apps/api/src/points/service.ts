@@ -4,7 +4,7 @@ import {
   POINTS_PER_SANTIM,
   type RedeemPointsResponse,
   type WatchHeartbeatResponse,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";

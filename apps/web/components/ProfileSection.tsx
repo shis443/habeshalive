@@ -1,6 +1,6 @@
 "use client";
 
-import type { MyAccount } from "@habeshalive/shared";
+import type { MyAccount } from "@birq/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

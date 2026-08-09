@@ -1,6 +1,6 @@
 "use client";
 
-import type { PinnedMessage } from "@habeshalive/shared";
+import type { PinnedMessage } from "@birq/shared";
 import { useState } from "react";
 import { ChevronRightIcon, CloseIcon, PinIcon } from "./icons";
 import styles from "./PinnedMessageBar.module.css";

@@ -5,7 +5,7 @@
 // actually matters here (don't show a blank white screen if the network
 // drops) is safer than pulling in an unmaintained dependency against a
 // framework version it was never tested with.
-const CACHE_NAME = "habeshalive-shell-v1";
+const CACHE_NAME = "birq-shell-v1";
 const OFFLINE_URL = "/offline.html";
 const APP_SHELL = [OFFLINE_URL, "/manifest.webmanifest", "/icons/192", "/icons/512"];
 

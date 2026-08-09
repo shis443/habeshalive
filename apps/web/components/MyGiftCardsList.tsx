@@ -1,4 +1,4 @@
-import { formatSantimAsBirr, type MyGiftCard } from "@habeshalive/shared";
+import { formatSantimAsBirr, type MyGiftCard } from "@birq/shared";
 import Link from "next/link";
 import styles from "./SubscriptionsList.module.css";
 

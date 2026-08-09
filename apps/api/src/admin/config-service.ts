@@ -1,4 +1,4 @@
-import type { PlatformConfig, UpdatePlatformConfigInput } from "@habeshalive/shared";
+import type { PlatformConfig, UpdatePlatformConfigInput } from "@birq/shared";
 import { logAdminAction } from "./audit.js";
 import { pool } from "../common/db.js";
 

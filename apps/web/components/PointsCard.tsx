@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, POINTS_PER_SANTIM, redeemPointsResponseSchema } from "@habeshalive/shared";
+import { formatSantimAsBirr, POINTS_PER_SANTIM, redeemPointsResponseSchema } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import styles from "./BalanceCard.module.css";

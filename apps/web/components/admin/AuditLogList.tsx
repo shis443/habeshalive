@@ -1,4 +1,4 @@
-import type { AdminAuditAction } from "@habeshalive/shared";
+import type { AdminAuditAction } from "@birq/shared";
 import styles from "./AdminQueue.module.css";
 
 function formatDate(iso: string): string {

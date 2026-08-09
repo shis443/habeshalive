@@ -1,4 +1,4 @@
-import type { AuthUser, LinkedSocialAccount, SocialProvider } from "@habeshalive/shared";
+import type { AuthUser, LinkedSocialAccount, SocialProvider } from "@birq/shared";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";

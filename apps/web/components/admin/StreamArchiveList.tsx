@@ -1,4 +1,4 @@
-import type { StreamArchiveItem } from "@habeshalive/shared";
+import type { StreamArchiveItem } from "@birq/shared";
 import styles from "./AdminQueue.module.css";
 
 function formatDate(iso: string | null): string {

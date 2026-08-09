@@ -1,4 +1,4 @@
-import { redeemPointsSchema, watchHeartbeatSchema } from "@habeshalive/shared";
+import { redeemPointsSchema, watchHeartbeatSchema } from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getPointsBalance, recordWatchHeartbeat, redeemPoints } from "./service.js";
 

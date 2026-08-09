@@ -1,6 +1,6 @@
 "use client";
 
-import type { MyCreatorApplication } from "@habeshalive/shared";
+import type { MyCreatorApplication } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./CreatorApplicationForm.module.css";

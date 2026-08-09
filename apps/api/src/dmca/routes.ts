@@ -3,7 +3,7 @@ import {
   resolveDmcaReportSchema,
   submitCounterNoticeSchema,
   submitDmcaReportSchema,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { listDmcaReports, resolveDmcaReport, submitCounterNotice, submitDmcaReport } from "./service.js";
 

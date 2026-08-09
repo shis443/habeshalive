@@ -1,6 +1,6 @@
 "use client";
 
-import { MAX_CLIP_DURATION_SECONDS, type Clip, type Vod } from "@habeshalive/shared";
+import { MAX_CLIP_DURATION_SECONDS, type Clip, type Vod } from "@birq/shared";
 import { useState } from "react";
 import styles from "./ClipCreatorPanel.module.css";
 

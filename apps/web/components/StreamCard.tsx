@@ -1,4 +1,4 @@
-import type { LiveStream } from "@habeshalive/shared";
+import type { LiveStream } from "@birq/shared";
 import Link from "next/link";
 import { formatViewerCount } from "@/lib/format";
 import styles from "./StreamCard.module.css";

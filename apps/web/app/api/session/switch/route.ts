@@ -1,4 +1,4 @@
-import { switchAccountSchema } from "@habeshalive/shared";
+import { switchAccountSchema } from "@birq/shared";
 import { NextResponse } from "next/server";
 import { getSessionCookie, writeSessionCookie } from "@/lib/session";
 

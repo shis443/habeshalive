@@ -3,7 +3,7 @@ import type {
   CreatorApplicationCapStatus,
   MyCreatorApplication,
   SubmitCreatorApplicationInput,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

@@ -1,4 +1,4 @@
-import { STREAM_CATEGORIES } from "@habeshalive/shared";
+import { STREAM_CATEGORIES } from "@birq/shared";
 import styles from "./RecentCategoriesPlaceholder.module.css";
 
 // Real category names (the platform's actual fixed taxonomy — see

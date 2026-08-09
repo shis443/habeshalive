@@ -7,7 +7,7 @@ import {
   type AvatarPart,
   type AvatarSelection,
   type AvatarValues,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ChangeEvent } from "react";

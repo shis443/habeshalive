@@ -1,4 +1,4 @@
-import { DAILY_POINT_CAP, POINTS_PER_HEARTBEAT, POINTS_PER_SANTIM } from "@habeshalive/shared";
+import { DAILY_POINT_CAP, POINTS_PER_HEARTBEAT, POINTS_PER_SANTIM } from "@birq/shared";
 import { afterAll, describe, expect, it } from "vitest";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

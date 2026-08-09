@@ -1,6 +1,6 @@
 "use client";
 
-import type { BlocklistTerm } from "@habeshalive/shared";
+import type { BlocklistTerm } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

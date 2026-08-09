@@ -1,4 +1,4 @@
-import { subscribeInputSchema, subscribeToPlatformSchema } from "@habeshalive/shared";
+import { subscribeInputSchema, subscribeToPlatformSchema } from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { cancelPlatformSubscription, getMyPlatformSubscription, subscribeToPlatform } from "./platform-service.js";
 import { cancelSubscription, listMySubscriptions, listTiers, subscribe } from "./service.js";

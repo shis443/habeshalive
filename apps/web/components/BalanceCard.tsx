@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, payoutResponseSchema, type PayoutMethod } from "@habeshalive/shared";
+import { formatSantimAsBirr, payoutResponseSchema, type PayoutMethod } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import styles from "./BalanceCard.module.css";

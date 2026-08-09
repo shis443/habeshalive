@@ -1,5 +1,5 @@
 {
-  "name": "@habeshalive/web",
+  "name": "@birq/web",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@habeshalive/shared": "*",
+    "@birq/shared": "*",
     "@sentry/nextjs": "^10.69.0",
     "centrifuge": "^5.2.4",
     "hls.js": "^1.5.20",

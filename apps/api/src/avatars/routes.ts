@@ -1,4 +1,4 @@
-import { saveAvatarSchema } from "@habeshalive/shared";
+import { saveAvatarSchema } from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { AppError } from "../common/errors.js";
 import {

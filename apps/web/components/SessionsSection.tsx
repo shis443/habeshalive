@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionAccount } from "@habeshalive/shared";
+import type { SessionAccount } from "@birq/shared";
 import { useEffect, useState } from "react";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import styles from "./AccountSection.module.css";

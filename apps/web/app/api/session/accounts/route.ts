@@ -1,4 +1,4 @@
-import { authUserSchema, type SessionAccount } from "@habeshalive/shared";
+import { authUserSchema, type SessionAccount } from "@birq/shared";
 import { NextResponse } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
 import { getSessionCookie } from "@/lib/session";

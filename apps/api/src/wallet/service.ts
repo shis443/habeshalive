@@ -22,7 +22,7 @@ import type {
   TopupResponse,
   UserRank,
   WalletBalance,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { logAdminAction } from "../admin/audit.js";

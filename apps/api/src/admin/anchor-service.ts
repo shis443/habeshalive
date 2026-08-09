@@ -1,4 +1,4 @@
-import type { AnchorCandidate, CreatorListItem } from "@habeshalive/shared";
+import type { AnchorCandidate, CreatorListItem } from "@birq/shared";
 import { pool } from "../common/db.js";
 
 interface CreatorRow {

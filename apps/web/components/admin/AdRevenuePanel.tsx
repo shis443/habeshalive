@@ -1,4 +1,4 @@
-import { formatSantimAsBirr, type AdRevenueByCreator } from "@habeshalive/shared";
+import { formatSantimAsBirr, type AdRevenueByCreator } from "@birq/shared";
 import styles from "./AdminQueue.module.css";
 
 export function AdRevenuePanel({ items }: { items: AdRevenueByCreator[] }) {

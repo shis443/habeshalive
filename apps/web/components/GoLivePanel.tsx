@@ -8,7 +8,7 @@ import {
   formatSantimAsBirr,
   streamDefaultsSchema,
   streamDetailSchema,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { useEffect, useRef, useState } from "react";
 import { SRS_WHIP_URL } from "@/lib/config";
 import { SquadPanel } from "./SquadPanel";

@@ -1,6 +1,6 @@
 "use client";
 
-import type { KycAdminItem } from "@habeshalive/shared";
+import type { KycAdminItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

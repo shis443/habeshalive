@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type LedgerTransactionLookup } from "@habeshalive/shared";
+import { formatSantimAsBirr, type LedgerTransactionLookup } from "@birq/shared";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";
 import filterStyles from "./PayoutHistoryFilters.module.css";

@@ -8,7 +8,7 @@ import {
   type PlatformSubscription,
   type Rank,
   type UserRank,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { openAuthModal } from "@/lib/useAuthModal";

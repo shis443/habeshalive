@@ -1,4 +1,4 @@
-import { formatSantimAsBirr } from "@habeshalive/shared";
+import { formatSantimAsBirr } from "@birq/shared";
 import Link from "next/link";
 import { ActionCard } from "@/components/admin/ActionCard";
 import { StatCard } from "@/components/StatCard";

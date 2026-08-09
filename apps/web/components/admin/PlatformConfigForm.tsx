@@ -1,6 +1,6 @@
 "use client";
 
-import { santimToBirr, birrToSantim, type PlatformConfig } from "@habeshalive/shared";
+import { santimToBirr, birrToSantim, type PlatformConfig } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

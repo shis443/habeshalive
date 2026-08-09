@@ -1,6 +1,6 @@
 "use client";
 
-import { streamKeySchema } from "@habeshalive/shared";
+import { streamKeySchema } from "@birq/shared";
 import { useState } from "react";
 import styles from "./StreamSetupPanel.module.css";
 

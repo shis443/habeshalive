@@ -1,4 +1,4 @@
-import type { CreatorListItem, SuspendCreatorInput, UpdateCreatorInput } from "@habeshalive/shared";
+import type { CreatorListItem, SuspendCreatorInput, UpdateCreatorInput } from "@birq/shared";
 import { logAdminAction } from "./audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

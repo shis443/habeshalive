@@ -1,4 +1,4 @@
-import type { FollowerListItem } from "@habeshalive/shared";
+import type { FollowerListItem } from "@birq/shared";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import styles from "./PeopleList.module.css";
 

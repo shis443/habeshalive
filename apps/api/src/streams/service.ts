@@ -10,7 +10,7 @@ import {
   type StreamKeyResponse,
   type ViewerList,
   type ViewerListEntry,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { getBoostPricing, getDefaultRevenueShareBps } from "../admin/config-service.js";
 import { pool } from "../common/db.js";

@@ -1,6 +1,6 @@
 "use client";
 
-import type { SubscriptionTier } from "@habeshalive/shared";
+import type { SubscriptionTier } from "@birq/shared";
 import { useTranslations } from "next-intl";
 import { EndStreamButton } from "./EndStreamButton";
 import { FollowButton } from "./FollowButton";

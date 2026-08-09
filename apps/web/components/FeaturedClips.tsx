@@ -1,6 +1,6 @@
 "use client";
 
-import type { Clip } from "@habeshalive/shared";
+import type { Clip } from "@birq/shared";
 import { useState } from "react";
 import styles from "./FeaturedClips.module.css";
 

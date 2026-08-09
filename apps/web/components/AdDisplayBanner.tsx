@@ -1,6 +1,6 @@
 "use client";
 
-import type { ServedAd } from "@habeshalive/shared";
+import type { ServedAd } from "@birq/shared";
 import styles from "./AdDisplayBanner.module.css";
 
 function recordClick(impressionId: string) {

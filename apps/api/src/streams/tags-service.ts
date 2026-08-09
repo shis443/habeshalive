@@ -1,4 +1,4 @@
-import type { StreamTagAdminItem } from "@habeshalive/shared";
+import type { StreamTagAdminItem } from "@birq/shared";
 import type { PoolClient } from "pg";
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";

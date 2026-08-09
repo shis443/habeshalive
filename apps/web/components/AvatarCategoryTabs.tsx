@@ -1,4 +1,4 @@
-import type { AvatarCategory } from "@habeshalive/shared";
+import type { AvatarCategory } from "@birq/shared";
 import styles from "./AvatarCategoryTabs.module.css";
 
 const CATEGORY_LABELS: Record<AvatarCategory, string> = {

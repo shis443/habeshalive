@@ -1,4 +1,4 @@
-import type { AddBlocklistTermInput, BlocklistTerm } from "@habeshalive/shared";
+import type { AddBlocklistTermInput, BlocklistTerm } from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

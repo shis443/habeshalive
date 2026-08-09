@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import type { Squad, SquadMember } from "@habeshalive/shared";
+import type { Squad, SquadMember } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { getLiveStreamByCreatorId } from "./service.js";

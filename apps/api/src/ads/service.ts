@@ -11,7 +11,7 @@ import type {
   CreatorAdsSettings,
   ServedAd,
   SubmitAdLeadInput,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
 import { getAdConfig } from "../admin/config-service.js";
 import { pool } from "../common/db.js";

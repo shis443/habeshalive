@@ -1,6 +1,6 @@
 "use client";
 
-import { followStatusSchema } from "@habeshalive/shared";
+import { followStatusSchema } from "@birq/shared";
 import { useState } from "react";
 import { openAuthModal } from "@/lib/useAuthModal";
 import styles from "./FollowButton.module.css";

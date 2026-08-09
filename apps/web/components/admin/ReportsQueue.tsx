@@ -1,6 +1,6 @@
 "use client";
 
-import type { Report } from "@habeshalive/shared";
+import type { Report } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

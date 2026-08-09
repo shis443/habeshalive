@@ -1,4 +1,4 @@
-import type { ChatMessage, GifterBadgeTier, PinnedMessage, Rank, RecentGifter } from "@habeshalive/shared";
+import type { ChatMessage, GifterBadgeTier, PinnedMessage, Rank, RecentGifter } from "@birq/shared";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";

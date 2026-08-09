@@ -7,7 +7,7 @@ import {
   submitAppealSchema,
   submitReportSchema,
   unbanUserSchema,
-} from "@habeshalive/shared";
+} from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { banUser, listModerationActions, unbanUser } from "./actions-service.js";
 import { listAppeals, resolveAppeal, submitAppeal } from "./appeals-service.js";

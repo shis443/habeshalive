@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type DonateResponse } from "@habeshalive/shared";
+import { formatSantimAsBirr, type DonateResponse } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { openAuthModal } from "@/lib/useAuthModal";

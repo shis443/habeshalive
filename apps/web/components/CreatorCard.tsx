@@ -1,4 +1,4 @@
-import type { CreatorSearchResult } from "@habeshalive/shared";
+import type { CreatorSearchResult } from "@birq/shared";
 import Link from "next/link";
 import styles from "./CreatorCard.module.css";
 

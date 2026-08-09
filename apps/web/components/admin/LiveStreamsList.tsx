@@ -1,6 +1,6 @@
 "use client";
 
-import type { LiveStream } from "@habeshalive/shared";
+import type { LiveStream } from "@birq/shared";
 import { useEffect, useRef, useState } from "react";
 import styles from "./AdminQueue.module.css";
 import liveStyles from "./LiveStreamsList.module.css";

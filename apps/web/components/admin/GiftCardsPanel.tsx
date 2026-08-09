@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSantimAsBirr, type GiftCardAdminItem } from "@habeshalive/shared";
+import { formatSantimAsBirr, type GiftCardAdminItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";

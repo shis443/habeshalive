@@ -1,4 +1,4 @@
-import type { Squad } from "@habeshalive/shared";
+import type { Squad } from "@birq/shared";
 import { VideoPlayer } from "./VideoPlayer";
 import styles from "./SquadGrid.module.css";
 

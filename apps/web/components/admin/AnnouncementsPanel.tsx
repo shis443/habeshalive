@@ -1,6 +1,6 @@
 "use client";
 
-import type { AnnouncementAdminItem } from "@habeshalive/shared";
+import type { AnnouncementAdminItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import styles from "./AdminQueue.module.css";
