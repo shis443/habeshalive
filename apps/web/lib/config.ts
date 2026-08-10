@@ -47,6 +47,16 @@ export const SRS_WHIP_URL = process.env.NEXT_PUBLIC_SRS_WHIP_URL ?? "http://loca
 // supports "ip:port" for exactly this reason.
 export const SRS_WEBRTC_PUBLIC_IP = process.env.NEXT_PUBLIC_SRS_WEBRTC_IP ?? "127.0.0.1:8000";
 
+// Remote control's WS relay (apps/api/src/remote-control/relay.ts) is
+// mounted directly on the API host, unlike Centrifugo above which is a
+// genuinely separate service — same reasoning as the iOS side's
+// birqRemoteControlUrl() deriving from birqApiBaseUrl() instead of a second
+// independent constant, mirrored here since this is the browser's
+// equivalent entry point. Local dev default matches apps/api's own default
+// port (see apps/api/src/common/env.ts's API_PORT).
+export const REMOTE_CONTROL_WS_URL =
+  process.env.NEXT_PUBLIC_REMOTE_CONTROL_WS_URL ?? "ws://localhost:4000/remote-control/relay";
+
 // Default-off kill switch for WHEP (WebRTC) playback, mirrored on the
 // server side by apps/api's own WHEP_ENABLED (common/env.ts) — both must
 // be on for VideoPlayer.tsx to ever attempt the WHEP engine before falling

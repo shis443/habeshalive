@@ -1,0 +1,227 @@
+.panel {
+  background: var(--surface-container);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.heading {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-3);
+}
+
+.connectRow {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.pinInput {
+  flex: 1;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 4px;
+  padding: 10px var(--space-2);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.connectButton {
+  padding: 0 var(--space-3);
+  border-radius: 4px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.connectButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--on-surface-variant);
+}
+
+.statusConnected {
+  color: var(--secondary);
+}
+
+.statusConnected .statusDot {
+  background: var(--secondary);
+}
+
+.previewRow {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.preview {
+  width: 200px;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.previewPlaceholder {
+  width: 200px;
+  aspect-ratio: 9 / 16;
+  border-radius: 6px;
+  background: var(--surface-container-lowest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.telemetry {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.telemetryRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px var(--space-2);
+  border-radius: 4px;
+  background: var(--surface-container-low);
+  font-family: var(--font-label);
+  font-size: 12px;
+}
+
+.telemetryRow span:first-child {
+  color: var(--on-surface-variant);
+}
+
+.telemetryRow span:last-child {
+  color: var(--on-background);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.controlsRow {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.controlButton,
+.controlButtonActive,
+.dangerButton,
+.dangerButtonActive {
+  padding: 10px var(--space-3);
+  border-radius: 4px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+  color: var(--on-background);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.controlButtonActive {
+  border-color: var(--primary);
+  background: rgba(208, 188, 255, 0.15);
+  color: var(--primary);
+}
+
+.dangerButton {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.dangerButtonActive {
+  background: var(--error);
+  color: var(--on-error);
+}
+
+.field {
+  margin-bottom: var(--space-3);
+}
+
+.fieldLabel {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 6px;
+}
+
+.pillRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pill,
+.pillActive {
+  padding: 6px var(--space-2);
+  border-radius: 9999px;
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+  color: var(--on-background);
+}
+
+.pillActive {
+  border-color: var(--primary);
+  background: rgba(208, 188, 255, 0.15);
+  color: var(--primary);
+}
+
+.disconnectButton {
+  width: 100%;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-align: center;
+}
+
+.disconnectButton:hover {
+  color: var(--on-background);
+}

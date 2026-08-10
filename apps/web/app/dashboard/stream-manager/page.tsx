@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GoLivePanel } from "@/components/GoLivePanel";
+import { RemoteControlPanel } from "@/components/RemoteControlPanel";
 import { getCurrentUser, getLiveStreamByUsername, getStreamKey } from "@/lib/api";
 import styles from "../page.module.css";
 
@@ -34,6 +35,7 @@ export default async function StreamManagerPage() {
         displayName={user.displayName}
         initialIsLive={!!liveStream}
       />
+      <RemoteControlPanel streamerId={user.id} />
     </>
   );
 }
