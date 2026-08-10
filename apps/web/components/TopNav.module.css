@@ -226,6 +226,7 @@
   padding: var(--space-2) 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 60;
+  transition: all 250ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* The "More" dropdown's trigger sits at the far left of the header — a
@@ -318,7 +319,7 @@
   background: var(--surface-container-highest);
   position: relative;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: all 250ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .toggleOn {
@@ -333,7 +334,7 @@
   height: 16px;
   border-radius: 50%;
   background: var(--on-background);
-  transition: transform 0.15s;
+  transition: all 250ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .toggleKnobOn {
