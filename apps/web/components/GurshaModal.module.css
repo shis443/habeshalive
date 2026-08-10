@@ -256,6 +256,24 @@
   cursor: not-allowed;
 }
 
+/* The "Peak Moment" — fires once, on the send button, when handleSend's
+   POST resolves successfully (see GurshaModal.tsx). Ends exactly at
+   scale(1) so there's no snap-back once the animation completes; the
+   overshoot past that in between comes from --ease-spring-bounce itself,
+   not from the keyframe stops. */
+@keyframes gurshaSuccessBounce {
+  from {
+    transform: scale(0.85);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.sendButtonBounce {
+  animation: gurshaSuccessBounce 480ms var(--ease-spring-bounce);
+}
+
 .error {
   color: var(--error);
   font-size: 13px;

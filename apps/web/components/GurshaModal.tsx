@@ -12,6 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { openAuthModal } from "@/lib/useAuthModal";
+import { playGurshaSuccessSound, triggerGurshaHaptic } from "@/lib/ui-feedback";
 import { CloseIcon } from "./icons";
 import styles from "./GurshaModal.module.css";
 
@@ -171,6 +172,8 @@ export function GurshaModal({
       setBadge(data.badge);
       setRank(data.rank);
       setSuccess(true);
+      playGurshaSuccessSound();
+      triggerGurshaHaptic();
       router.refresh();
       setTimeout(onClose, 1400);
     } catch (err) {
@@ -413,7 +416,7 @@ export function GurshaModal({
 
         <button
           type="button"
-          className={styles.sendButton}
+          className={success ? `${styles.sendButton} ${styles.sendButtonBounce}` : styles.sendButton}
           onClick={handleSend}
           disabled={loading || !selectedThemeId}
         >

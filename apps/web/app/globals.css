@@ -32,13 +32,23 @@
   --shell-bottom-height: 64px;
 
   /* Critically damped spring (no overshoot) — dropdowns, sheets, modal
-     panels. Deliberately no under-damped/bounce counterpart: bounce is
-     reserved for momentum-driven drag/flick gestures, not UI chrome (see
-     TopNav/CategoryPills — neither uses it). */
+     panels. */
   --ease-spring-smooth: linear(
     0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.226 9.8%, 0.388 13.9%, 0.575 18.7%,
     0.771 24.3%, 0.957 31.1%, 1.025 35.5%, 1.062 40.5%, 1.072 46%, 1.062 52.3%,
     1.037 60%, 1.002 73.1%, 1
+  );
+
+  /* Under-damped/bounce counterpart to --ease-spring-smooth above.
+     Deliberately NOT for general UI chrome — dropdowns/sheets/nav stay on
+     the critically-damped curve. Scoped to the one true "Peak Moment" in
+     the product: a successful Gursha send (GurshaModal.module.css's
+     .sendButtonBounce, paired with lib/ui-feedback.ts's sound/haptic).
+     Do not reuse for hover states or routine feedback. */
+  --ease-spring-bounce: linear(
+    0, 0.04, 0.161 4.3%, 0.362 8.9%, 0.591 13.7%, 0.851 19.7%, 1.086 25.6%,
+    1.208 30.2%, 1.283 34.4%, 1.312 37.9%, 1.316 40.6%, 1.293 44%, 1.235 48.3%,
+    1.121 55%, 1.031 62.1%, 0.989 69.2%, 0.976 78.5%, 0.997 91.6%, 1
   );
 }
 

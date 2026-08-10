@@ -1,4 +1,6 @@
 .alert {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -9,9 +11,38 @@
   background: rgba(20, 16, 30, 0.88);
   border: 2px solid #d0bcff;
   box-shadow: 0 0 32px rgba(208, 188, 255, 0.5);
-  animation: pop-in 0.3s ease-out;
+  animation: pop-in 0.4s var(--ease-spring-smooth);
   max-width: 520px;
   text-align: center;
+}
+
+/* Viewer-side polish only — strictly visual, no audio/haptics (those stay
+   scoped to the sender's own GurshaModal, see lib/ui-feedback.ts). One
+   sweep timed just after mount, not a looping shimmer — this plays once
+   per alert, the same way the entrance itself plays once. Lives on the
+   shared .alert base so every tier (including .banner) gets it for free
+   without per-tier duplication; overflow: hidden above is what keeps the
+   sweep clipped to the card instead of spilling past its rounded corners. */
+.alert::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(75deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  transform: translateX(-160%);
+  pointer-events: none;
+  animation: alert-shimmer 1.1s ease-out 0.2s 1;
+}
+
+@keyframes alert-shimmer {
+  from {
+    transform: translateX(-160%);
+  }
+  to {
+    transform: translateX(220%);
+  }
 }
 
 .headline {
@@ -40,11 +71,11 @@
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.85) translateY(-12px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateY(0);
   }
 }
 
@@ -66,7 +97,7 @@
    intentionally — tier weight should read at a glance. */
 .tierMulmul {
   animation:
-    pop-in 0.3s ease-out,
+    pop-in 0.4s var(--ease-spring-smooth),
     mulmul-float 2.2s ease-in-out infinite;
   border-color: #d8b26a;
   box-shadow: 0 0 24px rgba(216, 178, 106, 0.4);
@@ -85,7 +116,7 @@
    steam; .tierIcon's cup rocks gently rather than the whole card moving,
    since a full-card motion here would read the same as Mulmul's. */
 .tierBuna {
-  animation: pop-in 0.3s ease-out;
+  animation: pop-in 0.4s var(--ease-spring-smooth);
   border-color: #8b5a2b;
   box-shadow: 0 0 32px rgba(139, 90, 43, 0.55);
 }
