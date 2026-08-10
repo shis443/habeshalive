@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
+import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { adminRoutes } from "./admin/routes.js";
@@ -9,6 +10,7 @@ import { adRoutes } from "./ads/routes.js";
 import { announcementRoutes } from "./announcements/routes.js";
 import { authRoutes } from "./auth/routes.js";
 import { touchAndCheckSession } from "./auth/session-service.js";
+import { isNonSessionToken } from "./auth/token-guards.js";
 import { avatarRoutes } from "./avatars/routes.js";
 import { chatRoutes } from "./chat/routes.js";
 import { env } from "./common/env.js";
@@ -32,6 +34,8 @@ import { streamRoutes } from "./streams/routes.js";
 import { whepRoutes } from "./streams/whep-routes.js";
 import { subscriptionRoutes } from "./subscriptions/routes.js";
 import { pointsRoutes } from "./points/routes.js";
+import { remoteControlRelay } from "./remote-control/relay.js";
+import { remoteControlRoutes } from "./remote-control/routes.js";
 import { vodRoutes } from "./vods/routes.js";
 import { walletRoutes } from "./wallet/routes.js";
 
@@ -52,6 +56,9 @@ export function buildApp() {
   // layer's check is what makes the resulting AppError message clean and
   // consistent instead of a raw multipart-plugin error).
   app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  // remote-control/relay.ts's WS bridge — must be registered before that
+  // route is, same as every other Fastify plugin ordering constraint here.
+  app.register(websocket);
 
   // Shared Redis-backed store (ioredis) so limits are enforced across all
   // API instances, not per-process — must be registered before the route
@@ -92,20 +99,15 @@ export function buildApp() {
     skipOnError: true,
   });
 
-  // Two non-session token shapes are signed with the same secret as a
-  // real session token, so req.jwtVerify() accepts either just fine — this
-  // is what actually stops them from also working as one: a pending-2FA
-  // token (auth/totp-service.ts's PendingTotpClaims — issued mid-login to
-  // a user who's proven their password/OTP but still owes a TOTP code)
-  // and a PPV access token (streams/ppv-service.ts's PpvAccessClaims,
-  // {sub, streamId, ppvAccess: true, jti} — issued after a pay-per-view
-  // purchase). Explicitly clearing req.user (not just throwing inside
-  // this preHandler's own try/catch) matters because jwtVerify() already
-  // wrote req.user as a side effect before this check runs — any
-  // downstream handler reading req.user directly (not just trusting this
+  // Explicitly clearing req.user (not just throwing inside this
+  // preHandler's own try/catch) matters because jwtVerify() already wrote
+  // req.user as a side effect before this check runs — any downstream
+  // handler reading req.user directly (not just trusting this
   // preHandler's pass/fail) would otherwise still see a real-looking sub.
+  // See token-guards.ts's isNonSessionToken for what this actually checks
+  // and why.
   function rejectNonSessionToken(req: import("fastify").FastifyRequest): void {
-    if (req.user && ("pending2fa" in req.user || "ppvAccess" in req.user)) {
+    if (isNonSessionToken(req.user)) {
       req.user = undefined as unknown as typeof req.user;
       throw new Error("non-session token used as a session token");
     }
@@ -371,6 +373,8 @@ export function buildApp() {
   app.register(subscriptionRoutes, { prefix: "/subscriptions" });
   app.register(vodRoutes, { prefix: "/vods" });
   app.register(pointsRoutes, { prefix: "/points" });
+  app.register(remoteControlRoutes, { prefix: "/remote-control" });
+  app.register(remoteControlRelay, { prefix: "/remote-control" });
   app.register(dmcaRoutes, { prefix: "/dmca" });
 
   return app;

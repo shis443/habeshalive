@@ -12,6 +12,16 @@ const envSchema = z.object({
   // generated infra (e.g. `openssl rand -base64 32`), not something
   // requiring a business account.
   STREAM_KEY_ENCRYPTION_KEY: z.string().min(1),
+  // HMAC secret for remote-control/ticket-service.ts's short-lived
+  // browser-assistant tickets. Same tier as STREAM_KEY_ENCRYPTION_KEY
+  // above, not the empty-by-default Chapa/Stripe/etc. stub tier below —
+  // this is self-generated infra (e.g. `openssl rand -base64 32`), not a
+  // third-party credential that's genuinely still missing. Required with
+  // no default on purpose: a missing ticket secret must crash the API at
+  // boot, not silently mint unsigned (or worse, predictably-signed)
+  // tickets — "fails closed" only means something if it's enforced here,
+  // not left to whichever call site remembers to check.
+  REMOTE_CONTROL_TICKET_SECRET: z.string().min(32),
   // Host creators' OBS points at (RTMP ingest) and the host clients fetch
   // HLS playback from (SRS's HTTP server) — different in local dev
   // (localhost) vs. production (the real domain/IP), hence env-driven.

@@ -820,3 +820,96 @@ yet as of this writing (only 16.3.0 canary/preview builds) with a fixed
 actually invoked — but it's still an installed dependency, worth tracking
 until a real fix ships upstream, not silently ignored or falsely marked
 resolved.
+
+## Mobile repo canonicalization (2026-08-11)
+
+Three iOS snapshots existed at once: two zip exports (`birq-mobile-main`,
+`birq-ios-main`, differing by ~13 files — a few Swift files including
+`BirqWalletSettingsView.swift`, `Localizable.xcstrings`, the `.pbxproj`,
+a `.xcconfig`) and a third, separate checkout with real git history
+tracking two remotes (`birq-mobile` and, until this decision, `origin` →
+`birq-ios`) that was already ahead of both zips with uncommitted work
+(`BirqActiveDevicesSettingsView.swift`, `BirqTwoFactorSettingsView.swift`,
+a `BirqExplore` view, `RootTabView.swift`).
+
+**Resolved**: the git checkout (previously at `/Users/adem/Downloads/
+moblin-main`, referred to elsewhere as the "iOS repo" or "moblin-main")
+is canonical. Its `origin` remote has been repointed from
+`github.com/shis443/birq-ios.git` to `github.com/shis443/birq-mobile.git`
+— that GitHub repo, not `birq-ios`, is the project of record going
+forward. The two zip exports were superseded snapshots of the same
+project at an earlier point and have been archived (moved to
+`~/Downloads/_archived-mobile-snapshots/`, not deleted) rather than kept
+alongside the real checkout where they could be mistaken for a second
+source of truth.
+
+## Remote control (Phase 1, 2026-08-11)
+
+`Birq/RemoteControl/` (in the canonical iOS checkout above) implements
+two unrelated systems, easy to conflate:
+
+- `RemoteControlWeb.swift` + the SolidJS `WebRemoteControlFrontend` — a
+  LAN-only embedded web server on the phone (`websocketUrl()` resolves to
+  `window.location.hostname`), inherited from upstream Moblin, genuinely
+  unauthenticated by design. Only reachable by someone already on the
+  same network as the phone.
+- `RemoteControl.swift` / `RemoteControlAssistant.swift` — the
+  internet-capable three-tier protocol (Streamer ↔ Relay ↔ Assistant),
+  which already has real auth: SHA256 challenge/salt password handshake
+  (`remoteControlHashPassword`, `RemoteControlAssistant.swift`'s
+  `"Streamer sent wrong password"` handling).
+
+The gap is neither of those in isolation — it's that a **browser** has no
+way to join the second (already-authenticated) protocol as an Assistant
+without either learning the streamer's real password or the platform
+inventing a safe delegation mechanism. `apps/api/src/remote-control/`
+adds that mechanism:
+
+- `ticket-service.ts` — mints a short-lived (5 min), HMAC-signed,
+  single-streamer ticket in Redis after verifying the caller owns the
+  streamer (`creator_profiles.user_id`) or is a designated assistant
+  (`remote_control_assistants`, revocable). The streamer's real
+  `stream_key` never reaches the browser.
+- `routes.ts` — `POST /remote-control/ticket`, reached from the web app
+  via the existing `apps/web/app/api/backend/[...path]/route.ts` proxy
+  (no new web-side route needed — this is the same pattern every other
+  authenticated mutation already uses). Rate-limited per-user via the
+  existing `@fastify/rate-limit` + Redis convention
+  (`apps/api/src/auth/routes.ts`'s `keyByUser`).
+- `relay.ts` — the actual bridge, previously assumed to be an external
+  service that turned out not to exist anywhere in either repo. Built
+  internal to `apps/api` instead of depending on an unmanaged third
+  party: a Fastify WebSocket endpoint at `/remote-control/relay` that (a)
+  authenticates an incoming **streamer** (phone) connection via its
+  existing session JWT (`stream.birqToken` in the iOS model — the same
+  Keychain-stored, non-expiring-until-revoked credential every other
+  Birq API call from the phone already uses), verified the same way
+  `app.authenticate` verifies a normal HTTP request (signature,
+  non-session-token rejection via `auth/token-guards.ts`, live-session
+  check via `jti`) — **not** `stream_key`-based, despite an earlier pass
+  assuming it would be: grounding against the real iOS model
+  (`ModelBirq.swift`'s `completeBirqLogin`) found the phone never
+  actually retains its own raw `stream_key` as a separate value, it's
+  fetched once and immediately concatenated into the RTMP URL string and
+  discarded — `birqToken` needed no new secret and no new Swift-side
+  storage. And (b) authenticates an incoming **assistant** (browser)
+  connection via `validateTicket()` before bridging it to that
+  streamer's live socket. Assistant-scope connections get a hard
+  server-side command allowlist (`setScene`, `setMute`,
+  `setBitratePreset`, `setZoom`, `setTorch`, plus read-only
+  `getStatus`/`getSettings`) — `setLive`/`setRecord` and everything else
+  are owner-only, enforced at the relay, not just hidden in the UI.
+
+**Known limitation, not yet addressed**: the relay's streamer↔socket
+mapping is an in-process `Map`, correct only as long as `apps/api` runs
+as a single instance (`fly.toml`'s `min_machines_running = 1` is a floor,
+not a ceiling). If this ever scales horizontally, an assistant and its
+streamer landing on different machines would never find each other — the
+fix is a Redis-backed cross-instance registry (pub/sub or a shared
+socket-location table), not implemented here because it wasn't yet
+needed and would have been speculative complexity against a
+single-instance deployment that doesn't exist yet.
+
+The Swift side (`RemoteControlWeb.swift` accepting/forwarding a ticket,
+the phone dialing out to this new relay) is not yet implemented — see
+Phase 1.6 in the remote-control work plan.
