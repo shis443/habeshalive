@@ -150,7 +150,7 @@ import { fetchAuthed } from "./session";
 // logged in, is how the API resolves their "show sensitive content"
 // preference (see db/migrations/0012). Anonymous visitors still work
 // fine: fetchAuthed just omits the header when there's no session.
-export type LiveStreamSort = "viewers" | "recent" | "alphabetical";
+export type LiveStreamSort = "birqRank" | "viewers" | "recent" | "alphabetical";
 
 export async function getLiveStreams(
   filters: { category?: string; language?: string; tag?: string; sort?: LiveStreamSort } = {}

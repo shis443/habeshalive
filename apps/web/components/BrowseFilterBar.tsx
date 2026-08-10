@@ -6,6 +6,7 @@ import { useState } from "react";
 import styles from "./BrowseFilterBar.module.css";
 
 const SORTS = [
+  { value: "birqRank", label: "Birq Rank" },
   { value: "viewers", label: "Most viewers" },
   { value: "recent", label: "Recently started" },
   { value: "alphabetical", label: "A–Z" },

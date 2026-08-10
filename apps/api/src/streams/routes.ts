@@ -65,7 +65,7 @@ function extractKeyFromParam(param: string | undefined): string | null {
 }
 
 export const streamRoutes: FastifyPluginAsync = async (app) => {
-  const VALID_SORTS = new Set<LiveStreamSort>(["viewers", "recent", "alphabetical"]);
+  const VALID_SORTS = new Set<LiveStreamSort>(["birqRank", "viewers", "recent", "alphabetical"]);
   app.get<{ Querystring: { category?: string; language?: string; tag?: string; sort?: string } }>(
     "/live",
     { preHandler: app.tryAuthenticate },

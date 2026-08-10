@@ -240,7 +240,38 @@ export async function rotateStreamKey(userId: string): Promise<StreamKeyResponse
 // account preference opts in — see db/migrations/0012. NULL (anonymous or
 // not opted in) never matches the EXISTS, so those streams are simply
 // absent from the list rather than shown-but-blurred.
+// Birq Rank Score — the homepage default. (Viewers x1) + (Birr gifted x2)
+// + (new subscribers acquired during this stream x50). Adapted from the
+// original 4-term spec (Viewers, Santim gifted, Amole gifted, Gifted
+// subs): this platform's real currency is Birr/Santim only (no separate
+// Amole denomination — see money.ts), so the two gift terms collapse
+// into one, weighted in Birr (santim/100) rather than raw santim so a
+// single Kurt gift (1,000 ETB = 100,000 santim) scores comparably to a
+// few thousand viewers, not literally 200,000 points. "Gifted subs" has
+// no equivalent feature here (subscriptions.ts has no gift-a-sub path —
+// confirmed against the schema), so this substitutes new subscriptions
+// to the creator started during the stream's live window: a real,
+// stream-attributable monetization signal, same scoping as viewers/
+// gifts, rather than inventing a feature that doesn't exist to satisfy
+// the original wording literally.
+const BIRQ_RANK_SCORE_EXPR = `(
+  COALESCE(s.peak_viewers, 0)
+  + COALESCE((
+      SELECT SUM(gt.price_santim * gs.quantity)
+      FROM gifts_sent gs JOIN gift_types gt ON gt.id = gs.gift_type_id
+      WHERE gs.stream_id = s.id
+    ), 0) / 100.0 * 2
+  + COALESCE((
+      SELECT SUM(d.amount_santim) FROM donations d WHERE d.stream_id = s.id
+    ), 0) / 100.0 * 2
+  + (
+      SELECT COUNT(*) FROM subscriptions sub
+      WHERE sub.creator_id = s.creator_id AND sub.started_at >= s.started_at
+    ) * 50
+)`;
+
 const SORT_CLAUSES = {
+  birqRank: `${BIRQ_RANK_SCORE_EXPR} DESC NULLS LAST, s.started_at DESC`,
   viewers: "s.peak_viewers DESC NULLS LAST, s.started_at DESC",
   recent: "s.started_at DESC",
   alphabetical: "s.title ASC",
@@ -254,7 +285,7 @@ export async function listLiveStreams(filters: {
   viewerId?: string;
   sort?: LiveStreamSort;
 } = {}): Promise<StreamDetail[]> {
-  const sortClause = SORT_CLAUSES[filters.sort ?? "viewers"];
+  const sortClause = SORT_CLAUSES[filters.sort ?? "birqRank"];
   const { rows } = await pool.query<StreamRow>(
     `SELECT ${STREAM_SELECT_COLUMNS}
      FROM streams s

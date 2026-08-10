@@ -8,7 +8,7 @@ import { TopNav } from "@/components/TopNav";
 import { getCurrentUser, getLiveStreams, type LiveStreamSort } from "@/lib/api";
 import styles from "./page.module.css";
 
-const VALID_SORTS = new Set(["viewers", "recent", "alphabetical"]);
+const VALID_SORTS = new Set(["birqRank", "viewers", "recent", "alphabetical"]);
 
 export default async function BrowsePage({
   searchParams,
@@ -26,7 +26,7 @@ export default async function BrowsePage({
   const category = params.category ?? "";
   const language = params.language ?? "";
   const tag = params.tag ?? "";
-  const sort = VALID_SORTS.has(params.sort ?? "") ? (params.sort as LiveStreamSort) : "viewers";
+  const sort = VALID_SORTS.has(params.sort ?? "") ? (params.sort as LiveStreamSort) : "birqRank";
 
   const [user, allStreams, streams] = await Promise.all([
     getCurrentUser(),
