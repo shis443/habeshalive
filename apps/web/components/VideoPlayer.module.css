@@ -47,13 +47,24 @@
   bottom: 0;
   padding: var(--space-1) var(--space-2) var(--space-2);
   background: linear-gradient(to top, rgba(0, 0, 0, 0.75), transparent);
-  opacity: 0;
-  transition: opacity 0.15s;
+  opacity: 1;
+  transition: opacity 0.4s var(--ease-spring-smooth);
 }
 
-.wrap:hover .controls,
-.wrap:focus-within .controls {
+/* Driven by VideoPlayer.tsx's mousemove/inactivity-timer state, not pure
+   CSS hover — auto-hide only during actual playback needs JS to know
+   whether the video is playing, which :hover alone can't express. */
+.controlsHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Permanent override: a keyboard user tabbed onto a control (e.g. the
+   volume slider) never has controls fade out from under them, even with
+   zero mouse movement. */
+.wrap:focus-within .controlsHidden {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .bottomRow {
@@ -145,6 +156,30 @@
 
 .spacer {
   flex: 1;
+}
+
+.unmuteBanner {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  z-index: 5;
+}
+
+.unmuteBanner:hover {
+  background: rgba(0, 0, 0, 0.9);
 }
 
 .offline {

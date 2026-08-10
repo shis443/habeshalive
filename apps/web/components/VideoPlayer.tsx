@@ -65,6 +65,32 @@ const MIN_DVR_RANGE_SECONDS = 4;
 // on every tick even while genuinely caught up.
 const LIVE_EDGE_THRESHOLD_SECONDS = 3;
 
+// How long controls stay up after the last mouse movement, once playback
+// is actually active — see the mousemove-driven effect below.
+const CONTROLS_HIDE_DELAY_MS = 2500;
+
+// localStorage key for the viewer's volume/mute preference — colon
+// convention matches useChatSettings.ts/AnnouncementBanner.tsx, not the
+// older dash-separated keys (useTheme.ts/useLanguage.ts).
+const VOLUME_STORAGE_KEY = "birq:player-volume";
+
+// Bounded silent-retry budget for hls.js fatal errors that aren't the
+// "no stream yet" case (a real mid-stream network/decode drop) — hls.js's
+// own documented recovery calls (startLoad/recoverMediaError) before
+// surfacing an error, same "don't show an error for something that
+// self-heals" posture as the isNoStreamYet branch already had. Bounded so
+// a permanently-broken stream still reaches the error overlay eventually
+// instead of retrying forever in silence.
+const MAX_SILENT_HLS_RECONNECT_ATTEMPTS = 3;
+
+// Grace window after WHEP's ICE state drops to "disconnected" (which,
+// per spec, usually precedes "failed" and often self-heals as the
+// browser's own STUN connectivity checks recover the existing candidate
+// pair) before treating it as a real drop and falling back to HLS. Only
+// applies post-connect — the initial-connect path already has its own
+// WHEP_CONNECT_TIMEOUT_MS/ICE-failed handling above.
+const ICE_DISCONNECT_GRACE_MS = 4000;
+
 type DvrRange = { start: number; end: number };
 
 export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: string | null }) {
@@ -87,9 +113,35 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
   // include segments not yet downloaded; native Safari: video.seekable,
   // which Safari's own native HLS stack populates directly).
   const [dvrRange, setDvrRange] = useState<DvrRange | null>(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setPipSupported(typeof document !== "undefined" && document.pictureInPictureEnabled);
+  }, []);
+
+  // Volume/mute persistence — restores the viewer's last preference on
+  // mount. The <video> element itself always starts muted (see its own
+  // comment below on why that's not a preference but an autoplay-policy
+  // requirement); this runs once the ref exists and overrides that
+  // default with whatever was last saved, same "read after mount" timing
+  // as useLanguage.ts's own comment about avoiding a server/client
+  // mismatch.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      const stored = window.localStorage.getItem(VOLUME_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as { volume: number; muted: boolean };
+      const restoredVolume = Math.min(1, Math.max(0, parsed.volume));
+      video.volume = restoredVolume;
+      video.muted = parsed.muted;
+      setVolume(restoredVolume);
+      setMuted(parsed.muted);
+    } catch {
+      // Corrupt/absent storage — video keeps its muted-autoplay default.
+    }
   }, []);
 
   // Module 4 — Watch-to-Earn. Fires once on mount, then every
@@ -144,6 +196,7 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
     let iceConnected = false;
     let firstFrameSeen = false;
     let hardTimeout: ReturnType<typeof setTimeout> | undefined;
+    let disconnectGraceTimer: ReturnType<typeof setTimeout> | undefined;
 
     function maybeMarkPlaying() {
       if (iceConnected && firstFrameSeen && !cancelled) setState("playing");
@@ -182,11 +235,35 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
           if (iceState === "connected" || iceState === "completed") {
             iceConnected = true;
             if (hardTimeout) clearTimeout(hardTimeout);
+            if (disconnectGraceTimer) {
+              clearTimeout(disconnectGraceTimer);
+              disconnectGraceTimer = undefined;
+            }
             maybeMarkPlaying();
+          } else if (iceState === "disconnected") {
+            // Only meaningful once already connected — during the initial
+            // connect this state doesn't fire (goes straight from "new"/
+            // "checking" to "connected" or "failed"). A brief network blip
+            // (wifi roam, momentary packet loss) often self-heals from here
+            // with no action needed — the browser keeps sending STUN
+            // connectivity checks on the existing candidate pair. Give it a
+            // silent grace window (state is left untouched, same "playing"
+            // it already was) before treating it as a real drop; the branch
+            // above clears this timer the instant it recovers.
+            if (iceConnected && !disconnectGraceTimer) {
+              disconnectGraceTimer = setTimeout(() => {
+                disconnectGraceTimer = undefined;
+                fallbackToHls();
+              }, ICE_DISCONNECT_GRACE_MS);
+            }
           } else if (iceState === "failed") {
             // Instant fallback — don't wait for WHEP_CONNECT_TIMEOUT_MS
             // once ICE has definitively failed rather than merely not
             // having resolved yet.
+            if (disconnectGraceTimer) {
+              clearTimeout(disconnectGraceTimer);
+              disconnectGraceTimer = undefined;
+            }
             fallbackToHls();
           }
         });
@@ -201,6 +278,7 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
     return () => {
       cancelled = true;
       if (hardTimeout) clearTimeout(hardTimeout);
+      if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
       video.removeEventListener("loadeddata", onFirstFrame);
       connection?.close().catch(() => {});
     };
@@ -217,6 +295,10 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
 
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let cancelled = false;
+    // Reset whenever LEVEL_UPDATED confirms real forward progress (a
+    // playlist refresh actually landed) — only counts consecutive
+    // failures since the last time playback was genuinely healthy.
+    let reconnectAttempts = 0;
 
     // Native HLS is only reliably well-supported when paired with
     // ManagedMediaSource (Safari on iOS 17.1+) — per hls.js's current
@@ -331,6 +413,7 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
     // demand, same mechanism as any VOD seek), so the scrubber's range
     // needs to reflect the manifest, not the download cache.
     hls.on(Hls.Events.LEVEL_UPDATED, (_event, data) => {
+      reconnectAttempts = 0;
       setDvrRange({ start: data.details.fragmentStart, end: data.details.edge });
     });
     hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -355,9 +438,30 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
             attach();
           }
         }, RETRY_INTERVAL_MS);
-      } else {
-        setState("error");
+        return;
       }
+
+      // Mid-stream drop (already-live playback lost the connection or hit
+      // a decode error) — hls.js's own documented recovery calls before
+      // giving up, same "don't show an error for something that
+      // self-heals" posture as the isNoStreamYet branch above. Silent:
+      // `state` is left untouched (still "playing") so a viewer never
+      // sees an overlay flash for a drop that recovers within a second or
+      // two. Bounded by MAX_SILENT_HLS_RECONNECT_ATTEMPTS so a genuinely
+      // broken stream still reaches the error overlay instead of retrying
+      // forever.
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && reconnectAttempts < MAX_SILENT_HLS_RECONNECT_ATTEMPTS) {
+        reconnectAttempts += 1;
+        hls.startLoad();
+        return;
+      }
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR && reconnectAttempts < MAX_SILENT_HLS_RECONNECT_ATTEMPTS) {
+        reconnectAttempts += 1;
+        hls.recoverMediaError();
+        return;
+      }
+
+      setState("error");
     });
 
     attach();
@@ -424,6 +528,16 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
     video.currentTime = dvrRange.end;
   }
 
+  // Best-effort — storage can throw (private browsing / quota); losing a
+  // volume preference isn't worth surfacing as an error.
+  function persistVolumePreference(nextVolume: number, nextMuted: boolean) {
+    try {
+      window.localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify({ volume: nextVolume, muted: nextMuted }));
+    } catch {
+      // See function comment.
+    }
+  }
+
   function toggleMute() {
     const video = videoRef.current;
     if (!video) return;
@@ -431,10 +545,13 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
     setMuted(video.muted);
     // Unmuting at 0 volume would just be silent again — give it an
     // audible starting point, same as every comparable player does.
+    let nextVolume = volume;
     if (!video.muted && volume === 0) {
       video.volume = 1;
       setVolume(1);
+      nextVolume = 1;
     }
+    persistVolumePreference(nextVolume, video.muted);
   }
 
   function handleVolumeChange(next: number) {
@@ -444,6 +561,7 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
     video.muted = next === 0;
     setVolume(next);
     setMuted(next === 0);
+    persistVolumePreference(next, next === 0);
   }
 
   async function toggleFullscreen() {
@@ -469,6 +587,82 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
       // an error state, the button just stays clickable to retry.
     }
   }
+
+  // Document-wide so the hotkeys work without requiring the player itself
+  // to hold DOM focus (matches YouTube/Twitch), guarded by skipping
+  // whenever a text-input-like element is focused — ChatPanel's message
+  // box, GurshaModal's fields, the header search, etc. — so typing
+  // "m"/"f"/"k"/space anywhere on the page never gets hijacked as a
+  // player hotkey. Depends on the handler functions themselves rather
+  // than duplicating their logic, so this and the click handlers can
+  // never drift out of sync; they're plain functions (not memoized),
+  // same as every other handler in this file, so the effect just
+  // re-subscribes on the renders where that matters.
+  useEffect(() => {
+    if (!src) return;
+
+    function isTypingTarget(el: Element | null): boolean {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el as HTMLElement).isContentEditable;
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(document.activeElement)) return;
+      switch (e.key) {
+        case " ":
+        case "k":
+        case "K":
+          // Stops the page itself from scrolling on Space when nothing
+          // else has focus — the default browser behavior here.
+          e.preventDefault();
+          togglePlay();
+          break;
+        case "m":
+        case "M":
+          toggleMute();
+          break;
+        case "f":
+        case "F":
+          toggleFullscreen();
+          break;
+        default:
+          return;
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [src, togglePlay, toggleMute, toggleFullscreen]);
+
+  // Controls auto-hide — only while actually playing (paused/buffering/
+  // error states keep controls up, same as every comparable player).
+  // mousemove/mouseenter both show instantly and reschedule the hide;
+  // :focus-within in the CSS is a separate, permanent override so a
+  // keyboard user tabbed onto e.g. the volume slider never has controls
+  // fade out from under them even with no mouse movement at all.
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    function showControls() {
+      setControlsVisible(true);
+      if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
+      if (state === "playing" && playing) {
+        hideControlsTimerRef.current = setTimeout(() => setControlsVisible(false), CONTROLS_HIDE_DELAY_MS);
+      }
+    }
+
+    showControls();
+    wrap.addEventListener("mousemove", showControls);
+    wrap.addEventListener("mouseenter", showControls);
+    return () => {
+      wrap.removeEventListener("mousemove", showControls);
+      wrap.removeEventListener("mouseenter", showControls);
+      if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
+    };
+  }, [state, playing]);
 
   if (!src) {
     return (
@@ -509,7 +703,17 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
           </span>
         </div>
       )}
-      <div className={styles.controls}>
+      {/* Shown whenever actually muted during playback, regardless of why
+          (autoplay-policy default on first visit, or a restored "last
+          time I left muted" preference) — same universal treatment every
+          comparable player uses, since the browser gives no way to
+          distinguish "policy forced this" from "the viewer chose this". */}
+      {state === "playing" && muted && (
+        <button type="button" className={styles.unmuteBanner} onClick={toggleMute}>
+          <MutedIcon /> Click to Unmute
+        </button>
+      )}
+      <div className={`${styles.controls} ${controlsVisible ? "" : styles.controlsHidden}`}>
         {/* Only once the DVR window is known and wide enough to be useful
             (see MIN_DVR_RANGE_SECONDS) — a scrubber with essentially zero
             range in the first couple seconds of a stream is worse than no
