@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: habeshalive
-      POSTGRES_PASSWORD: habeshalive
-      POSTGRES_DB: habeshalive
+      POSTGRES_USER: birq
+      POSTGRES_PASSWORD: birq
+      POSTGRES_DB: birq
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U habeshalive"]
+      test: ["CMD-SHELL", "pg_isready -U birq"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,11 +25,11 @@ services:
     build:
       context: ./infra/backup
     environment:
-      DATABASE_URL: postgres://habeshalive:habeshalive@postgres:5432/habeshalive
+      DATABASE_URL: postgres://birq:birq@postgres:5432/birq
       BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT}
       BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID}
       BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY}
-      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-habeshalive-backups}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-birq-backups}
       BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-2}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
     depends_on:
@@ -112,7 +112,7 @@ services:
       # hostnames. SRS_*_HOST: addresses external clients (OBS, browsers)
       # actually connect to, so localhost (mapped by SRS's published ports)
       # even from inside this container — never the internal "srs" hostname.
-      DATABASE_URL: postgres://habeshalive:habeshalive@postgres:5432/habeshalive
+      DATABASE_URL: postgres://birq:birq@postgres:5432/birq
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
       VIDEO_WEBHOOK_SECRET: ${VIDEO_WEBHOOK_SECRET:-dev-only-change-me}
@@ -159,7 +159,7 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     environment:
-      DATA_SOURCE_NAME: postgresql://habeshalive:habeshalive@postgres:5432/habeshalive?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://birq:birq@postgres:5432/birq?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy

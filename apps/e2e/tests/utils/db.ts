@@ -1,7 +1,7 @@
 import pg from "pg";
 
 const connectionString =
-  process.env.DATABASE_URL ?? "postgres://habeshalive:habeshalive@localhost:5432/habeshalive";
+  process.env.DATABASE_URL ?? "postgres://birq:birq@localhost:5432/birq";
 
 // Direct DB access from tests is deliberate here, not a shortcut around
 // the API: promoting a user to admin has no (and shouldn't have one

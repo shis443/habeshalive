@@ -15,7 +15,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # apps/api and apps/web both import compiled @habeshalive/shared
+      # apps/api and apps/web both import compiled @birq/shared
       # (its package.json points at dist/, not src/ — see the earlier
       # incident this caused: a stale dist/ silently hid real type errors
       # until this was rebuilt), so it must exist before typechecking them.
@@ -28,17 +28,17 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: habeshalive
-          POSTGRES_PASSWORD: habeshalive
-          POSTGRES_DB: habeshalive
+          POSTGRES_USER: birq
+          POSTGRES_PASSWORD: birq
+          POSTGRES_DB: birq
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U habeshalive"
+          --health-cmd "pg_isready -U birq"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://habeshalive:habeshalive@localhost:5432/habeshalive
+      DATABASE_URL: postgres://birq:birq@localhost:5432/birq
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -87,7 +87,7 @@ jobs:
 
       - run: node db/migrate.mjs
         env:
-          DATABASE_URL: postgres://habeshalive:habeshalive@localhost:5432/habeshalive
+          DATABASE_URL: postgres://birq:birq@localhost:5432/birq
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

@@ -2,12 +2,12 @@
 set -eu
 
 mc alias set backupstore "$BACKUP_S3_ENDPOINT" "$BACKUP_S3_ACCESS_KEY_ID" "$BACKUP_S3_SECRET_ACCESS_KEY" >/dev/null
-mc mb --ignore-existing "backupstore/${BACKUP_S3_BUCKET:-habeshalive-backups}" >/dev/null
+mc mb --ignore-existing "backupstore/${BACKUP_S3_BUCKET:-birq-backups}" >/dev/null
 
 run_backup() {
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
-  file="/tmp/habeshalive-${ts}.sql.gz"
-  bucket="${BACKUP_S3_BUCKET:-habeshalive-backups}"
+  file="/tmp/birq-${ts}.sql.gz"
+  bucket="${BACKUP_S3_BUCKET:-birq-backups}"
   echo "[backup] ${ts} starting pg_dump -> ${file}"
   pg_dump "$DATABASE_URL" | gzip > "$file"
   mc cp "$file" "backupstore/${bucket}/$(basename "$file")"

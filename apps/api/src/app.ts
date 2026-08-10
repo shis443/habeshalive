@@ -85,7 +85,7 @@ export function buildApp() {
   // safer default than silently allowing unlimited OTP sends/brute force.
   app.register(rateLimit, {
     redis,
-    nameSpace: "habeshalive-rl:",
+    nameSpace: "birq-rl:",
     global: true,
     max: 2000,
     timeWindow: "1 minute",

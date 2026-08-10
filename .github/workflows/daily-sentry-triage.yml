@@ -62,7 +62,7 @@ jobs:
         if: steps.sentry.outputs.issue_count != '0'
         run: |
           {
-            echo "New Sentry issues from the last 24h (habeshalive production/staging):"
+            echo "New Sentry issues from the last 24h (birq production/staging):"
             echo ""
             jq -r '.[] | "- **\(.title)** (\(.count) events) — culprit: \(.culprit // "unknown") — \(.permalink)"' sentry-issues.json
             echo ""
