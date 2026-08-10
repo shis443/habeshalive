@@ -41,6 +41,7 @@
 }
 
 .closeButton {
+  position: relative;
   width: 32px;
   height: 32px;
   display: flex;
@@ -48,6 +49,14 @@
   justify-content: center;
   border-radius: 50%;
   color: var(--on-surface-variant);
+}
+
+/* Invisible hit-area expansion (not a visual resize) — 6px inset reaches
+   the 44x44pt touch-target minimum. */
+.closeButton::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
 }
 
 .closeButton:hover {

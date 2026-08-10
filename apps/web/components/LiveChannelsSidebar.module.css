@@ -35,6 +35,7 @@
 }
 
 .collapseButton {
+  position: relative;
   width: 28px;
   height: 28px;
   flex-shrink: 0;
@@ -43,6 +44,15 @@
   justify-content: center;
   border-radius: 50%;
   color: var(--on-surface-variant);
+}
+
+/* Invisible hit-area expansion (not a visual resize) — 8px inset reaches
+   the 44x44pt touch-target minimum without enlarging the icon itself,
+   preserving this rail's intentionally dense layout. */
+.collapseButton::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
 }
 
 .collapseButton:hover {

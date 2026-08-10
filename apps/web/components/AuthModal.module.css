@@ -36,6 +36,14 @@
   background: var(--surface-container-highest);
 }
 
+/* Invisible hit-area expansion (not a visual resize) — 6px inset reaches
+   the 44x44pt touch-target minimum. */
+.closeButton::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
 .formPanel {
   flex: 1;
   min-width: 0;

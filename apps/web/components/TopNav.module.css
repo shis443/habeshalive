@@ -23,6 +23,7 @@
 }
 
 .iconButton {
+  position: relative;
   width: 32px;
   height: 32px;
   display: flex;
@@ -31,6 +32,15 @@
   border-radius: 50%;
   color: var(--on-surface-variant);
   flex-shrink: 0;
+}
+
+/* Invisible hit-area expansion, not a visual resize — 32px box, 6px inset
+   on each side reaches the 44x44pt touch-target minimum without changing
+   the icon's rendered size or the header's density. */
+.iconButton::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
 }
 
 .iconButton:hover {
@@ -149,9 +159,15 @@
   white-space: nowrap;
 }
 
+/* Always used together with .iconButton (see TopNav.tsx) — that class
+   already supplies position: relative and the ::before hit-area
+   expansion. No overflow: hidden here (unlike before) — it would clip
+   that expanded pseudo-element right back down to the visible 28px
+   circle, since both classes land on the same physical button. Not
+   needed anyway: .avatarImg's own border-radius: 50% already clips the
+   image to a circle without help from a parent's overflow. */
 .avatarTrigger {
   padding: 0;
-  overflow: hidden;
 }
 
 .avatarImg {
@@ -226,7 +242,30 @@
   padding: var(--space-2) 0;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 60;
-  transition: all 250ms var(--ease-spring-smooth);
+  /* Right-anchored by default (matches the "more"/settings dropdowns);
+     .dropdownLeft overrides this for the one left-anchored menu. Scales
+     from its actual trigger corner, not the center — a dropdown is
+     anchored UI, not a modal (see component-patterns.md's own
+     distinction between the two). */
+  transform-origin: top right;
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 250ms var(--ease-spring-smooth),
+    transform 250ms var(--ease-spring-smooth);
+
+  /* This element is conditionally *mounted* in TopNav.tsx (not an
+     always-present node toggled via a class), so without @starting-style
+     there is nothing for a transition to animate from — the old
+     `transition: all` was already inert for that reason, not just an
+     anti-pattern for using `all`. @starting-style gives it a real "from"
+     state on insertion. Progressive enhancement: browsers without
+     @starting-style support just show the dropdown immediately, same as
+     before this change — no regression either way. */
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.88);
+  }
 }
 
 /* The "More" dropdown's trigger sits at the far left of the header — a
@@ -237,6 +276,7 @@
 .dropdownLeft {
   right: auto;
   left: 0;
+  transform-origin: top left;
 }
 
 .dropdownWide {
@@ -319,7 +359,7 @@
   background: var(--surface-container-highest);
   position: relative;
   flex-shrink: 0;
-  transition: all 250ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: background-color 250ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .toggleOn {
@@ -334,7 +374,7 @@
   height: 16px;
   border-radius: 50%;
   background: var(--on-background);
-  transition: all 250ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .toggleKnobOn {
