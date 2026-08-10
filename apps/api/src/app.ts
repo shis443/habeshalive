@@ -270,6 +270,41 @@ export function buildApp() {
     };
   });
 
+  // API contract standardization: every response (success or error) is
+  // { success, data, error }, wrapped centrally here rather than at each
+  // of the ~20 route files — so route handlers and setErrorHandler below
+  // keep returning/sending whatever they already did, and this is the one
+  // place that knows about the envelope shape. Two carve-outs:
+  //  - non-JSON responses (the /metrics Prometheus text export, the SVG
+  //    thumbnail placeholder) — wrapping those in a JSON envelope would
+  //    corrupt them, not just be redundant.
+  //  - /webhooks/* routes (Chapa/Stripe/PayPal/SRS callbacks) — these are
+  //    read by external services that only know their own provider's
+  //    expected response shape, not ours; wrapping would be a response
+  //    format neither provider's webhook handler expects.
+  const WEBHOOK_PATH_SEGMENT = "/webhooks/";
+  app.addHook("preSerialization", async (req, reply, payload) => {
+    const contentType = reply.getHeader("content-type");
+    if (contentType && !String(contentType).includes("application/json")) return payload;
+    if (req.url.includes(WEBHOOK_PATH_SEGMENT)) return payload;
+
+    if (reply.statusCode >= 400) {
+      let message = "request_failed";
+      if (payload && typeof payload === "object") {
+        const p = payload as Record<string, unknown>;
+        if (Array.isArray(p.issues)) {
+          message = (p.issues as { path: (string | number)[]; message: string }[])
+            .map((i) => `${i.path.join(".")}: ${i.message}`)
+            .join("; ");
+        } else if (typeof p.error === "string") {
+          message = p.error;
+        }
+      }
+      return { success: false, data: null, error: message };
+    }
+    return { success: true, data: payload, error: null };
+  });
+
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ZodError) {
       reply.status(400).send({ error: "validation_error", issues: err.issues });

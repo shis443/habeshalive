@@ -137,6 +137,7 @@ import {
   type UserListItem,
   type UserRank,
   type Vod,
+  type ApiEnvelope,
   type WalletBalance,
 } from "@birq/shared";
 // Every function in this file runs server-side only (Server Components), so
@@ -144,6 +145,23 @@ import {
 // API_BASE_URL when containerized.
 import { API_INTERNAL_URL } from "./config";
 import { fetchAuthed } from "./session";
+
+// Unwraps apps/api's { success, data, error } envelope (see app.ts's
+// preSerialization hook) — every call site in this file that used to do
+// `await res.json()` now does `await unwrapData(res)` instead, which then
+// gets passed to the same Zod schema as before (the schemas validate the
+// actual content shape, not the envelope, so nothing downstream changes).
+// Deliberately throws rather than returning something schema.parse() would
+// choke on anyway — a thrown Error here surfaces as a 500 from whatever
+// Server Component called this, same failure visibility as a bad
+// `res.json()` parse would have had before this existed.
+async function unwrapData(res: Response): Promise<unknown> {
+  const body = (await res.json()) as ApiEnvelope<unknown>;
+  if (!body.success) {
+    throw new Error(body.error ?? "API request failed");
+  }
+  return body.data;
+}
 
 // Uses fetchAuthed (not a plain fetch) even though this route never
 // requires auth — an Authorization header, when a visitor happens to be
@@ -174,7 +192,7 @@ export async function getLiveStreams(
     console.error(`Failed to load live streams (${res.status})`);
     return [];
   }
-  const data = await res.json();
+  const data = await unwrapData(res);
   return liveStreamSchema.array().parse(data);
 }
 
@@ -193,7 +211,7 @@ export async function getLiveStreamByUsername(username: string, ticket?: string)
     console.error(`Failed to load stream (${res.status})`);
     return null;
   }
-  const data = await res.json();
+  const data = await unwrapData(res);
   return streamDetailSchema.parse(data);
 }
 
@@ -202,7 +220,7 @@ export async function getLiveStreamByUsername(username: string, ticket?: string)
 export async function getSquadForUsername(username: string): Promise<Squad | null> {
   const res = await fetchAuthed(`/streams/username/${encodeURIComponent(username)}/squad`);
   if (!res.ok) return null;
-  const data = await res.json();
+  const data = await unwrapData(res);
   if (!data) return null;
   return squadSchema.parse(data);
 }
@@ -213,7 +231,7 @@ export async function getStreamActivity(streamId: string): Promise<StreamActivit
     console.error(`Failed to load stream activity (${res.status})`);
     return { giftsCount: 0, activeSubscribers: 0, recentEvents: [] };
   }
-  return streamActivitySchema.parse(await res.json());
+  return streamActivitySchema.parse(await unwrapData(res));
 }
 
 // Same fetchAuthed reasoning as getLiveStreams above.
@@ -226,7 +244,7 @@ export async function search(query: string): Promise<SearchResults> {
     console.error(`Search failed (${res.status})`);
     return { streams: [], creators: [] };
   }
-  return searchResultsSchema.parse(await res.json());
+  return searchResultsSchema.parse(await unwrapData(res));
 }
 
 export async function getGiftTypes(): Promise<GiftType[]> {
@@ -235,7 +253,7 @@ export async function getGiftTypes(): Promise<GiftType[]> {
     console.error(`Failed to load gift types (${res.status})`);
     return [];
   }
-  return giftTypeSchema.array().parse(await res.json());
+  return giftTypeSchema.array().parse(await unwrapData(res));
 }
 
 // Grouped-by-tier shape for GurshaModal's tier-then-theme selector — see
@@ -246,7 +264,7 @@ export async function getGiftTiers(): Promise<GiftTier[]> {
     console.error(`Failed to load gift tiers (${res.status})`);
     return [];
   }
-  return giftTierSchema.array().parse(await res.json());
+  return giftTierSchema.array().parse(await unwrapData(res));
 }
 
 export async function getSubscriptionTiers(): Promise<SubscriptionTier[]> {
@@ -255,7 +273,7 @@ export async function getSubscriptionTiers(): Promise<SubscriptionTier[]> {
     console.error(`Failed to load subscription tiers (${res.status})`);
     return [];
   }
-  return subscriptionTierSchema.array().parse(await res.json());
+  return subscriptionTierSchema.array().parse(await unwrapData(res));
 }
 
 // Authenticated reads for Server Components — return null on any non-200
@@ -274,7 +292,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     console.error(`Failed to load current user (${res.status})`);
     return null;
   }
-  return authUserSchema.parse(await res.json());
+  return authUserSchema.parse(await unwrapData(res));
 }
 
 export async function getFollowedCreators(): Promise<CreatorSearchResult[] | null> {
@@ -284,7 +302,7 @@ export async function getFollowedCreators(): Promise<CreatorSearchResult[] | nul
     console.error(`Failed to load followed creators (${res.status})`);
     return null;
   }
-  return creatorSearchResultSchema.array().parse(await res.json());
+  return creatorSearchResultSchema.array().parse(await unwrapData(res));
 }
 
 export async function getStreamKey(): Promise<StreamKeyResponse | null> {
@@ -294,7 +312,7 @@ export async function getStreamKey(): Promise<StreamKeyResponse | null> {
     console.error(`Failed to load stream key (${res.status})`);
     return null;
   }
-  return streamKeySchema.parse(await res.json());
+  return streamKeySchema.parse(await unwrapData(res));
 }
 
 // Independent of live status, unlike getLiveStreamByUsername — see
@@ -309,7 +327,7 @@ export async function getCreatorProfile(username: string): Promise<CreatorProfil
     console.error(`Failed to load creator profile for ${username} (${res.status})`);
     return null;
   }
-  return creatorProfileSchema.parse(await res.json());
+  return creatorProfileSchema.parse(await unwrapData(res));
 }
 
 export async function getVods(username: string): Promise<Vod[]> {
@@ -318,7 +336,7 @@ export async function getVods(username: string): Promise<Vod[]> {
     console.error(`Failed to load VODs for ${username} (${res.status})`);
     return [];
   }
-  return vodSchema.array().parse(await res.json());
+  return vodSchema.array().parse(await unwrapData(res));
 }
 
 // Module 4 — degrade to an empty list on any error, same posture as
@@ -327,7 +345,7 @@ export async function getVods(username: string): Promise<Vod[]> {
 export async function getClipsForUsername(username: string): Promise<Clip[]> {
   const res = await fetch(`${API_INTERNAL_URL}/vods/${encodeURIComponent(username)}/clips`, { cache: "no-store" });
   if (!res.ok) return [];
-  return clipSchema.array().parse(await res.json());
+  return clipSchema.array().parse(await unwrapData(res));
 }
 
 // Authenticated — includes drafts, unlike getVods above (public, published-
@@ -338,7 +356,7 @@ export async function getMyVods(): Promise<Vod[]> {
     console.error(`Failed to load own VODs (${res.status})`);
     return [];
   }
-  return vodSchema.array().parse(await res.json());
+  return vodSchema.array().parse(await unwrapData(res));
 }
 
 // Creator Dashboard's Community > Followers.
@@ -348,7 +366,7 @@ export async function getMyFollowers(): Promise<FollowerListItem[]> {
     console.error(`Failed to load followers (${res.status})`);
     return [];
   }
-  return followerListItemSchema.array().parse(await res.json());
+  return followerListItemSchema.array().parse(await unwrapData(res));
 }
 
 // Creator Dashboard's Community > My Assigned Roles.
@@ -358,7 +376,7 @@ export async function getChannelsIModerate(): Promise<ModeratedChannel[]> {
     console.error(`Failed to load moderated channels (${res.status})`);
     return [];
   }
-  return moderatedChannelSchema.array().parse(await res.json());
+  return moderatedChannelSchema.array().parse(await unwrapData(res));
 }
 
 export async function getStreamDefaults(): Promise<StreamDefaults | null> {
@@ -367,7 +385,7 @@ export async function getStreamDefaults(): Promise<StreamDefaults | null> {
     console.error(`Failed to load stream defaults (${res.status})`);
     return null;
   }
-  return streamDefaultsSchema.parse(await res.json());
+  return streamDefaultsSchema.parse(await unwrapData(res));
 }
 
 export async function getWalletBalance(): Promise<WalletBalance | null> {
@@ -377,13 +395,13 @@ export async function getWalletBalance(): Promise<WalletBalance | null> {
     console.error(`Failed to load balance (${res.status})`);
     return null;
   }
-  return walletBalanceSchema.parse(await res.json());
+  return walletBalanceSchema.parse(await unwrapData(res));
 }
 
 export async function getPointsBalance(): Promise<number> {
   const res = await fetchAuthed("/points/balance");
   if (!res.ok) return 0;
-  return pointsBalanceSchema.parse(await res.json()).balance;
+  return pointsBalanceSchema.parse(await unwrapData(res)).balance;
 }
 
 export async function getEarningsThisMonth(): Promise<EarningsThisMonth | null> {
@@ -393,7 +411,7 @@ export async function getEarningsThisMonth(): Promise<EarningsThisMonth | null> 
     console.error(`Failed to load earnings (${res.status})`);
     return null;
   }
-  return earningsThisMonthSchema.parse(await res.json());
+  return earningsThisMonthSchema.parse(await unwrapData(res));
 }
 
 export async function getCreatorStats(): Promise<CreatorStats | null> {
@@ -403,7 +421,7 @@ export async function getCreatorStats(): Promise<CreatorStats | null> {
     console.error(`Failed to load creator stats (${res.status})`);
     return null;
   }
-  return creatorStatsSchema.parse(await res.json());
+  return creatorStatsSchema.parse(await unwrapData(res));
 }
 
 export async function getTransactions(): Promise<Transaction[] | null> {
@@ -413,7 +431,7 @@ export async function getTransactions(): Promise<Transaction[] | null> {
     console.error(`Failed to load transactions (${res.status})`);
     return null;
   }
-  return transactionSchema.array().parse(await res.json());
+  return transactionSchema.array().parse(await unwrapData(res));
 }
 
 export async function getMySubscriptions(): Promise<MySubscription[] | null> {
@@ -423,7 +441,7 @@ export async function getMySubscriptions(): Promise<MySubscription[] | null> {
     console.error(`Failed to load subscriptions (${res.status})`);
     return null;
   }
-  return mySubscriptionSchema.array().parse(await res.json());
+  return mySubscriptionSchema.array().parse(await unwrapData(res));
 }
 
 // Platform-wide Rank (cumulative Gursha spend) — distinct from the
@@ -435,7 +453,7 @@ export async function getMyRank(): Promise<UserRank | null> {
     console.error(`Failed to load rank (${res.status})`);
     return null;
   }
-  return userRankSchema.parse(await res.json());
+  return userRankSchema.parse(await unwrapData(res));
 }
 
 // null both when unauthenticated and when the user simply has no active
@@ -444,7 +462,7 @@ export async function getMyRank(): Promise<UserRank | null> {
 export async function getMyPlatformSubscription(): Promise<PlatformSubscription | null> {
   const res = await fetchAuthed("/subscriptions/platform/mine");
   if (!res.ok) return null;
-  const data = await res.json();
+  const data = await unwrapData(res);
   if (!data) return null;
   return platformSubscriptionSchema.parse(data);
 }
@@ -458,7 +476,7 @@ export async function getFollowStatus(creatorId: string): Promise<FollowStatus> 
     console.error(`Failed to load follow status (${res.status})`);
     return { following: false, followerCount: 0 };
   }
-  return followStatusSchema.parse(await res.json());
+  return followStatusSchema.parse(await unwrapData(res));
 }
 
 // Left throwing, unlike the rest of this file after the k6 finding above:
@@ -469,7 +487,7 @@ export async function getFollowStatus(creatorId: string): Promise<FollowStatus> 
 export async function getAvatarParts(): Promise<AvatarManifest> {
   const res = await fetch(`${API_INTERNAL_URL}/avatars/parts`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Failed to load avatar parts (${res.status})`);
-  return avatarManifestSchema.parse(await res.json());
+  return avatarManifestSchema.parse(await unwrapData(res));
 }
 
 export async function getAvatarSelection(): Promise<AvatarSelection | null> {
@@ -479,7 +497,7 @@ export async function getAvatarSelection(): Promise<AvatarSelection | null> {
     console.error(`Failed to load avatar selection (${res.status})`);
     return null;
   }
-  return avatarSelectionSchema.parse(await res.json());
+  return avatarSelectionSchema.parse(await unwrapData(res));
 }
 
 // Admin-only reads. Lower urgency than the functions above (only admins
@@ -493,7 +511,7 @@ export async function getAdminSummary(): Promise<AdminSummary | null> {
     console.error(`Failed to load admin summary (${res.status})`);
     return null;
   }
-  return adminSummarySchema.parse(await res.json());
+  return adminSummarySchema.parse(await unwrapData(res));
 }
 
 export async function getPendingPayouts(): Promise<PayoutQueueItem[]> {
@@ -502,7 +520,7 @@ export async function getPendingPayouts(): Promise<PayoutQueueItem[]> {
     console.error(`Failed to load pending payouts (${res.status})`);
     return [];
   }
-  return payoutQueueItemSchema.array().parse(await res.json());
+  return payoutQueueItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getPayoutHistory(filters: { status?: string; creator?: string }): Promise<PayoutHistoryItem[]> {
@@ -515,7 +533,7 @@ export async function getPayoutHistory(filters: { status?: string; creator?: str
     console.error(`Failed to load payout history (${res.status})`);
     return [];
   }
-  return payoutHistoryItemSchema.array().parse(await res.json());
+  return payoutHistoryItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getModerationActions(): Promise<ModerationActionRecord[]> {
@@ -524,7 +542,7 @@ export async function getModerationActions(): Promise<ModerationActionRecord[]> 
     console.error(`Failed to load moderation action history (${res.status})`);
     return [];
   }
-  return moderationActionRecordSchema.array().parse(await res.json());
+  return moderationActionRecordSchema.array().parse(await unwrapData(res));
 }
 
 export async function getBlocklistTerms(): Promise<BlocklistTerm[]> {
@@ -533,7 +551,7 @@ export async function getBlocklistTerms(): Promise<BlocklistTerm[]> {
     console.error(`Failed to load blocklist (${res.status})`);
     return [];
   }
-  return blocklistTermSchema.array().parse(await res.json());
+  return blocklistTermSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAdminAuditLog(filters: { limit?: number; action?: string } = {}): Promise<AdminAuditAction[]> {
@@ -546,7 +564,7 @@ export async function getAdminAuditLog(filters: { limit?: number; action?: strin
     console.error(`Failed to load audit log (${res.status})`);
     return [];
   }
-  return adminAuditActionSchema.array().parse(await res.json());
+  return adminAuditActionSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAnchorCreators(): Promise<CreatorListItem[]> {
@@ -555,7 +573,7 @@ export async function getAnchorCreators(): Promise<CreatorListItem[]> {
     console.error(`Failed to load anchor creators (${res.status})`);
     return [];
   }
-  return creatorListItemSchema.array().parse(await res.json());
+  return creatorListItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAnchorCandidates(): Promise<AnchorCandidate[]> {
@@ -564,7 +582,7 @@ export async function getAnchorCandidates(): Promise<AnchorCandidate[]> {
     console.error(`Failed to load anchor candidates (${res.status})`);
     return [];
   }
-  return anchorCandidateSchema.array().parse(await res.json());
+  return anchorCandidateSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAdminLiveStreams(): Promise<LiveStream[]> {
@@ -573,7 +591,7 @@ export async function getAdminLiveStreams(): Promise<LiveStream[]> {
     console.error(`Failed to load admin live streams (${res.status})`);
     return [];
   }
-  return liveStreamSchema.array().parse(await res.json());
+  return liveStreamSchema.array().parse(await unwrapData(res));
 }
 
 export async function getStreamArchive(creator?: string): Promise<StreamArchiveItem[]> {
@@ -583,7 +601,7 @@ export async function getStreamArchive(creator?: string): Promise<StreamArchiveI
     console.error(`Failed to load stream archive (${res.status})`);
     return [];
   }
-  return streamArchiveItemSchema.array().parse(await res.json());
+  return streamArchiveItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getLedgerReconciliation(): Promise<LedgerReconciliation | null> {
@@ -592,7 +610,7 @@ export async function getLedgerReconciliation(): Promise<LedgerReconciliation | 
     console.error(`Failed to load ledger reconciliation (${res.status})`);
     return null;
   }
-  return ledgerReconciliationSchema.parse(await res.json());
+  return ledgerReconciliationSchema.parse(await unwrapData(res));
 }
 
 export async function getPlatformWalletSummary(): Promise<PlatformWalletSummary | null> {
@@ -601,7 +619,7 @@ export async function getPlatformWalletSummary(): Promise<PlatformWalletSummary 
     console.error(`Failed to load platform wallet summary (${res.status})`);
     return null;
   }
-  return platformWalletSummarySchema.parse(await res.json());
+  return platformWalletSummarySchema.parse(await unwrapData(res));
 }
 
 export async function searchLedgerTransactions(query: string): Promise<LedgerTransactionLookup[]> {
@@ -611,7 +629,7 @@ export async function searchLedgerTransactions(query: string): Promise<LedgerTra
     console.error(`Failed to search ledger transactions (${res.status})`);
     return [];
   }
-  return ledgerTransactionLookupSchema.array().parse(await res.json());
+  return ledgerTransactionLookupSchema.array().parse(await unwrapData(res));
 }
 
 export async function getCreators(search?: string): Promise<CreatorListItem[]> {
@@ -621,7 +639,7 @@ export async function getCreators(search?: string): Promise<CreatorListItem[]> {
     console.error(`Failed to load creators (${res.status})`);
     return [];
   }
-  return creatorListItemSchema.array().parse(await res.json());
+  return creatorListItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAdminUsers(search?: string): Promise<UserListItem[]> {
@@ -631,7 +649,7 @@ export async function getAdminUsers(search?: string): Promise<UserListItem[]> {
     console.error(`Failed to load users (${res.status})`);
     return [];
   }
-  return userListItemSchema.array().parse(await res.json());
+  return userListItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getBoostRevenue(): Promise<BoostRevenueByCreator[]> {
@@ -640,7 +658,7 @@ export async function getBoostRevenue(): Promise<BoostRevenueByCreator[]> {
     console.error(`Failed to load boost revenue (${res.status})`);
     return [];
   }
-  return boostRevenueByCreatorSchema.array().parse(await res.json());
+  return boostRevenueByCreatorSchema.array().parse(await unwrapData(res));
 }
 
 export async function getPlatformConfigData(): Promise<PlatformConfig | null> {
@@ -649,7 +667,7 @@ export async function getPlatformConfigData(): Promise<PlatformConfig | null> {
     console.error(`Failed to load platform config (${res.status})`);
     return null;
   }
-  return platformConfigSchema.parse(await res.json());
+  return platformConfigSchema.parse(await unwrapData(res));
 }
 
 export async function getAdminSubscriptions(atRisk: boolean): Promise<SubscriptionAdminItem[]> {
@@ -658,7 +676,7 @@ export async function getAdminSubscriptions(atRisk: boolean): Promise<Subscripti
     console.error(`Failed to load subscriptions (${res.status})`);
     return [];
   }
-  return subscriptionAdminItemSchema.array().parse(await res.json());
+  return subscriptionAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getModerationQueue(): Promise<ModerationFlag[]> {
@@ -667,7 +685,7 @@ export async function getModerationQueue(): Promise<ModerationFlag[]> {
     console.error(`Failed to load moderation queue (${res.status})`);
     return [];
   }
-  return moderationFlagSchema.array().parse(await res.json());
+  return moderationFlagSchema.array().parse(await unwrapData(res));
 }
 
 export async function getActiveBoosts(): Promise<ActiveBoost[]> {
@@ -676,7 +694,7 @@ export async function getActiveBoosts(): Promise<ActiveBoost[]> {
     console.error(`Failed to load active boosts (${res.status})`);
     return [];
   }
-  return activeBoostSchema.array().parse(await res.json());
+  return activeBoostSchema.array().parse(await unwrapData(res));
 }
 
 export async function getReports(): Promise<Report[]> {
@@ -685,7 +703,7 @@ export async function getReports(): Promise<Report[]> {
     console.error(`Failed to load reports (${res.status})`);
     return [];
   }
-  return reportSchema.array().parse(await res.json());
+  return reportSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAppeals(): Promise<Appeal[]> {
@@ -694,7 +712,7 @@ export async function getAppeals(): Promise<Appeal[]> {
     console.error(`Failed to load appeals (${res.status})`);
     return [];
   }
-  return appealSchema.array().parse(await res.json());
+  return appealSchema.array().parse(await unwrapData(res));
 }
 
 export async function getMyCreatorApplication(): Promise<MyCreatorApplication | null> {
@@ -704,7 +722,7 @@ export async function getMyCreatorApplication(): Promise<MyCreatorApplication | 
     console.error(`Failed to load creator application (${res.status})`);
     return null;
   }
-  const body = await res.json();
+  const body = await unwrapData(res);
   return body ? myCreatorApplicationSchema.parse(body) : null;
 }
 
@@ -714,7 +732,7 @@ export async function getCreatorApplicationCapStatus(): Promise<CreatorApplicati
     console.error(`Failed to load creator application cap status (${res.status})`);
     return null;
   }
-  return creatorApplicationCapStatusSchema.parse(await res.json());
+  return creatorApplicationCapStatusSchema.parse(await unwrapData(res));
 }
 
 export async function getCreatorApplications(
@@ -726,7 +744,7 @@ export async function getCreatorApplications(
     console.error(`Failed to load creator applications (${res.status})`);
     return [];
   }
-  return creatorApplicationAdminItemSchema.array().parse(await res.json());
+  return creatorApplicationAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 // --- KYC (Module 1.4) ---
@@ -738,13 +756,13 @@ export async function getKycSubmissions(status?: "pending" | "approved" | "rejec
     console.error(`Failed to load KYC submissions (${res.status})`);
     return [];
   }
-  return kycAdminItemSchema.array().parse(await res.json());
+  return kycAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getMyKycStatus() {
   const res = await fetchAuthed("/kyc/status");
   if (!res.ok) return null;
-  return kycStatusSchema.parse(await res.json());
+  return kycStatusSchema.parse(await unwrapData(res));
 }
 
 // --- Ads (B.2) ---
@@ -752,7 +770,7 @@ export async function getMyKycStatus() {
 export async function getServedAd(streamId: string, format: string): Promise<ServedAd | null> {
   const res = await fetchAuthed(`/ads/serve?streamId=${streamId}&format=${format}`);
   if (!res.ok) return null;
-  const body = await res.json();
+  const body = await unwrapData(res);
   return body ? servedAdSchema.parse(body) : null;
 }
 
@@ -762,7 +780,7 @@ export async function getSponsoredCard(category?: string, language?: string): Pr
   if (language) params.set("language", language);
   const res = await fetch(`${API_INTERNAL_URL}/ads/sponsored-card?${params.toString()}`);
   if (!res.ok) return null;
-  const body = await res.json();
+  const body = await unwrapData(res);
   return body ? servedAdSchema.parse(body) : null;
 }
 
@@ -772,7 +790,7 @@ export async function getCreatorAdsSettings(): Promise<CreatorAdsSettings | null
     console.error(`Failed to load creator ads settings (${res.status})`);
     return null;
   }
-  return creatorAdsSettingsSchema.parse(await res.json());
+  return creatorAdsSettingsSchema.parse(await unwrapData(res));
 }
 
 export async function getAdvertisers(): Promise<Advertiser[]> {
@@ -781,7 +799,7 @@ export async function getAdvertisers(): Promise<Advertiser[]> {
     console.error(`Failed to load advertisers (${res.status})`);
     return [];
   }
-  return advertiserSchema.array().parse(await res.json());
+  return advertiserSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAdCampaigns(): Promise<AdCampaignAdminItem[]> {
@@ -790,7 +808,7 @@ export async function getAdCampaigns(): Promise<AdCampaignAdminItem[]> {
     console.error(`Failed to load ad campaigns (${res.status})`);
     return [];
   }
-  return adCampaignAdminItemSchema.array().parse(await res.json());
+  return adCampaignAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAdCreatives(campaignId: string): Promise<AdCreativeAdminItem[]> {
@@ -799,7 +817,7 @@ export async function getAdCreatives(campaignId: string): Promise<AdCreativeAdmi
     console.error(`Failed to load ad creatives (${res.status})`);
     return [];
   }
-  return adCreativeAdminItemSchema.array().parse(await res.json());
+  return adCreativeAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAdLeads(): Promise<AdLeadAdminItem[]> {
@@ -808,7 +826,7 @@ export async function getAdLeads(): Promise<AdLeadAdminItem[]> {
     console.error(`Failed to load ad leads (${res.status})`);
     return [];
   }
-  return adLeadAdminItemSchema.array().parse(await res.json());
+  return adLeadAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAdRevenueByCreator(): Promise<AdRevenueByCreator[]> {
@@ -817,7 +835,7 @@ export async function getAdRevenueByCreator(): Promise<AdRevenueByCreator[]> {
     console.error(`Failed to load ad revenue (${res.status})`);
     return [];
   }
-  return adRevenueByCreatorSchema.array().parse(await res.json());
+  return adRevenueByCreatorSchema.array().parse(await unwrapData(res));
 }
 
 // --- Gift cards (B.3) ---
@@ -828,13 +846,13 @@ export async function getMyGiftCards(): Promise<MyGiftCard[]> {
     console.error(`Failed to load gift cards (${res.status})`);
     return [];
   }
-  return myGiftCardSchema.array().parse(await res.json());
+  return myGiftCardSchema.array().parse(await unwrapData(res));
 }
 
 export async function getGiftCardPreview(code: string): Promise<GiftCardPreview | null> {
   const res = await fetch(`${API_INTERNAL_URL}/gift-cards/preview?code=${encodeURIComponent(code)}`);
   if (!res.ok) return null;
-  const body = await res.json();
+  const body = await unwrapData(res);
   return body ? giftCardPreviewSchema.parse(body) : null;
 }
 
@@ -845,13 +863,15 @@ export async function getGiftCardsAdmin(status?: string): Promise<GiftCardAdminI
     console.error(`Failed to load gift cards (${res.status})`);
     return [];
   }
-  return giftCardAdminItemSchema.array().parse(await res.json());
+  return giftCardAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getSuspiciousGiftCardPurchasers(): Promise<{ username: string; count: number }[]> {
   const res = await fetchAuthed("/admin/gift-cards/suspicious");
   if (!res.ok) return [];
-  return res.json();
+  // No Zod schema for this one (pre-existing — unwrapData returns unknown,
+  // same trust-the-shape posture res.json()'s implicit `any` had before).
+  return (await unwrapData(res)) as { username: string; count: number }[];
 }
 
 export async function getStreamTagsAdmin(): Promise<StreamTagAdminItem[]> {
@@ -860,7 +880,7 @@ export async function getStreamTagsAdmin(): Promise<StreamTagAdminItem[]> {
     console.error(`Failed to load stream tags (${res.status})`);
     return [];
   }
-  return streamTagAdminItemSchema.array().parse(await res.json());
+  return streamTagAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 export async function getAnnouncementsAdmin(): Promise<AnnouncementAdminItem[]> {
@@ -869,7 +889,7 @@ export async function getAnnouncementsAdmin(): Promise<AnnouncementAdminItem[]> 
     console.error(`Failed to load announcements (${res.status})`);
     return [];
   }
-  return announcementAdminItemSchema.array().parse(await res.json());
+  return announcementAdminItemSchema.array().parse(await unwrapData(res));
 }
 
 // --- E: Account & Identity ---
@@ -881,41 +901,41 @@ export async function getMyAccount(): Promise<MyAccount | null> {
     console.error(`Failed to load account (${res.status})`);
     return null;
   }
-  return myAccountSchema.parse(await res.json());
+  return myAccountSchema.parse(await unwrapData(res));
 }
 
 export async function getAccountDeletionStatus(): Promise<AccountDeletionStatus | null> {
   const res = await fetchAuthed("/auth/account/deletion");
   if (!res.ok) return null;
-  return accountDeletionStatusSchema.parse(await res.json());
+  return accountDeletionStatusSchema.parse(await unwrapData(res));
 }
 
 export async function getLinkedSocialAccounts(): Promise<LinkedSocialAccount[]> {
   const res = await fetchAuthed("/auth/social");
   if (!res.ok) return [];
-  return linkedSocialAccountSchema.array().parse(await res.json());
+  return linkedSocialAccountSchema.array().parse(await unwrapData(res));
 }
 
 export async function getNotifications(): Promise<Notification[]> {
   const res = await fetchAuthed("/notifications");
   if (!res.ok) return [];
-  return notificationSchema.array().parse(await res.json());
+  return notificationSchema.array().parse(await unwrapData(res));
 }
 
 export async function getUnreadNotificationCount(): Promise<number> {
   const res = await fetchAuthed("/notifications/unread-count");
   if (!res.ok) return 0;
-  return unreadCountSchema.parse(await res.json()).count;
+  return unreadCountSchema.parse(await unwrapData(res)).count;
 }
 
 export async function getNotificationPreferences(): Promise<NotificationPreferences | null> {
   const res = await fetchAuthed("/notifications/preferences");
   if (!res.ok) return null;
-  return notificationPreferencesSchema.parse(await res.json());
+  return notificationPreferencesSchema.parse(await unwrapData(res));
 }
 
 export async function getTotpStatus(): Promise<{ enabled: boolean } | null> {
   const res = await fetchAuthed("/auth/2fa/status");
   if (!res.ok) return null;
-  return totpStatusSchema.parse(await res.json());
+  return totpStatusSchema.parse(await unwrapData(res));
 }
