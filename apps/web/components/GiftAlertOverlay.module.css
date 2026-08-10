@@ -47,3 +47,117 @@
     transform: scale(1) translateY(0);
   }
 }
+
+/* The Gursha Menu — four placeholder treatments, one per gift_tiers row,
+   swappable for real Lottie/illustrated assets + licensed audio later
+   without touching GiftAlertOverlay.tsx (see that file's comment). Kept
+   as CSS keyframes rather than a canvas/Lottie library dependency for
+   the same reason 0019_gursha.sql's animation_key placeholders are
+   CSS-based — no new asset pipeline needed just to ship the branching. */
+
+.tierIcon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+/* Mulmul (100 ETB, cheapest) — a gentle float-and-settle, matching
+   "floating bread animation, soft ping": the least dramatic of the four,
+   intentionally — tier weight should read at a glance. */
+.tierMulmul {
+  animation:
+    pop-in 0.3s ease-out,
+    mulmul-float 2.2s ease-in-out infinite;
+  border-color: #d8b26a;
+  box-shadow: 0 0 24px rgba(216, 178, 106, 0.4);
+}
+@keyframes mulmul-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Buna (200 ETB) — a warm steady glow standing in for rising coffee
+   steam; .tierIcon's cup rocks gently rather than the whole card moving,
+   since a full-card motion here would read the same as Mulmul's. */
+.tierBuna {
+  animation: pop-in 0.3s ease-out;
+  border-color: #8b5a2b;
+  box-shadow: 0 0 32px rgba(139, 90, 43, 0.55);
+}
+.tierBuna .tierIcon {
+  animation: buna-steam 1.6s ease-in-out infinite;
+}
+@keyframes buna-steam {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-4deg) translateY(-3px);
+  }
+}
+
+/* Tej (500 ETB) — a golden radial burst on entry, standing in for a
+   honey splash. */
+.tierTej {
+  animation: tej-splash 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+  border-color: #e8b923;
+  box-shadow: 0 0 48px rgba(232, 185, 35, 0.7);
+}
+@keyframes tej-splash {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+    box-shadow: 0 0 0 rgba(232, 185, 35, 0);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow: 0 0 64px rgba(232, 185, 35, 0.9);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 48px rgba(232, 185, 35, 0.7);
+  }
+}
+
+/* Kurt (1,000 ETB, top tier) — the only one that breaks out of the
+   standard centered card: full-width banner with a center-out wipe,
+   standing in for "full-screen split chop with banner". Deliberately
+   the most disruptive of the four — this is the top gift tier, it
+   should be unmissable even to a viewer not looking at the overlay. */
+.banner {
+  max-width: min(90vw, 900px);
+  width: 100%;
+  padding: 24px 48px;
+  border-width: 3px;
+  border-color: #d64545;
+}
+.banner .headline {
+  font-size: 30px;
+}
+.banner .amount {
+  font-size: 20px;
+}
+.tierKurt {
+  animation: kurt-chop 0.45s ease-out;
+  box-shadow: 0 0 64px rgba(214, 69, 69, 0.75);
+}
+@keyframes kurt-chop {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 50% 0 50%);
+  }
+  70% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
