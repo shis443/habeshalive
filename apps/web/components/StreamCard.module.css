@@ -1,5 +1,12 @@
 .card {
   display: block;
+  container-type: inline-size;
+  container-name: stream-card;
+}
+
+.cardInner {
+  display: flex;
+  flex-direction: column;
 }
 
 .thumbnailWrap {
@@ -124,4 +131,48 @@
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 9999px;
+}
+
+/* Container query math, grounded in the real grid this card lives in
+   (app/page.module.css's .grid): repeat(auto-fill, minmax(280px, 1fr))
+   with a 16px (--space-3) gap. A 2nd column only forms once the
+   container is wide enough for two 280px tracks plus the gap between
+   them: 2*280 + 16 = 576px. Below that threshold, exactly one column
+   exists and it stretches to fill the full container width — so a
+   single card's real width ranges from 280px up to 575px (never higher;
+   at 576px it snaps back down to ~280px as a 2nd column appears). The
+   420px breakpoint below sits inside that single-column stretch zone,
+   with margin on both sides so the horizontal layout doesn't flicker at
+   the 280px or 576px edges.
+
+   Placed at the end of the file, after every rule it overrides
+   (.thumbnailWrap, .info) — @container doesn't add specificity, so with
+   equal-specificity selectors the later rule wins the cascade regardless
+   of whether its condition matches.
+
+   Targets .cardInner, not .card — verified empirically (isolated test
+   pages, both in this Next.js pipeline and raw static HTML) that an
+   element establishing container-type cannot have its OWN display/
+   flex-direction changed by a query against its OWN size: the query
+   silently never matches, no console error, nothing malformed about the
+   CSS. A parent-container/distinct-descendant-restyled structure worked
+   immediately in the same test. .card stays the passive container;
+   .cardInner (a genuine descendant) is what actually flips layout. */
+@container stream-card (min-width: 420px) {
+  .cardInner {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .thumbnailWrap {
+    flex: 0 0 200px;
+    width: 200px;
+    margin-bottom: 0;
+  }
+
+  .info {
+    flex: 1;
+    min-width: 0;
+  }
 }

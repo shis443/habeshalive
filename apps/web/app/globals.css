@@ -30,6 +30,16 @@
 
   --shell-top-height: 56px;
   --shell-bottom-height: 64px;
+
+  /* Critically damped spring (no overshoot) — dropdowns, sheets, modal
+     panels. Deliberately no under-damped/bounce counterpart: bounce is
+     reserved for momentum-driven drag/flick gestures, not UI chrome (see
+     TopNav/CategoryPills — neither uses it). */
+  --ease-spring-smooth: linear(
+    0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.226 9.8%, 0.388 13.9%, 0.575 18.7%,
+    0.771 24.3%, 0.957 31.1%, 1.025 35.5%, 1.062 40.5%, 1.072 46%, 1.062 52.3%,
+    1.037 60%, 1.002 73.1%, 1
+  );
 }
 
 /* Light theme — same hue identity as the dark palette above (purple
