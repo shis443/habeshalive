@@ -19,6 +19,7 @@ export * from "./schemas/kyc.js";
 export * from "./schemas/moderation.js";
 export * from "./schemas/notifications.js";
 export * from "./schemas/points.js";
+export * from "./schemas/remote-control.js";
 export * from "./schemas/reports.js";
 export * from "./schemas/search.js";
 export * from "./schemas/sessions.js";
