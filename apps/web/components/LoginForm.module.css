@@ -6,6 +6,16 @@
   padding: var(--space-3);
 }
 
+/* The concrete "card floating in a large dead field" case — vertically
+   centered content in a tall viewport is a desktop pattern, and this is
+   the very first thing a logged-out viewer sees on cold launch. Top-
+   anchored instead, with a safe-area-cleared gap standing in for what the
+   (now-hidden) TopNav would have reserved. */
+html[data-native="true"] .wrap {
+  align-items: flex-start;
+  padding-top: max(var(--space-5), env(safe-area-inset-top));
+}
+
 .card {
   width: 100%;
   max-width: 360px;

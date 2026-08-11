@@ -90,6 +90,32 @@
   }
 }
 
+/* RootTabView.swift's native TabView replaces both TopNav and BottomNav
+   entirely when embedded (BottomNav.tsx/TopNav.tsx both render null under
+   data-native) — every page's own padding still reserves
+   --shell-top-height/--shell-bottom-height space for chrome that's no
+   longer there, which is exactly the "large dead vertical space" a
+   logged-out viewer sees on first launch. 21 page/component stylesheets
+   read these two variables for their own top/bottom padding (grepped,
+   not assumed) — overriding them once here, to the real safe-area inset
+   instead of 0, cascades the fix to all of them and satisfies the
+   Dynamic-Island/home-indicator clearance requirement at the same time,
+   rather than needing a `min(0, ...)` + separate safe-area padding rule
+   duplicated into every one of those files individually. */
+:root[data-native="true"] {
+  --shell-top-height: env(safe-area-inset-top);
+  --shell-bottom-height: env(safe-area-inset-bottom);
+}
+
+/* The single strongest "this is a webpage, not an app" tell — native
+   apps don't bounce past their own content. Scoped to the native
+   WKWebView only: birq.live's own desktop/mobile-web visitors keep
+   whatever their browser's default overscroll behavior already is. */
+html[data-native="true"],
+html[data-native="true"] body {
+  overscroll-behavior: none;
+}
+
 *,
 *::before,
 *::after {
