@@ -6,9 +6,11 @@ import { getSessionCookie, MAX_ACCOUNTS, writeSessionCookie } from "@/lib/sessio
 // (BirqApi.createWebBridgeCode on the mobile side, POST /auth/web-bridge-code
 // on the API — see apps/api/src/auth/web-bridge-service.ts's own comment for
 // the full rationale). The mobile app opens
-// https://birq.live/api/mobile-bridge?code=...&redirect=/wallet in an
-// SFSafariViewController; this route exchanges the one-time code for a real
-// session server-side and hands the browser off to `redirect` already
+// https://birq.live/api/mobile-bridge?code=...&redirect=/browse in a
+// WKWebView (Birq/View/BirqExplore/BirqExploreView.swift — not
+// SFSafariViewController, that's used elsewhere in the app for a separate
+// mid-broadcast utility browser); this route exchanges the one-time code for
+// a real session server-side and hands the browser off to `redirect` already
 // signed in — the code and the resulting token never reach client JS.
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");

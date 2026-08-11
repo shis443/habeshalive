@@ -1,29 +1,19 @@
-"use client";
+import { cookies, headers } from "next/headers";
+import { BottomNavClient, type NavTab } from "./BottomNavClient";
 
-import { useTranslations } from "next-intl";
-import Link from "next/link";
-import styles from "./BottomNav.module.css";
-import { ExploreIcon, FollowingIcon, GoLiveIcon, WalletIcon } from "./icons";
+// The native app embeds this web app in a full-screen WKWebView with its
+// own TabView tab bar (Birq/View/RootTabView.swift) — rendering this bar
+// too would stack two navigation systems on screen at once. The WKWebView
+// sets a birq_native cookie unconditionally on creation (auth-independent,
+// unlike the mobile-bridge session cookie which only fires for logged-in
+// users) plus applicationNameForUserAgent="BirqApp/1.0" as a belt-and-braces
+// signal readable before any cookie round-trip completes.
+export async function BottomNav({ active }: { active?: NavTab }) {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  const isNativeShell =
+    cookieStore.get("birq_native")?.value === "1" || (headerStore.get("user-agent") ?? "").includes("BirqApp");
 
-type NavTab = "explore" | "following" | "go-live" | "wallet";
+  if (isNativeShell) return null;
 
-const TABS: { id: NavTab; labelKey: string; href: string; icon: (props: { className?: string }) => JSX.Element }[] = [
-  { id: "explore", labelKey: "explore", href: "/", icon: ExploreIcon },
-  { id: "following", labelKey: "following", href: "/following", icon: FollowingIcon },
-  { id: "go-live", labelKey: "goLive", href: "/dashboard", icon: GoLiveIcon },
-  { id: "wallet", labelKey: "wallet", href: "/wallet", icon: WalletIcon },
-];
-
-export function BottomNav({ active }: { active?: NavTab }) {
-  const t = useTranslations("nav");
-  return (
-    <nav className={styles.nav}>
-      {TABS.map(({ id, labelKey, href, icon: Icon }) => (
-        <Link key={id} href={href} className={id === active ? styles.itemActive : styles.item}>
-          <Icon />
-          <span>{t(labelKey)}</span>
-        </Link>
-      ))}
-    </nav>
-  );
+  return <BottomNavClient active={active} />;
 }
