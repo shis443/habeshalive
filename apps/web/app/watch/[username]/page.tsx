@@ -122,7 +122,7 @@ export default async function WatchPage({
           ) : showSquadGrid ? (
             <SquadGrid squad={squad} />
           ) : (
-            <VideoPlayer src={stream.playbackUrl} streamId={stream.id} />
+            <VideoPlayer src={stream.playbackUrl} streamId={stream.id} aspectRatio={stream.aspectRatio} />
           )}
           <div className={styles.body}>
             <AdDisplayBanner ad={displayAd} />

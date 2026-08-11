@@ -4,6 +4,26 @@
   aspect-ratio: 16 / 9;
 }
 
+/* Portrait-default streaming — a 9:16 stream stretched to fill a 16:9 box
+   would distort; centering a narrower column instead is what "natural
+   aspect" (Phase 3.1) actually means for a single-video context like this
+   one. Constrained by viewport height, not just width, so a portrait
+   player in the wide .playerColumn doesn't become an absurdly tall
+   scroll-the-page box — bounded to roughly the same viewport-height
+   budget theater mode already uses below. Left unset (falls through to
+   the plain .wrap rule above) wherever VideoPlayer is used in a context
+   that already forces its own box shape — SquadGrid.module.css's
+   `.tile > :global(div) { width/height: 100% }` already overrides
+   .wrap's aspect-ratio entirely for the co-streaming grid, which is
+   deliberately NOT given this treatment: multiple simultaneous tiles are
+   a uniform-frame grid (Phase 3.2's own reasoning), not a single natural-
+   aspect video. */
+.portrait {
+  aspect-ratio: 9 / 16;
+  max-width: min(100%, calc((100dvh - var(--shell-top-height) - var(--shell-bottom-height)) * 9 / 16));
+  margin: 0 auto;
+}
+
 /* Scoped to the player's own box, not a page-wide layout change (hiding
    the sidebar/resizing the chat column) — see VideoPlayer.tsx's comment.
    A real, honest "bigger video" mode without threading state through
@@ -13,12 +33,33 @@
   height: min(80vh, 100vw * 9 / 16);
 }
 
+/* Same reasoning as .theater above, inverted: a 9:16 box's constraining
+   dimension is height, not width, so the width-derived-from-height
+   formula flips (100vw * 16/9 instead of 100vw * 9/16) to still guard
+   against a pathologically narrow viewport where even a portrait box
+   would overflow horizontally. */
+.theater.portrait {
+  max-width: none;
+  height: min(80vh, 100vw * 16 / 9);
+}
+
 .video {
   width: 100%;
   height: 100%;
   aspect-ratio: 16 / 9;
+  /* Was unset (defaults to `fill`) — silently stretched any non-16:9
+     source to fit the box. cover crops instead of distorting; harmless
+     for a real 16:9 source in the .wrap default (an exact-ratio box has
+     nothing to crop), the actual fix for a 9:16 source in .portrait, and
+     also what makes SquadGrid's own forced-cell-shape tiles crop cleanly
+     instead of stretching. */
+  object-fit: cover;
   background: #000;
   display: block;
+}
+
+.portrait .video {
+  aspect-ratio: 9 / 16;
 }
 
 .theater .video {

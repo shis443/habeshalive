@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClipPlayer } from "@/components/ClipPlayer";
 import { ShareSheet } from "@/components/ShareSheet";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import { getPublicClip } from "@/lib/api";
 import { SITE_URL } from "@/lib/config";
 import styles from "./page.module.css";
@@ -16,13 +17,16 @@ function formatDuration(seconds: number): string {
 // Phase 3.1 — the actual distribution surface, not the clip page itself:
 // without these tags a shared link is a bare URL and the growth loop this
 // whole feature exists for doesn't close (a Telegram/WhatsApp preview
-// card is what makes a stranger tap through, not the URL text). No
-// dedicated clip-thumbnail generation exists in the backend yet — using
-// the creator's avatar as og:image is a real stand-in, not a placeholder
-// left silently broken: something recognizable beats a blank preview
-// card, and it needs no code change to swap in a real generated
-// thumbnail later (same "art-blocked, not code-blocked" posture as the
-// avatar system elsewhere in this app).
+// card is what makes a stranger tap through, not the URL text).
+//
+// Phase 3.3 — clip.ogImageUrl is now a real ffmpeg-generated 1200x630
+// frame from the clip itself (clip-service.ts's runFfmpegOgImage), not a
+// placeholder. Falls back to the creator's avatar only if generation
+// failed at creation time (ogImageUrl null — see createClip's fail-open
+// handling) — resolveAvatarUrl matters here specifically because
+// creatorAvatarUrl is a path relative to the API origin, not an absolute
+// URL; og:image/twitter:image need one directly, there's no browser
+// context here to resolve a relative path against like <img src> gets.
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const clip = await getPublicClip(id);
@@ -31,6 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const title = clip.title ?? `${clip.creatorDisplayName} on Birq`;
   const description = `Watch @${clip.creatorUsername}'s clip on Birq${clip.category ? ` — ${clip.category}` : ""}.`;
   const url = `${SITE_URL}/clip/${clip.id}`;
+  const previewImage = clip.ogImageUrl ?? resolveAvatarUrl(clip.creatorAvatarUrl);
 
   return {
     title: `${title} — Birq`,
@@ -41,14 +46,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       url,
       siteName: "Birq",
       type: "video.other",
-      images: clip.creatorAvatarUrl ? [{ url: clip.creatorAvatarUrl }] : [],
+      images: previewImage ? [{ url: previewImage }] : [],
       videos: [{ url: clip.playbackUrl }],
     },
     twitter: {
       card: "player",
       title,
       description,
-      images: clip.creatorAvatarUrl ? [clip.creatorAvatarUrl] : [],
+      images: previewImage ? [previewImage] : [],
     },
   };
 }

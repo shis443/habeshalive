@@ -42,6 +42,10 @@ export const publicClipSchema = z.object({
   playbackUrl: z.string(),
   durationSeconds: z.number().int().positive(),
   aspectRatio: aspectRatioSchema,
+  // Real ffmpeg-generated 1200x630 preview (see clip-service.ts's
+  // runFfmpegOgImage) — null when generation failed at creation time,
+  // in which case the clip page falls back to the creator's avatar.
+  ogImageUrl: z.string().nullable(),
   createdAt: z.string(),
   views: z.number().int().nonnegative(),
   category: z.string().nullable(),

@@ -6,8 +6,15 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { AspectRatio, Clip, CreateClipInput, PublicClip } from "@birq/shared";
 import { pool } from "../common/db.js";
+import { env } from "../common/env.js";
 import { AppError } from "../common/errors.js";
-import { deleteObject, getSignedVodUrl, isObjectStorageConfigured, uploadObject } from "../common/object-storage.js";
+import {
+  deleteObject,
+  getObjectBuffer,
+  getSignedVodUrl,
+  isObjectStorageConfigured,
+  uploadObject,
+} from "../common/object-storage.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -50,6 +57,53 @@ async function runFfmpegClip(sourceUrl: string, startSeconds: number, durationSe
     return await readFile(outputPath);
   } catch (err) {
     throw new AppError(500, `Clip generation failed: ${err instanceof Error ? err.message : "unknown error"}`);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
+// Phase 3.3 — the actual Open Graph preview image, replacing the
+// creator-avatar stand-in generateMetadata used before this (clips have
+// never had a thumbnail_url column — nothing existed to build a real one
+// from). Same crop=ih*9/16:ih as runFfmpegClip above so the probed frame
+// shows exactly what the clip itself shows, not a differently-framed
+// slice of the source — then scaled to a 1200px-wide intermediate and
+// cropped down to the classic 1200x630 OG size, weighted toward the
+// upper third (0.33 rather than the 0.5 a dead-center crop would use)
+// since that's roughly where a face sits in a vertically-framed shot.
+// Probes 1s into the clip (or its midpoint, for anything shorter) rather
+// than frame zero — a clip's very first frame is disproportionately
+// likely to be a transition/blank moment right after the creator hit
+// "clip this."
+async function runFfmpegOgImage(
+  sourceUrl: string,
+  startSeconds: number,
+  durationSeconds: number
+): Promise<Buffer> {
+  const workDir = await mkdtemp(join(tmpdir(), "birq-clip-og-"));
+  const outputPath = join(workDir, "og.jpg");
+  const probeOffset = startSeconds + Math.min(1, durationSeconds / 2);
+  try {
+    await execFileAsync(
+      "ffmpeg",
+      [
+        "-ss", String(probeOffset),
+        "-i", sourceUrl,
+        "-frames:v", "1",
+        // Without this, ffmpeg's image2 muxer warns that a single-file
+        // output needs either a sequence pattern or -update — harmless
+        // today (verified: still produces a correct 1200x630 JPEG,
+        // ffprobe-confirmed) but not guaranteed silent/non-fatal across
+        // every ffmpeg build the runner image might end up on.
+        "-update", "1",
+        "-vf", "crop=ih*9/16:ih,scale=1200:-2,crop=1200:630:0:(ih-630)*0.33",
+        "-q:v", "3",
+        "-y",
+        outputPath,
+      ],
+      { timeout: 30_000, maxBuffer: 1024 * 1024 * 10 }
+    );
+    return await readFile(outputPath);
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }
@@ -107,11 +161,24 @@ export async function createClip(userId: string, vodId: string, input: CreateCli
   const objectKey = `clips/${userId}/${randomUUID()}.mp4`;
   await uploadObject(objectKey, clipBuffer, "video/mp4");
 
+  // Fail-open: an OG-image probe/upload error shouldn't cost the creator
+  // their actual clip, same posture as vods/service.ts's ffprobe. A clip
+  // with a null og_image_key falls back to the creator's avatar in
+  // generateMetadata (app/clip/[id]/page.tsx) rather than a broken image.
+  let ogImageKey: string | null = null;
+  try {
+    const ogImageBuffer = await runFfmpegOgImage(sourceUrl, input.startSeconds, input.durationSeconds);
+    ogImageKey = `clips-og/${userId}/${randomUUID()}.jpg`;
+    await uploadObject(ogImageKey, ogImageBuffer, "image/jpeg");
+  } catch (err) {
+    console.error(`[clips] OG image generation failed, continuing without one:`, err);
+  }
+
   const { rows: inserted } = await pool.query<ClipRow>(
-    `INSERT INTO clips (vod_id, creator_id, title, object_key, start_seconds, duration_seconds)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO clips (vod_id, creator_id, title, object_key, start_seconds, duration_seconds, og_image_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, vod_id, title, object_key, start_seconds, duration_seconds, aspect_ratio, created_at`,
-    [vodId, userId, input.title ?? null, objectKey, input.startSeconds, input.durationSeconds]
+    [vodId, userId, input.title ?? null, objectKey, input.startSeconds, input.durationSeconds, ogImageKey]
   );
   return toClip(inserted[0]!);
 }
@@ -135,6 +202,7 @@ interface PublicClipRow {
   object_key: string;
   duration_seconds: number;
   aspect_ratio: AspectRatio;
+  og_image_key: string | null;
   created_at: string;
   views: number;
   category: string | null;
@@ -150,6 +218,10 @@ async function toPublicClip(row: PublicClipRow): Promise<PublicClip> {
     playbackUrl: await getSignedVodUrl(row.object_key),
     durationSeconds: row.duration_seconds,
     aspectRatio: row.aspect_ratio,
+    // null when generation failed at creation time (see createClip's
+    // fail-open handling) — app/clip/[id]/page.tsx falls back to the
+    // creator's avatar rather than rendering a broken og:image.
+    ogImageUrl: row.og_image_key ? `${env.API_PUBLIC_URL}/vods/clips/${row.id}/og-image` : null,
     createdAt: row.created_at,
     views: row.views,
     category: row.category,
@@ -159,7 +231,7 @@ async function toPublicClip(row: PublicClipRow): Promise<PublicClip> {
   };
 }
 
-const PUBLIC_CLIP_SELECT = `SELECT c.id, c.title, c.object_key, c.duration_seconds, c.aspect_ratio, c.created_at, c.views,
+const PUBLIC_CLIP_SELECT = `SELECT c.id, c.title, c.object_key, c.duration_seconds, c.aspect_ratio, c.og_image_key, c.created_at, c.views,
             COALESCE(v.category, s.category) AS category,
             u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
      FROM clips c
@@ -181,6 +253,23 @@ export async function getPublicClipById(clipId: string): Promise<PublicClip | nu
   );
   const row = rows[0];
   return row ? toPublicClip(row) : null;
+}
+
+// The stable URL PUBLIC_CLIP_SELECT's og_image_key builds into ogImageUrl
+// (Content-Security-Policy: object storage stays signed-URL-only per
+// common/object-storage.ts's own comment, so this proxies the read
+// through apps/api rather than exposing the bucket — same pattern as
+// avatars/routes.ts's /photo/:userId). Unlike an avatar, a clip's frame
+// never changes after generation, so this can cache much longer.
+export async function getClipOgImage(clipId: string): Promise<{ buffer: Buffer; contentType: string }> {
+  const { rows } = await pool.query<{ og_image_key: string | null }>(
+    `SELECT og_image_key FROM clips WHERE id = $1 AND dmca_removed_at IS NULL`,
+    [clipId]
+  );
+  const key = rows[0]?.og_image_key;
+  if (!key) throw new AppError(404, "No OG image for this clip");
+  const { buffer, contentType } = await getObjectBuffer(key);
+  return { buffer, contentType: contentType ?? "image/jpeg" };
 }
 
 // Phase 3.3 — category detail page's Clips tab. Reuses PublicClip

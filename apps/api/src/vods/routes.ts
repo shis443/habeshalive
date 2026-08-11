@@ -4,6 +4,7 @@ import { AppError } from "../common/errors.js";
 import {
   createClip,
   deleteClipOwned,
+  getClipOgImage,
   getPublicClipById,
   incrementClipViews,
   listClipsByCategory,
@@ -123,6 +124,16 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
     const clip = await getPublicClipById(req.params.id);
     if (!clip) throw new AppError(404, "Clip not found");
     return clip;
+  });
+
+  // Public, unauthenticated — the stable URL publicClipSchema's
+  // ogImageUrl points at, same "proxy a private-storage read through
+  // apps/api's own origin" pattern as avatars/routes.ts's /photo/:userId.
+  // A clip's frame never changes after generation, unlike an avatar, so
+  // this caches far longer.
+  app.get<{ Params: { id: string } }>("/clips/:id/og-image", async (req, reply) => {
+    const { buffer, contentType } = await getClipOgImage(req.params.id);
+    reply.header("Content-Type", contentType).header("Cache-Control", "public, max-age=31536000, immutable").send(buffer);
   });
 
   // Public, unauthenticated, no rate limiting — same "count a play, not

@@ -45,7 +45,7 @@ export default async function EmbedPage({
 
   return (
     <div className={styles.wrap}>
-      <VideoPlayer src={stream.playbackUrl} streamId={stream.id} />
+      <VideoPlayer src={stream.playbackUrl} streamId={stream.id} aspectRatio={stream.aspectRatio} />
     </div>
   );
 }

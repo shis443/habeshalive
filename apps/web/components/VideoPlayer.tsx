@@ -1,6 +1,6 @@
 "use client";
 
-import { HEARTBEAT_INTERVAL_SECONDS } from "@birq/shared";
+import { HEARTBEAT_INTERVAL_SECONDS, type AspectRatio } from "@birq/shared";
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { WHEP_ENABLED } from "@/lib/config";
@@ -93,7 +93,20 @@ const ICE_DISCONNECT_GRACE_MS = 4000;
 
 type DvrRange = { start: number; end: number };
 
-export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: string | null }) {
+// aspectRatio omitted defaults to the plain 16:9 .wrap rule — every
+// existing call site (SquadGrid's co-streaming tiles) that doesn't pass
+// it keeps today's behavior exactly, and SquadGrid's own CSS overrides
+// .wrap's sizing entirely regardless (see VideoPlayer.module.css's
+// .portrait comment).
+export function VideoPlayer({
+  src,
+  streamId,
+  aspectRatio,
+}: {
+  src: string | null;
+  streamId?: string | null;
+  aspectRatio?: AspectRatio;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<PlaybackState>("connecting");
@@ -672,8 +685,16 @@ export function VideoPlayer({ src, streamId }: { src: string | null; streamId?: 
     );
   }
 
+  const wrapClassName = [
+    styles.wrap,
+    aspectRatio === "9:16" ? styles.portrait : "",
+    theater ? styles.theater : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div ref={wrapRef} className={`${styles.wrap} ${theater ? styles.theater : ""}`}>
+    <div ref={wrapRef} className={wrapClassName}>
       {/* autoPlay+muted is the one autoplay pattern every major browser's
           autoplay policy actually permits without a user gesture first —
           unmuted autoplay is blocked outright in Chrome/Firefox/Safari, so
