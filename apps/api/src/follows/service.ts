@@ -1,4 +1,4 @@
-import type { CreatorProfile, CreatorSearchResult, FollowerListItem, FollowStatus } from "@birq/shared";
+import type { FollowedCreator, CreatorProfile, FollowerListItem, FollowStatus } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
@@ -10,22 +10,48 @@ interface FollowedCreatorRow {
   bio: string | null;
   category: string | null;
   is_live: boolean;
+  has_new_content: boolean;
 }
 
-// Reuses CreatorSearchResult (search/service.ts) rather than a new shape —
-// same "creator card with live status" data either way. Live creators
-// first (ORDER BY is_live DESC) so the /following page can render live
-// ones up top without re-sorting client-side.
-export async function getFollowedCreators(followerId: string): Promise<CreatorSearchResult[]> {
+// Phase 3.5 — new-content badge. NULL following_last_seen_at (never
+// visited /following) reads as "-infinity" here, so a fresh follower with
+// zero visit history sees every followed creator's existing content as
+// new — there's no prior baseline for them, so that's the honest answer,
+// not a special "hide badges on day one" case worth extra logic for.
+//
+// Reuses CreatorSearchResult's fields (search/service.ts) plus
+// hasNewContent — see followedCreatorSchema's own comment for why that's
+// a new type instead of bolting the field onto the shared one. Live
+// creators first (ORDER BY is_live DESC) so the /following page can
+// render live ones up top without re-sorting client-side.
+export async function getFollowedCreators(followerId: string): Promise<FollowedCreator[]> {
+  const { rows: userRows } = await pool.query<{ following_last_seen_at: string | null }>(
+    `SELECT following_last_seen_at FROM users WHERE id = $1`,
+    [followerId]
+  );
+  const lastSeenAt = userRows[0]?.following_last_seen_at ?? null;
+
   const { rows } = await pool.query<FollowedCreatorRow>(
     `SELECT u.id, u.username, u.display_name, u.avatar_url, u.bio, cp.category,
-            EXISTS (SELECT 1 FROM streams s WHERE s.creator_id = u.id AND s.status = 'live') AS is_live
+            EXISTS (SELECT 1 FROM streams s WHERE s.creator_id = u.id AND s.status = 'live') AS is_live,
+            (
+              EXISTS (
+                SELECT 1 FROM stream_vods v JOIN streams s2 ON s2.id = v.stream_id
+                WHERE s2.creator_id = u.id AND v.is_published = true AND v.dmca_removed_at IS NULL
+                  AND v.created_at > COALESCE($2::timestamptz, '-infinity'::timestamptz)
+              )
+              OR EXISTS (
+                SELECT 1 FROM clips c
+                WHERE c.creator_id = u.id AND c.dmca_removed_at IS NULL
+                  AND c.created_at > COALESCE($2::timestamptz, '-infinity'::timestamptz)
+              )
+            ) AS has_new_content
      FROM follows f
      JOIN users u ON u.id = f.creator_id
      LEFT JOIN creator_profiles cp ON cp.user_id = u.id
      WHERE f.follower_id = $1
      ORDER BY is_live DESC, u.display_name ASC`,
-    [followerId]
+    [followerId, lastSeenAt]
   );
   return rows.map((row) => ({
     id: row.id,
@@ -35,7 +61,19 @@ export async function getFollowedCreators(followerId: string): Promise<CreatorSe
     bio: row.bio,
     category: row.category,
     isLive: row.is_live,
+    hasNewContent: row.has_new_content,
   }));
+}
+
+// Separate, explicit action rather than a side effect of
+// getFollowedCreators above (called from a "the user is genuinely
+// looking at this page now" client beacon, not the GET itself) — same
+// reasoning as notifications/service.ts's markRead/markAllRead staying
+// distinct from listNotifications: a GET can be triggered by prefetch/
+// revalidation without real user intent, and marking everything seen on
+// that would hide badges the viewer never actually saw.
+export async function markFollowingSeen(userId: string): Promise<void> {
+  await pool.query(`UPDATE users SET following_last_seen_at = now() WHERE id = $1`, [userId]);
 }
 
 // Exported — reused by getCreatorProfile below (a second, independent

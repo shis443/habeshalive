@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getCategoryFollowStatus, toggleCategoryFollow } from "./category-service.js";
-import { getFollowedCreators, getFollowStatus, listMyFollowers, toggleFollow } from "./service.js";
+import { getFollowedCreators, getFollowStatus, listMyFollowers, markFollowingSeen, toggleFollow } from "./service.js";
 
 // Same keying rationale as wallet/routes.ts's keyByUser.
 function keyByUser(req: FastifyRequest): string {
@@ -9,6 +9,15 @@ function keyByUser(req: FastifyRequest): string {
 
 export const followRoutes: FastifyPluginAsync = async (app) => {
   app.get("/mine", { preHandler: app.authenticate }, async (req) => getFollowedCreators(req.user.sub));
+
+  // Phase 3.5 — explicit "I actually looked at this" beacon, separate
+  // from the GET above — see markFollowingSeen's own comment for why.
+  // Static "mine/seen" segment, same non-collision reasoning as every
+  // other static route in this file.
+  app.post("/mine/seen", { preHandler: app.authenticate }, async (req, reply) => {
+    await markFollowingSeen(req.user.sub);
+    reply.status(204).send();
+  });
 
   // Creator Dashboard's Community > Followers — deliberately a different
   // path from /mine above (that's "who I follow", this is "who follows

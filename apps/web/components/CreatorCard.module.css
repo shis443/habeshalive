@@ -60,10 +60,25 @@
 
 .displayName {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 15px;
   color: var(--on-background);
+}
+
+/* New VOD/clip since the viewer last opened /following — a dot next to
+   the name (not stacked on the avatar's existing Live badge corner,
+   which would fight for the same space) so it reads at a glance without
+   competing with live status. */
+.newContentDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--secondary);
+  flex-shrink: 0;
 }
 
 .username {

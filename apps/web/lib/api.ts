@@ -22,9 +22,9 @@ import {
   creatorApplicationCapStatusSchema,
   creatorListItemSchema,
   creatorProfileSchema,
-  creatorSearchResultSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
+  followedCreatorSchema,
   followerListItemSchema,
   followStatusSchema,
   giftCardAdminItemSchema,
@@ -96,9 +96,9 @@ import {
   type CreatorApplicationCapStatus,
   type CreatorListItem,
   type CreatorProfile,
-  type CreatorSearchResult,
   type CreatorStats,
   type EarningsThisMonth,
+  type FollowedCreator,
   type FollowerListItem,
   type FollowStatus,
   type GiftCardAdminItem,
@@ -299,14 +299,14 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return authUserSchema.parse(await unwrapData(res));
 }
 
-export async function getFollowedCreators(): Promise<CreatorSearchResult[] | null> {
+export async function getFollowedCreators(): Promise<FollowedCreator[] | null> {
   const res = await fetchAuthed("/follows/mine");
   if (res.status === 401) return null;
   if (!res.ok) {
     console.error(`Failed to load followed creators (${res.status})`);
     return null;
   }
-  return creatorSearchResultSchema.array().parse(await unwrapData(res));
+  return followedCreatorSchema.array().parse(await unwrapData(res));
 }
 
 export async function getStreamKey(): Promise<StreamKeyResponse | null> {

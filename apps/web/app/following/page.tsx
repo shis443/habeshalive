@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
 import { CreatorCard } from "@/components/CreatorCard";
+import { FollowingSeenBeacon } from "@/components/FollowingSeenBeacon";
 import { TopNav } from "@/components/TopNav";
 import { getCurrentUser, getFollowedCreators } from "@/lib/api";
 import styles from "./page.module.css";
@@ -29,13 +30,19 @@ export default async function FollowingPage() {
             </p>
             <div className={styles.creatorGrid}>
               {creators.map((creator) => (
-                <CreatorCard key={creator.id} creator={creator} muteWhenOffline />
+                <CreatorCard
+                  key={creator.id}
+                  creator={creator}
+                  muteWhenOffline
+                  hasNewContent={creator.hasNewContent}
+                />
               ))}
             </div>
           </>
         )}
       </main>
       <BottomNav active="following" />
+      <FollowingSeenBeacon />
     </>
   );
 }
