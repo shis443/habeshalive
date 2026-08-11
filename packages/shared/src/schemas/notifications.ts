@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const notificationTypeSchema = z.enum([
   "creator_live",
+  "category_live",
   "gursha_received",
   "subscription_new",
   "subscription_renewed",

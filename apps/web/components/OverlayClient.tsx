@@ -26,7 +26,15 @@ export function OverlayClient({ username }: { username: string }) {
           if (!cancelled) setStreamId(null);
           return;
         }
-        const stream = streamDetailSchema.parse(await res.json());
+        // The API wraps every response as { success, data, error } (see
+        // apps/api/src/app.ts's preSerialization hook) — parsing the raw
+        // body directly against streamDetailSchema (as this previously
+        // did) threw on every successful poll, silently caught below and
+        // treated as "offline". Net effect: this overlay never showed a
+        // real streamId, so GiftAlertOverlay (gated on streamId being
+        // non-null) never mounted for any OBS browser-source user, ever.
+        const body = (await res.json()) as { data: unknown };
+        const stream = streamDetailSchema.parse(body.data);
         if (!cancelled) setStreamId(stream.id);
       } catch {
         if (!cancelled) setStreamId(null);

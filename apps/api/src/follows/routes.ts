@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import { getCategoryFollowStatus, toggleCategoryFollow } from "./category-service.js";
 import { getFollowedCreators, getFollowStatus, listMyFollowers, toggleFollow } from "./service.js";
 
 // Same keying rationale as wallet/routes.ts's keyByUser.
@@ -40,5 +41,29 @@ export const followRoutes: FastifyPluginAsync = async (app) => {
       config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler", keyGenerator: keyByUser } },
     },
     async (req) => toggleFollow(req.user.sub, req.params.creatorId)
+  );
+
+  // Phase 3.4 — category following. Registered under a static "category"
+  // segment, same non-collision reasoning as "/mine"/"/followers" above:
+  // "/category/:category/status" can't be shadowed by "/:creatorId/status"
+  // regardless of registration order.
+  app.get<{ Params: { category: string } }>("/category/:category/status", async (req) => {
+    let followerId: string | null = null;
+    try {
+      await req.jwtVerify();
+      followerId = req.user.sub;
+    } catch {
+      // no/invalid session — treat as anonymous
+    }
+    return getCategoryFollowStatus(followerId, req.params.category);
+  });
+
+  app.post<{ Params: { category: string } }>(
+    "/category/:category",
+    {
+      preHandler: app.authenticate,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler", keyGenerator: keyByUser } },
+    },
+    async (req) => toggleCategoryFollow(req.user.sub, req.params.category)
   );
 };

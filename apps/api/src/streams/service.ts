@@ -21,7 +21,7 @@ import { encryptSecret, resolveStreamKey, timingSafeEqualStreamKey } from "../co
 import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
 import { killActiveRtmpPublishers } from "../moderation/actions-service.js";
 import { isApprovedCreator } from "../creator-applications/service.js";
-import { notifyFollowersCreatorLive } from "../notifications/service.js";
+import { notifyFollowersCategoryLive, notifyFollowersCreatorLive } from "../notifications/service.js";
 import { appendHlsToken } from "./hls-token.js";
 import { hasPpvAccess } from "./ppv-service.js";
 import { linkTagsToStream } from "./tags-service.js";
@@ -607,6 +607,13 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   notifyFollowersCreatorLive(userId, stream.creator.username, stream.creator.displayName).catch((err) => {
     console.error("[streams] notifyFollowersCreatorLive failed:", err);
   });
+  // Phase 3.4 — same detached, best-effort posture as the creator-follow
+  // notification above.
+  notifyFollowersCategoryLive(input.category, userId, stream.creator.username, stream.creator.displayName).catch(
+    (err) => {
+      console.error("[streams] notifyFollowersCategoryLive failed:", err);
+    }
+  );
   // Module 4 — no-ops until TELEGRAM_BOT_TOKEN/TELEGRAM_CHANNEL_ID are
   // configured (see telegram-client.ts).
   sendGoLiveAnnouncement(stream.creator.displayName, `${env.WEB_PUBLIC_URL}/watch/${stream.creator.username}`).catch(

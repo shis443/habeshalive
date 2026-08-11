@@ -24,7 +24,16 @@ export function StreamKeyRow({ initialStreamKey }: { initialStreamKey: string })
     try {
       const res = await fetch("/api/backend/streams/key/rotate", { method: "POST" });
       if (res.ok) {
-        const data = streamKeySchema.parse(await res.json());
+        // The API wraps every response as { success, data, error } (see
+        // apps/api/src/app.ts's preSerialization hook) — parsing the raw
+        // body directly against streamKeySchema (as this previously did)
+        // threw here every time, uncaught. The rotation itself had
+        // already succeeded server-side (the old key was already
+        // invalidated by this point) — the creator just never saw the
+        // new key or any indication anything had happened, silently
+        // breaking their OBS connection with no error shown.
+        const body = (await res.json()) as { data: unknown };
+        const data = streamKeySchema.parse(body.data);
         setStreamKey(data.streamKey);
         setRevealed(true);
       }

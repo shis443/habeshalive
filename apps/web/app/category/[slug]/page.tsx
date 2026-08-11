@@ -3,11 +3,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
 import { CategoryClipsGrid } from "@/components/CategoryClipsGrid";
+import { CategoryFollowButton } from "@/components/CategoryFollowButton";
 import { CategoryVodsGrid } from "@/components/CategoryVodsGrid";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
 import { StreamCard } from "@/components/StreamCard";
 import { TopNav } from "@/components/TopNav";
-import { getClipsByCategory, getCurrentUser, getLiveStreams, getVodsByCategory } from "@/lib/api";
+import {
+  getCategoryFollowStatus,
+  getClipsByCategory,
+  getCurrentUser,
+  getLiveStreams,
+  getVodsByCategory,
+} from "@/lib/api";
 import styles from "./page.module.css";
 
 type CategoryTab = "live" | "videos" | "clips";
@@ -36,12 +43,13 @@ export default async function CategoryPage({
 
   // Only the active tab's data is fetched — same reasoning as
   // watch/[username]/page.tsx already applies to its own tab set.
-  const [user, sidebarStreams, liveStreams, vods, clips] = await Promise.all([
+  const [user, sidebarStreams, liveStreams, vods, clips, followStatus] = await Promise.all([
     getCurrentUser(),
     getLiveStreams(),
     tab === "live" ? getLiveStreams({ category }) : Promise.resolve([]),
     tab === "videos" ? getVodsByCategory(category) : Promise.resolve([]),
     tab === "clips" ? getClipsByCategory(category) : Promise.resolve([]),
+    getCategoryFollowStatus(category),
   ]);
 
   function tabHref(next: CategoryTab) {
@@ -53,7 +61,10 @@ export default async function CategoryPage({
       <TopNav isAuthed={!!user} />
       <LiveChannelsSidebar streams={sidebarStreams} />
       <main className={styles.main}>
-        <h1 className={styles.heading}>{category}</h1>
+        <div className={styles.headerRow}>
+          <h1 className={styles.heading}>{category}</h1>
+          <CategoryFollowButton category={category} isAuthed={!!user} initialFollowing={followStatus.following} />
+        </div>
         <div className={styles.tabs}>
           <Link href={tabHref("live")} className={tab === "live" ? styles.tabActive : styles.tab}>
             Live Channels

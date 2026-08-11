@@ -12,12 +12,20 @@
   }
 }
 
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
 .heading {
   font-family: var(--font-headline);
   font-weight: 600;
   font-size: 22px;
   color: var(--on-background);
-  margin: 0 0 var(--space-3);
+  margin: 0;
 }
 
 .tabs {

@@ -5,12 +5,16 @@ import { useState } from "react";
 import { openAuthModal } from "@/lib/useAuthModal";
 import styles from "./FollowButton.module.css";
 
-export function FollowButton({
-  creatorId,
+// Phase 3.4 — category following. Reuses FollowButton.module.css directly
+// (identical visual shape, a toggle pill) rather than duplicating styles
+// for what's otherwise the same component pattern with a different
+// endpoint.
+export function CategoryFollowButton({
+  category,
   isAuthed,
   initialFollowing,
 }: {
-  creatorId: string;
+  category: string;
   isAuthed: boolean;
   initialFollowing: boolean;
 }) {
@@ -24,15 +28,11 @@ export function FollowButton({
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/backend/follows/${creatorId}`, { method: "POST" });
+      const res = await fetch(`/api/backend/follows/category/${encodeURIComponent(category)}`, { method: "POST" });
       if (res.ok) {
-        // The API wraps every response as { success, data, error } — see
-        // apps/api/src/app.ts's preSerialization hook. Parsing the raw
-        // body against followStatusSchema (as this previously did) throws
-        // on every call, since {success,data,error} never matches
-        // {following,followerCount} — the follow itself still applies
-        // server-side (the request already succeeded by this point), but
-        // the button silently never re-renders to reflect it.
+        // See FollowButton.tsx's own comment on why .data must be
+        // unwrapped first — apps/api wraps every response as
+        // { success, data, error }.
         const body = (await res.json()) as { data: unknown };
         const data = followStatusSchema.parse(body.data);
         setFollowing(data.following);
@@ -49,7 +49,7 @@ export function FollowButton({
       onClick={handleClick}
       disabled={loading}
     >
-      {following ? "Following" : "Follow"}
+      {following ? "Following category" : "Follow category"}
     </button>
   );
 }

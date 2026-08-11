@@ -509,6 +509,17 @@ export async function getFollowStatus(creatorId: string): Promise<FollowStatus> 
   return followStatusSchema.parse(await unwrapData(res));
 }
 
+// Phase 3.4 — category detail page's follow button. Same public/
+// graceful-default posture as getFollowStatus above.
+export async function getCategoryFollowStatus(category: string): Promise<FollowStatus> {
+  const res = await fetchAuthed(`/follows/category/${encodeURIComponent(category)}/status`);
+  if (!res.ok) {
+    console.error(`Failed to load category follow status (${res.status})`);
+    return { following: false, followerCount: 0 };
+  }
+  return followStatusSchema.parse(await unwrapData(res));
+}
+
 // Left throwing, unlike the rest of this file after the k6 finding above:
 // there's no safe empty AvatarManifest to degrade to (it's a fixed part
 // catalog, not a list of results) that wouldn't itself confuse the editor

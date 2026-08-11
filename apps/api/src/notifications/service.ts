@@ -67,6 +67,12 @@ async function publishUnreadUpdate(userId: string, unreadCount: number): Promise
 
 const PREFERENCE_COLUMN: Record<NotificationType, keyof NotificationPreferences | null> = {
   creator_live: "liveAlerts",
+  // Same underlying "tell me when something is live" toggle as
+  // creator_live — a separate preference column for this would be a
+  // settings-UI toggle nobody asked for; the two notification *types*
+  // stay distinct (different copy/link), the on/off switch doesn't need
+  // to.
+  category_live: "liveAlerts",
   gursha_received: "gurshaReceived",
   subscription_new: "subscriptionEvents",
   subscription_renewed: "subscriptionEvents",
@@ -158,6 +164,41 @@ export async function notifyFollowersCreatorLive(
   // durably stored regardless of whether the real-time push lands.
   Promise.all(followerIds.map((userId) => publishUnreadUpdate(userId, countByUser.get(userId) ?? 0))).catch((err) => {
     console.error("[notifications] batched live-alert publish failed:", err);
+  });
+}
+
+// Phase 3.4 — category-follow equivalent of notifyFollowersCreatorLive
+// above, same batching reasoning (one bulk INSERT, one bulk COUNT, N
+// unavoidable per-follower Centrifugo publishes fired detached). Excludes
+// the streamer's own user_id defensively — nothing stops someone from
+// following a category they then stream in, and they don't need a
+// notification about their own broadcast.
+export async function notifyFollowersCategoryLive(
+  category: string,
+  streamerId: string,
+  creatorUsername: string,
+  creatorDisplayName: string
+): Promise<void> {
+  const { rows: inserted } = await pool.query<{ user_id: string }>(
+    `INSERT INTO notifications (user_id, type, title, link_url, actor_id)
+     SELECT cf.user_id, 'category_live', $2 || ' is live in ' || $1, '/watch/' || $3, $4
+     FROM category_follows cf
+     LEFT JOIN notification_preferences np ON np.user_id = cf.user_id
+     WHERE cf.category = $1 AND cf.user_id != $4 AND COALESCE(np.live_alerts, TRUE) = TRUE
+     RETURNING user_id`,
+    [category, creatorDisplayName, creatorUsername, streamerId]
+  );
+  if (inserted.length === 0) return;
+
+  const followerIds = inserted.map((r) => r.user_id);
+  const { rows: counts } = await pool.query<{ user_id: string; count: string }>(
+    `SELECT user_id, count(*) FROM notifications WHERE user_id = ANY($1::uuid[]) AND read_at IS NULL GROUP BY user_id`,
+    [followerIds]
+  );
+  const countByUser = new Map(counts.map((r) => [r.user_id, Number(r.count)]));
+
+  Promise.all(followerIds.map((userId) => publishUnreadUpdate(userId, countByUser.get(userId) ?? 0))).catch((err) => {
+    console.error("[notifications] batched category-live-alert publish failed:", err);
   });
 }
 
