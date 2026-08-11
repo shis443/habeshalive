@@ -5,6 +5,7 @@ const TABS = [
   { value: "home", label: "Home" },
   { value: "about", label: "About" },
   { value: "videos", label: "Videos" },
+  { value: "clips", label: "Clips" },
 ] as const;
 
 export type ChannelTab = (typeof TABS)[number]["value"];
@@ -14,15 +15,15 @@ export type ChannelTab = (typeof TABS)[number]["value"];
 // no JS needed for the tab switch itself to work (this page is otherwise
 // entirely server-rendered for the offline path it's used on).
 //
-// Only three tabs, not the six in a typical Twitch layout (Home/About/
-// Clips/Videos/Schedule/Chat) — Clips is real (Module 4's clip-service.ts)
-// but shown as a section within Home instead of a full tab of its own
-// (see FeaturedClips.tsx), same "small enough to not need its own tab"
-// judgment as Home already applying to Recent Categories. Schedule has no
-// backend concept whatsoever (omitted rather than adding a second
-// undiscussed placeholder), and Chat is already always visible inline
-// while a stream is live in this app's existing architecture, with no
-// offline-chat concept to put behind a tab.
+// Four tabs, not the six in a typical Twitch layout (Home/About/Clips/
+// Videos/Schedule/Chat) — Schedule has no backend concept whatsoever
+// (omitted rather than adding a second undiscussed placeholder), and Chat
+// is already always visible inline while a stream is live in this app's
+// existing architecture, with no offline-chat concept to put behind a
+// tab. Clips (Phase 3.2) reuses FeaturedClips.tsx as its own tab now,
+// same component as the Home-tab preview — same "component keeps its own
+// heading even under a like-named tab" precedent PastBroadcasts.tsx
+// already set for Videos.
 export function ChannelTabs({ username, active }: { username: string; active: ChannelTab }) {
   return (
     <nav className={styles.tabs}>

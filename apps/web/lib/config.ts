@@ -1,3 +1,11 @@
+// This app's own public origin — needed for absolute URLs a client can't
+// derive from a relative path: Open Graph/Twitter card tags (a scraper
+// fetching /clip/[id] has no request-relative context at all) and share
+// links. Matches apps/api's own WEB_PUBLIC_URL name (common/env.ts) for
+// the same real host, just exposed client-side here since generateMetadata
+// runs where NEXT_PUBLIC_* is what's actually available.
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 // What the browser can reach the API at — baked into the client bundle.
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 

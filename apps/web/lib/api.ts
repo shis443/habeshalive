@@ -52,6 +52,7 @@ import {
   platformSubscriptionSchema,
   platformWalletSummarySchema,
   pointsBalanceSchema,
+  publicClipSchema,
   reportSchema,
   searchResultsSchema,
   servedAdSchema,
@@ -121,6 +122,7 @@ import {
   type PlatformConfig,
   type PlatformSubscription,
   type PlatformWalletSummary,
+  type PublicClip,
   type Report,
   type SearchResults,
   type ServedAd,
@@ -346,6 +348,16 @@ export async function getClipsForUsername(username: string): Promise<Clip[]> {
   const res = await fetch(`${API_INTERNAL_URL}/vods/${encodeURIComponent(username)}/clips`, { cache: "no-store" });
   if (!res.ok) return [];
   return clipSchema.array().parse(await unwrapData(res));
+}
+
+// Phase 3.1 — the public, independently-shareable clip page
+// (app/clip/[id]/page.tsx). Null on a 404 (removed/never existed) so the
+// page can render its own not-found state rather than throwing through
+// generateMetadata, which a missing clip would otherwise reach first.
+export async function getPublicClip(id: string): Promise<PublicClip | null> {
+  const res = await fetch(`${API_INTERNAL_URL}/vods/clips/${encodeURIComponent(id)}`, { cache: "no-store" });
+  if (!res.ok) return null;
+  return publicClipSchema.parse(await unwrapData(res));
 }
 
 // Authenticated — includes drafts, unlike getVods above (public, published-

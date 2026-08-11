@@ -1,6 +1,13 @@
 import { createClipSchema, publishVodSchema } from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
-import { createClip, deleteClipOwned, listClipsForCreator } from "./clip-service.js";
+import { AppError } from "../common/errors.js";
+import {
+  createClip,
+  deleteClipOwned,
+  getPublicClipById,
+  incrementClipViews,
+  listClipsForCreator,
+} from "./clip-service.js";
 import {
   deleteVodOwned,
   incrementVodViews,
@@ -72,6 +79,25 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { username: string } }>("/:username/clips", async (req) =>
     listClipsForCreator(req.params.username)
   );
+
+  // Phase 3.1 — public, independently-shareable clip. Registered as a
+  // static "clips" segment (same as DELETE /clips/:id below), so it can't
+  // be shadowed by the parametric "/:username" route above regardless of
+  // registration order — same non-load-bearing-but-worth-noting point as
+  // "/mine"'s own comment up top.
+  app.get<{ Params: { id: string } }>("/clips/:id", async (req) => {
+    const clip = await getPublicClipById(req.params.id);
+    if (!clip) throw new AppError(404, "Clip not found");
+    return clip;
+  });
+
+  // Public, unauthenticated, no rate limiting — same "count a play, not
+  // an impression" convention as /:id/view above, fired once by the
+  // client on first playback.
+  app.post<{ Params: { id: string } }>("/clips/:id/view", async (req, reply) => {
+    await incrementClipViews(req.params.id);
+    reply.status(204).send();
+  });
 
   app.delete<{ Params: { id: string } }>("/clips/:id", { preHandler: app.authenticate }, async (req, reply) => {
     await deleteClipOwned(req.params.id, req.user.sub);

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Clip, CreateClipInput } from "@birq/shared";
+import type { Clip, CreateClipInput, PublicClip } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { deleteObject, getSignedVodUrl, isObjectStorageConfigured, uploadObject } from "../common/object-storage.js";
@@ -125,6 +125,61 @@ export async function listClipsForCreator(username: string): Promise<Clip[]> {
     [username]
   );
   return Promise.all(rows.map(toClip));
+}
+
+interface PublicClipRow {
+  id: string;
+  title: string | null;
+  object_key: string;
+  duration_seconds: number;
+  created_at: string;
+  views: number;
+  category: string | null;
+  creator_username: string;
+  creator_display_name: string;
+  creator_avatar_url: string | null;
+}
+
+// Phase 3.1 — the public, independently-shareable clip page. category
+// mirrors vods/service.ts's own COALESCE(v.category, s.category) pattern
+// (0028_vod_publish_workflow.sql): a clip's source VOD can override the
+// parent stream's category, falling back to it otherwise. dmca_removed_at
+// IS NULL is the same enforcement point vods/service.ts's public listing
+// already uses — a takedown-flagged clip must 404 here too, not just
+// disappear from listClipsForCreator.
+export async function getPublicClipById(clipId: string): Promise<PublicClip | null> {
+  const { rows } = await pool.query<PublicClipRow>(
+    `SELECT c.id, c.title, c.object_key, c.duration_seconds, c.created_at, c.views,
+            COALESCE(v.category, s.category) AS category,
+            u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
+     FROM clips c
+     JOIN stream_vods v ON v.id = c.vod_id
+     JOIN streams s ON s.id = v.stream_id
+     JOIN users u ON u.id = c.creator_id
+     WHERE c.id = $1 AND c.dmca_removed_at IS NULL`,
+    [clipId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    playbackUrl: await getSignedVodUrl(row.object_key),
+    durationSeconds: row.duration_seconds,
+    createdAt: row.created_at,
+    views: row.views,
+    category: row.category,
+    creatorUsername: row.creator_username,
+    creatorDisplayName: row.creator_display_name,
+    creatorAvatarUrl: row.creator_avatar_url,
+  };
+}
+
+// Public, unauthenticated — same trust level and same "count a play, not
+// an impression" convention as vods/service.ts's incrementVodViews
+// (fired once by the client on first playback, not on page load).
+export async function incrementClipViews(clipId: string): Promise<void> {
+  await pool.query(`UPDATE clips SET views = views + 1 WHERE id = $1 AND dmca_removed_at IS NULL`, [clipId]);
 }
 
 export async function deleteClipOwned(clipId: string, userId: string): Promise<void> {

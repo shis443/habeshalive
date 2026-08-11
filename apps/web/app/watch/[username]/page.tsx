@@ -73,7 +73,8 @@ export default async function WatchPage({
     }
 
     const rawTab = (await searchParams).tab;
-    const tab: ChannelTab = rawTab === "about" || rawTab === "videos" ? rawTab : "home";
+    const tab: ChannelTab =
+      rawTab === "about" || rawTab === "videos" || rawTab === "clips" ? rawTab : "home";
 
     return (
       <>
@@ -92,6 +93,7 @@ export default async function WatchPage({
           <AboutCreator displayName={profile.displayName} bio={profile.bio} followerCount={profile.followerCount} />
         )}
         {tab === "videos" && <PastBroadcasts vods={vods} />}
+        {tab === "clips" && <FeaturedClips clips={clips} />}
         <BottomNav />
       </>
     );
