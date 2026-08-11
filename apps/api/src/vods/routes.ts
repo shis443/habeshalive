@@ -6,12 +6,14 @@ import {
   deleteClipOwned,
   getPublicClipById,
   incrementClipViews,
+  listClipsByCategory,
   listClipsForCreator,
 } from "./clip-service.js";
 import {
   deleteVodOwned,
   incrementVodViews,
   listMyVods,
+  listVodsByCategory,
   listVodsForCreator,
   publishVod,
   unpublishVod,
@@ -57,6 +59,17 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
     reply.status(204).send();
   });
 
+  // Phase 3.3 — category detail page's Videos tab. Registered as a bare
+  // path (no segment) under this same "/vods" prefix — genuinely distinct
+  // from "/:username" below regardless of registration order, since a
+  // parametric segment requires something to be present to match against.
+  // No stricter validation against STREAM_CATEGORIES than streams/
+  // routes.ts's own live-stream category filter already has — an unknown
+  // category is just an empty result, not an error, same as there.
+  app.get<{ Querystring: { category?: string } }>("/", async (req) =>
+    req.query.category ? listVodsByCategory(req.query.category) : []
+  );
+
   app.get<{ Params: { username: string } }>("/:username", async (req) =>
     listVodsForCreator(req.params.username)
   );
@@ -78,6 +91,14 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { username: string } }>("/:username/clips", async (req) =>
     listClipsForCreator(req.params.username)
+  );
+
+  // Phase 3.3 — category detail page's Clips tab. Static "clips" segment
+  // with no further path, distinct from both "/:username/clips" above and
+  // "/clips/:id" below (a bare "/vods/clips" never matches a route that
+  // requires an :id segment to be present).
+  app.get<{ Querystring: { category?: string } }>("/clips", async (req) =>
+    req.query.category ? listClipsByCategory(req.query.category) : []
   );
 
   // Phase 3.1 — public, independently-shareable clip. Registered as a

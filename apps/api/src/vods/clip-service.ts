@@ -140,27 +140,7 @@ interface PublicClipRow {
   creator_avatar_url: string | null;
 }
 
-// Phase 3.1 — the public, independently-shareable clip page. category
-// mirrors vods/service.ts's own COALESCE(v.category, s.category) pattern
-// (0028_vod_publish_workflow.sql): a clip's source VOD can override the
-// parent stream's category, falling back to it otherwise. dmca_removed_at
-// IS NULL is the same enforcement point vods/service.ts's public listing
-// already uses — a takedown-flagged clip must 404 here too, not just
-// disappear from listClipsForCreator.
-export async function getPublicClipById(clipId: string): Promise<PublicClip | null> {
-  const { rows } = await pool.query<PublicClipRow>(
-    `SELECT c.id, c.title, c.object_key, c.duration_seconds, c.created_at, c.views,
-            COALESCE(v.category, s.category) AS category,
-            u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
-     FROM clips c
-     JOIN stream_vods v ON v.id = c.vod_id
-     JOIN streams s ON s.id = v.stream_id
-     JOIN users u ON u.id = c.creator_id
-     WHERE c.id = $1 AND c.dmca_removed_at IS NULL`,
-    [clipId]
-  );
-  const row = rows[0];
-  if (!row) return null;
+async function toPublicClip(row: PublicClipRow): Promise<PublicClip> {
   return {
     id: row.id,
     title: row.title,
@@ -173,6 +153,46 @@ export async function getPublicClipById(clipId: string): Promise<PublicClip | nu
     creatorDisplayName: row.creator_display_name,
     creatorAvatarUrl: row.creator_avatar_url,
   };
+}
+
+const PUBLIC_CLIP_SELECT = `SELECT c.id, c.title, c.object_key, c.duration_seconds, c.created_at, c.views,
+            COALESCE(v.category, s.category) AS category,
+            u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
+     FROM clips c
+     JOIN stream_vods v ON v.id = c.vod_id
+     JOIN streams s ON s.id = v.stream_id
+     JOIN users u ON u.id = c.creator_id`;
+
+// Phase 3.1 — the public, independently-shareable clip page. category
+// mirrors vods/service.ts's own COALESCE(v.category, s.category) pattern
+// (0028_vod_publish_workflow.sql): a clip's source VOD can override the
+// parent stream's category, falling back to it otherwise. dmca_removed_at
+// IS NULL is the same enforcement point vods/service.ts's public listing
+// already uses — a takedown-flagged clip must 404 here too, not just
+// disappear from listClipsForCreator.
+export async function getPublicClipById(clipId: string): Promise<PublicClip | null> {
+  const { rows } = await pool.query<PublicClipRow>(
+    `${PUBLIC_CLIP_SELECT} WHERE c.id = $1 AND c.dmca_removed_at IS NULL`,
+    [clipId]
+  );
+  const row = rows[0];
+  return row ? toPublicClip(row) : null;
+}
+
+// Phase 3.3 — category detail page's Clips tab. Reuses PublicClip
+// (already built for Phase 3.1's public clip page) rather than a third
+// type — same shape a cross-creator feed needs either way: attribution,
+// category, views. Same 24-item cap as listVodsByCategory's sibling
+// query — a browse feed, not a paginated archive.
+export async function listClipsByCategory(category: string): Promise<PublicClip[]> {
+  const { rows } = await pool.query<PublicClipRow>(
+    `${PUBLIC_CLIP_SELECT}
+     WHERE COALESCE(v.category, s.category) = $1 AND c.dmca_removed_at IS NULL
+     ORDER BY c.created_at DESC
+     LIMIT 24`,
+    [category]
+  );
+  return Promise.all(rows.map(toPublicClip));
 }
 
 // Public, unauthenticated — same trust level and same "count a play, not

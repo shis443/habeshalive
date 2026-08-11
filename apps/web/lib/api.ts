@@ -53,6 +53,7 @@ import {
   platformWalletSummarySchema,
   pointsBalanceSchema,
   publicClipSchema,
+  publicVodSchema,
   reportSchema,
   searchResultsSchema,
   servedAdSchema,
@@ -123,6 +124,7 @@ import {
   type PlatformSubscription,
   type PlatformWalletSummary,
   type PublicClip,
+  type PublicVod,
   type Report,
   type SearchResults,
   type ServedAd,
@@ -358,6 +360,22 @@ export async function getPublicClip(id: string): Promise<PublicClip | null> {
   const res = await fetch(`${API_INTERNAL_URL}/vods/clips/${encodeURIComponent(id)}`, { cache: "no-store" });
   if (!res.ok) return null;
   return publicClipSchema.parse(await unwrapData(res));
+}
+
+// Phase 3.3 — category detail page's Videos/Clips tabs. Same degrade-to-
+// empty-list posture as getVods/getClipsForUsername above.
+export async function getVodsByCategory(category: string): Promise<PublicVod[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/vods?category=${encodeURIComponent(category)}`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return publicVodSchema.array().parse(await unwrapData(res));
+}
+
+export async function getClipsByCategory(category: string): Promise<PublicClip[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/vods/clips?category=${encodeURIComponent(category)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  return publicClipSchema.array().parse(await unwrapData(res));
 }
 
 // Authenticated — includes drafts, unlike getVods above (public, published-

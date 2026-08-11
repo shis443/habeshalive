@@ -142,6 +142,26 @@ export const vodSchema = z.object({
 });
 export type Vod = z.infer<typeof vodSchema>;
 
+// Phase 3.3 — category detail page (app/category/[slug]). vodSchema above
+// is creator-scoped (rendered on that creator's own channel page, where
+// "whose VOD is this" is already implied by context) and so carries no
+// attribution — a cross-creator category feed needs it, same reasoning
+// as clips.ts's publicClipSchema.
+export const publicVodSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  category: z.string().nullable(),
+  thumbnailUrl: z.string().nullable(),
+  playbackUrl: z.string(),
+  durationSeconds: z.number().int().nullable(),
+  views: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  creatorUsername: z.string(),
+  creatorDisplayName: z.string(),
+  creatorAvatarUrl: z.string().nullable(),
+});
+export type PublicVod = z.infer<typeof publicVodSchema>;
+
 // PATCH /vods/:id/publish body — every field optional since publishing
 // with no overrides (just flip is_published) is the common case; only a
 // creator explicitly renaming/re-categorizing before publishing sends

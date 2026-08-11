@@ -1,4 +1,4 @@
-import type { PublishVodInput, Vod } from "@birq/shared";
+import type { PublicVod, PublishVodInput, Vod } from "@birq/shared";
 import { getVodRetentionDays } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
@@ -54,6 +54,51 @@ export async function listVodsForCreator(username: string): Promise<Vod[]> {
     [username]
   );
   return Promise.all(rows.map(toVod));
+}
+
+interface PublicVodRow extends VodRow {
+  creator_username: string;
+  creator_display_name: string;
+  creator_avatar_url: string | null;
+}
+
+async function toPublicVod(row: PublicVodRow): Promise<PublicVod> {
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    thumbnailUrl: row.thumbnail_url,
+    playbackUrl: await getSignedVodUrl(row.playback_url),
+    durationSeconds: row.duration_seconds,
+    views: row.views,
+    createdAt: row.created_at,
+    creatorUsername: row.creator_username,
+    creatorDisplayName: row.creator_display_name,
+    creatorAvatarUrl: row.creator_avatar_url,
+  };
+}
+
+// Phase 3.3 — category detail page's Videos tab. Same public/is_published
+// gate as listVodsForCreator above, just filtered by category across all
+// creators instead of by username for one. Capped at 24 — this is a
+// browse feed, not a paginated archive; no "load more" exists yet on
+// either the category page or listVodsForCreator's own equivalent.
+export async function listVodsByCategory(category: string): Promise<PublicVod[]> {
+  const { rows } = await pool.query<PublicVodRow>(
+    `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
+            COALESCE(v.category, s.category) AS category, s.thumbnail_url,
+            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at,
+            u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
+     FROM stream_vods v
+     JOIN streams s ON s.id = v.stream_id
+     JOIN users u ON u.id = s.creator_id
+     WHERE COALESCE(v.category, s.category) = $1
+       AND v.expires_at > now() AND v.is_published = true AND v.dmca_removed_at IS NULL
+     ORDER BY v.created_at DESC
+     LIMIT 24`,
+    [category]
+  );
+  return Promise.all(rows.map(toPublicVod));
 }
 
 // Authenticated — a creator managing their own channel needs to see

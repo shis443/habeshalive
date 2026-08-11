@@ -42,9 +42,14 @@ export default async function BrowsePage({
     return `/browse?${p.toString()}`;
   }
 
+  // Phase 3.3 — category tiles now go to a real destination
+  // (/category/[slug]'s Live/Videos/Clips tabs) instead of just filtering
+  // this same page's Live Channels view. That filter itself is untouched
+  // (BrowseFilterBar's own category-adjacent controls still work exactly
+  // as before) — this only changes where clicking a category *tile*
+  // lands.
   function categoryHref(cat: string) {
-    const p = new URLSearchParams({ view: "channels", category: cat });
-    return `/browse?${p.toString()}`;
+    return `/category/${encodeURIComponent(cat)}`;
   }
 
   return (
