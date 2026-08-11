@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Clip, CreateClipInput, PublicClip } from "@birq/shared";
+import type { AspectRatio, Clip, CreateClipInput, PublicClip } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { deleteObject, getSignedVodUrl, isObjectStorageConfigured, uploadObject } from "../common/object-storage.js";
@@ -62,6 +62,7 @@ interface ClipRow {
   object_key: string;
   start_seconds: number;
   duration_seconds: number;
+  aspect_ratio: AspectRatio;
   created_at: string;
 }
 
@@ -73,6 +74,7 @@ async function toClip(row: ClipRow): Promise<Clip> {
     playbackUrl: await getSignedVodUrl(row.object_key),
     startSeconds: row.start_seconds,
     durationSeconds: row.duration_seconds,
+    aspectRatio: row.aspect_ratio,
     createdAt: row.created_at,
   };
 }
@@ -108,7 +110,7 @@ export async function createClip(userId: string, vodId: string, input: CreateCli
   const { rows: inserted } = await pool.query<ClipRow>(
     `INSERT INTO clips (vod_id, creator_id, title, object_key, start_seconds, duration_seconds)
      VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, vod_id, title, object_key, start_seconds, duration_seconds, created_at`,
+     RETURNING id, vod_id, title, object_key, start_seconds, duration_seconds, aspect_ratio, created_at`,
     [vodId, userId, input.title ?? null, objectKey, input.startSeconds, input.durationSeconds]
   );
   return toClip(inserted[0]!);
@@ -132,6 +134,7 @@ interface PublicClipRow {
   title: string | null;
   object_key: string;
   duration_seconds: number;
+  aspect_ratio: AspectRatio;
   created_at: string;
   views: number;
   category: string | null;
@@ -146,6 +149,7 @@ async function toPublicClip(row: PublicClipRow): Promise<PublicClip> {
     title: row.title,
     playbackUrl: await getSignedVodUrl(row.object_key),
     durationSeconds: row.duration_seconds,
+    aspectRatio: row.aspect_ratio,
     createdAt: row.created_at,
     views: row.views,
     category: row.category,
@@ -155,7 +159,7 @@ async function toPublicClip(row: PublicClipRow): Promise<PublicClip> {
   };
 }
 
-const PUBLIC_CLIP_SELECT = `SELECT c.id, c.title, c.object_key, c.duration_seconds, c.created_at, c.views,
+const PUBLIC_CLIP_SELECT = `SELECT c.id, c.title, c.object_key, c.duration_seconds, c.aspect_ratio, c.created_at, c.views,
             COALESCE(v.category, s.category) AS category,
             u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
      FROM clips c

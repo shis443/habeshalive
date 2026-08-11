@@ -1,8 +1,15 @@
-import type { PublicVod, PublishVodInput, Vod } from "@birq/shared";
+import { execFile } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import type { AspectRatio, PublicVod, PublishVodInput, Vod } from "@birq/shared";
 import { getVodRetentionDays } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { deleteObject, getSignedVodUrl, uploadObject } from "../common/object-storage.js";
+
+const execFileAsync = promisify(execFile);
 
 interface VodRow {
   id: string;
@@ -14,6 +21,7 @@ interface VodRow {
   duration_seconds: number | null;
   views: number;
   is_published: boolean;
+  aspect_ratio: AspectRatio;
   created_at: string;
 }
 
@@ -28,6 +36,7 @@ async function toVod(row: VodRow): Promise<Vod> {
     durationSeconds: row.duration_seconds,
     views: row.views,
     isPublished: row.is_published,
+    aspectRatio: row.aspect_ratio,
     createdAt: row.created_at,
   };
 }
@@ -45,7 +54,7 @@ export async function listVodsForCreator(username: string): Promise<Vod[]> {
   const { rows } = await pool.query<VodRow>(
     `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
             COALESCE(v.category, s.category) AS category, s.thumbnail_url,
-            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at
+            v.playback_url, v.duration_seconds, v.views, v.is_published, v.aspect_ratio, v.created_at
      FROM stream_vods v
      JOIN streams s ON s.id = v.stream_id
      JOIN users u ON u.id = s.creator_id
@@ -70,6 +79,7 @@ async function toPublicVod(row: PublicVodRow): Promise<PublicVod> {
     thumbnailUrl: row.thumbnail_url,
     playbackUrl: await getSignedVodUrl(row.playback_url),
     durationSeconds: row.duration_seconds,
+    aspectRatio: row.aspect_ratio,
     views: row.views,
     createdAt: row.created_at,
     creatorUsername: row.creator_username,
@@ -80,7 +90,7 @@ async function toPublicVod(row: PublicVodRow): Promise<PublicVod> {
 
 const PUBLIC_VOD_SELECT = `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
             COALESCE(v.category, s.category) AS category, s.thumbnail_url,
-            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at,
+            v.playback_url, v.duration_seconds, v.views, v.is_published, v.aspect_ratio, v.created_at,
             u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
      FROM stream_vods v
      JOIN streams s ON s.id = v.stream_id
@@ -127,7 +137,7 @@ export async function listMyVods(userId: string): Promise<Vod[]> {
   const { rows } = await pool.query<VodRow>(
     `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
             COALESCE(v.category, s.category) AS category, s.thumbnail_url,
-            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at
+            v.playback_url, v.duration_seconds, v.views, v.is_published, v.aspect_ratio, v.created_at
      FROM stream_vods v
      JOIN streams s ON s.id = v.stream_id
      WHERE s.creator_id = $1 AND v.expires_at > now()
@@ -155,7 +165,7 @@ export async function publishVod(vodId: string, userId: string, input: PublishVo
      WHERE v.id = $1 AND v.stream_id = s.id AND s.creator_id = $2
      RETURNING v.id, COALESCE(v.title, s.title) AS title, v.description,
                COALESCE(v.category, s.category) AS category, s.thumbnail_url,
-               v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at`,
+               v.playback_url, v.duration_seconds, v.views, v.is_published, v.aspect_ratio, v.created_at`,
     [vodId, userId, input.title ?? null, input.description ?? null, input.category ?? null]
   );
   const row = rows[0];
@@ -171,7 +181,7 @@ export async function unpublishVod(vodId: string, userId: string): Promise<Vod> 
      WHERE v.id = $1 AND v.stream_id = s.id AND s.creator_id = $2
      RETURNING v.id, COALESCE(v.title, s.title) AS title, v.description,
                COALESCE(v.category, s.category) AS category, s.thumbnail_url,
-               v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at`,
+               v.playback_url, v.duration_seconds, v.views, v.is_published, v.aspect_ratio, v.created_at`,
     [vodId, userId]
   );
   const row = rows[0];
@@ -213,6 +223,39 @@ export async function incrementVodViews(vodId: string): Promise<void> {
 // new recording starts as a draft; the dashboard's "stream ended" prompt
 // (GET /vods/mine, filtered client-side to unpublished) is what lets a
 // creator actually publish it.
+// SRS's on_publish callback can't report dimensions (fires before any
+// video is decoded — see streams.ts's createStreamSchema comment on the
+// live-stream side of this same problem), but by on_dvr time the actual
+// recorded file exists on disk with real, unimpeachable dimensions —
+// ffprobe reads them directly rather than trusting anything reported
+// earlier. Same binary/argument pattern already verified working in
+// clip-service.test.ts's own ffprobe check. Fails open to the
+// stream_vods.aspect_ratio column's '16:9' default on any error (a
+// corrupt/unreadable probe) — a VOD existing with a possibly-wrong ratio
+// beats losing the recording entirely.
+async function probeAspectRatio(fileBuffer: Buffer): Promise<AspectRatio> {
+  const probeDir = await mkdtemp(join(tmpdir(), "birq-vod-probe-"));
+  const probePath = join(probeDir, "recording.mp4");
+  try {
+    await writeFile(probePath, fileBuffer);
+    const { stdout } = await execFileAsync("ffprobe", [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=width,height",
+      "-of", "csv=p=0",
+      probePath,
+    ]);
+    const [width, height] = stdout.trim().split(",").map(Number);
+    if (!width || !height) return "16:9";
+    return height > width ? "9:16" : "16:9";
+  } catch (err) {
+    console.error(`[vods] ffprobe failed, defaulting to 16:9:`, err);
+    return "16:9";
+  } finally {
+    await rm(probeDir, { recursive: true, force: true });
+  }
+}
+
 export async function createVodFromRecording(streamId: string, fileUrl: string): Promise<Vod> {
   const streamResult = await pool.query<{ creator_id: string; is_anchor_creator: boolean }>(
     `SELECT s.creator_id, cp.is_anchor_creator
@@ -226,6 +269,8 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
   const fileRes = await fetch(fileUrl);
   if (!fileRes.ok) throw new Error(`Failed to fetch recording from ${fileUrl}: ${fileRes.status}`);
   const body = Buffer.from(await fileRes.arrayBuffer());
+
+  const aspectRatio = await probeAspectRatio(body);
 
   const key = `${streamId}/${Date.now()}.mp4`;
   await uploadObject(key, body, "video/mp4");
@@ -242,12 +287,13 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
     duration_seconds: number | null;
     views: number;
     is_published: boolean;
+    aspect_ratio: AspectRatio;
     created_at: string;
   }>(
-    `INSERT INTO stream_vods (stream_id, playback_url, expires_at)
-     VALUES ($1, $2, now() + interval '1 day' * $3)
-     RETURNING id, title, description, category, playback_url, duration_seconds, views, is_published, created_at`,
-    [streamId, key, retentionDays]
+    `INSERT INTO stream_vods (stream_id, playback_url, expires_at, aspect_ratio)
+     VALUES ($1, $2, now() + interval '1 day' * $3, $4)
+     RETURNING id, title, description, category, playback_url, duration_seconds, views, is_published, aspect_ratio, created_at`,
+    [streamId, key, retentionDays, aspectRatio]
   );
   const inserted = rows[0]!;
 

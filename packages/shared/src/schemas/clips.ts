@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aspectRatioSchema } from "./streams.js";
 
 // Module 4 — one-click 9:16 clipper (apps/api/src/vods/clip-service.ts),
 // a real ffmpeg crop+scale of an existing VOD.
@@ -11,6 +12,10 @@ export const clipSchema = z.object({
   playbackUrl: z.string(),
   startSeconds: z.number().int().nonnegative(),
   durationSeconds: z.number().int().positive(),
+  // Always "9:16" under the current clipper (see clip-service.ts's
+  // runFfmpegClip) — carried as real data rather than assumed by every
+  // consumer, same reasoning as streams.ts's aspectRatioSchema.
+  aspectRatio: aspectRatioSchema,
   createdAt: z.string(),
 });
 export type Clip = z.infer<typeof clipSchema>;
@@ -36,6 +41,7 @@ export const publicClipSchema = z.object({
   title: z.string().nullable(),
   playbackUrl: z.string(),
   durationSeconds: z.number().int().positive(),
+  aspectRatio: aspectRatioSchema,
   createdAt: z.string(),
   views: z.number().int().nonnegative(),
   category: z.string().nullable(),

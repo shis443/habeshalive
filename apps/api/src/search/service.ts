@@ -1,4 +1,4 @@
-import type { CreatorSearchResult, StreamDetail } from "@birq/shared";
+import type { AspectRatio, CreatorSearchResult, StreamDetail } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { hasPpvAccess } from "../streams/ppv-service.js";
 
@@ -40,6 +40,7 @@ interface StreamSearchRow {
   tags: string[];
   is_ppv: boolean;
   ppv_price_santim: number | null;
+  aspect_ratio: AspectRatio;
 }
 
 // viewerId gates labeled (is_sensitive) streams the same way
@@ -50,7 +51,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
 
   const { rows } = await pool.query<StreamSearchRow>(
     `SELECT s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
-            s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim,
+            s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim, s.aspect_ratio,
             u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
             EXISTS (
               SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
@@ -83,6 +84,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
         thumbnailUrl: row.thumbnail_url,
         playbackUrl: hasAccess ? row.playback_url : null,
         startedAt: row.started_at,
+        aspectRatio: row.aspect_ratio,
         status: row.status as StreamDetail["status"],
         viewerCount: row.peak_viewers,
         isBoosted: row.is_boosted,

@@ -1,5 +1,6 @@
 import {
   renderThumbnailPlaceholderSvg,
+  type AspectRatio,
   type BoostStreamResponse,
   type CreateStreamInput,
   type CreatorStats,
@@ -79,6 +80,7 @@ interface StreamRow {
   tags: string[];
   is_ppv: boolean;
   ppv_price_santim: number | null;
+  aspect_ratio: AspectRatio;
 }
 
 // Module 2 — the creator always has access to their own stream; anyone
@@ -111,6 +113,7 @@ function toStreamDetail(row: StreamRow, hasAccess: boolean): StreamDetail {
     // write time. No-op until HLS_TOKEN_HMAC_SECRET is configured.
     playbackUrl,
     startedAt: row.started_at,
+    aspectRatio: row.aspect_ratio,
     status: row.status as StreamDetail["status"],
     viewerCount: row.peak_viewers,
     isBoosted: row.is_boosted,
@@ -136,7 +139,7 @@ function toStreamDetail(row: StreamRow, hasAccess: boolean): StreamDetail {
 // four separate queries.
 const STREAM_SELECT_COLUMNS = `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
-  s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim,
+  s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim, s.aspect_ratio,
   u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
   EXISTS (
     SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
@@ -569,10 +572,23 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   // incoming SRS webhooks) must never contain the actual publish secret.
   const playbackUrl = videoProvider.getPlaybackUrl(userId);
   const thumbnailUrl = input.thumbnailUrl ?? thumbnailPlaceholderUrl(input.category);
+  // Reported by the app's own encoder config (resolution.dimensions(portrait:)
+  // on the Swift side) — real numbers the server buckets itself, not a
+  // pre-labeled ratio string. SRS's on_publish callback can't supply this:
+  // it fires at the moment publishing begins, before any video is decoded,
+  // so {stream, param} is genuinely all it carries (see srsCallbackSchema).
+  // Falls back to the streams.aspect_ratio column's own '16:9' default for
+  // pre-update app builds that don't send these fields yet.
+  const aspectRatio: AspectRatio | undefined =
+    input.videoWidth && input.videoHeight
+      ? input.videoHeight > input.videoWidth
+        ? "9:16"
+        : "16:9"
+      : undefined;
 
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive, is_ppv, ppv_price_santim, copyright_certified_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8, $9, $10, now())
+    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive, is_ppv, ppv_price_santim, copyright_certified_at, aspect_ratio)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8, $9, $10, now(), $11)
      RETURNING id`,
     [
       userId,
@@ -585,6 +601,7 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
       input.isSensitive ?? false,
       Boolean(input.ppvPriceSantim),
       input.ppvPriceSantim ?? null,
+      aspectRatio ?? "16:9",
     ]
   );
   const streamId = rows[0]!.id;

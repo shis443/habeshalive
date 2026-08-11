@@ -2,6 +2,15 @@ import { z } from "zod";
 
 export const streamStatusSchema = z.enum(["offline", "live", "ended"]);
 
+// Portrait-default streaming — landscape stays fully supported per stream,
+// so every surface that renders a stream/VOD/clip needs to know which
+// shape it's looking at rather than assuming 16:9. Two canonical buckets,
+// not raw pixel dimensions: every consumer (card grids, the watch page,
+// OG image generation) only ever needs "which of two layouts," never the
+// exact source resolution.
+export const aspectRatioSchema = z.enum(["16:9", "9:16"]);
+export type AspectRatio = z.infer<typeof aspectRatioSchema>;
+
 export const liveStreamSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
@@ -10,6 +19,7 @@ export const liveStreamSchema = z.object({
   thumbnailUrl: z.string().nullable(),
   playbackUrl: z.string().nullable(),
   startedAt: z.string().nullable(),
+  aspectRatio: aspectRatioSchema,
   viewerCount: z.number().int().nonnegative(),
   isBoosted: z.boolean(),
   isSensitive: z.boolean(),
@@ -87,6 +97,17 @@ export const createStreamSchema = z.object({
   // certification practice works. No legal claim is made by this field
   // alone — it's the data layer, not a Terms-of-Service statement.
   copyrightCertified: z.literal(true),
+  // Portrait-default streaming — the encoder's own resolution
+  // (SettingsStreamResolution.dimensions(portrait:) on the Swift side),
+  // not a separate orientation flag the client could get out of sync
+  // with what it's actually encoding. Optional for backward compat with
+  // app builds that predate this field; the server falls back to '16:9'
+  // (streams.aspect_ratio's own column default) when absent. The server
+  // derives the aspect_ratio bucket from these two numbers itself rather
+  // than accepting a pre-labeled ratio string — real numbers can be
+  // sanity-checked (positive, non-equal), a label can't.
+  videoWidth: z.number().int().positive().optional(),
+  videoHeight: z.number().int().positive().optional(),
 });
 export type CreateStreamInput = z.infer<typeof createStreamSchema>;
 
@@ -138,6 +159,7 @@ export const vodSchema = z.object({
   durationSeconds: z.number().int().nullable(),
   views: z.number().int().nonnegative(),
   isPublished: z.boolean(),
+  aspectRatio: aspectRatioSchema,
   createdAt: z.string(),
 });
 export type Vod = z.infer<typeof vodSchema>;
@@ -155,6 +177,7 @@ export const publicVodSchema = z.object({
   playbackUrl: z.string(),
   durationSeconds: z.number().int().nullable(),
   views: z.number().int().nonnegative(),
+  aspectRatio: aspectRatioSchema,
   createdAt: z.string(),
   creatorUsername: z.string(),
   creatorDisplayName: z.string(),
