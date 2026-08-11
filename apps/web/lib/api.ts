@@ -378,6 +378,20 @@ export async function getClipsByCategory(category: string): Promise<PublicClip[]
   return publicClipSchema.array().parse(await unwrapData(res));
 }
 
+// Phase 3.6 — /discover's trending section. Same degrade-to-empty-list
+// posture as the category variants above.
+export async function getTrendingVods(): Promise<PublicVod[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/vods/trending`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return publicVodSchema.array().parse(await unwrapData(res));
+}
+
+export async function getTrendingClips(): Promise<PublicClip[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/vods/clips/trending`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return publicClipSchema.array().parse(await unwrapData(res));
+}
+
 // Authenticated — includes drafts, unlike getVods above (public, published-
 // only). Used by the dashboard's stream-ended publish prompt.
 export async function getMyVods(): Promise<Vod[]> {

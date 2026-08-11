@@ -57,7 +57,17 @@ export default async function BrowsePage({
       <TopNav isAuthed={!!user} />
       <LiveChannelsSidebar streams={allStreams} />
       <main className={styles.main}>
-        <h1 className={styles.heading}>Browse</h1>
+        <div className={styles.headerRow}>
+          <h1 className={styles.heading}>Browse</h1>
+          {/* Phase 3.6 — Browse ("I know what I want, filter it") and
+              Discover ("show me something") are explicit siblings in the
+              IA this app is modeling, not a tab switch within the same
+              page — a real nav link to the other one, not a third tab
+              here. */}
+          <Link href="/discover" className={styles.discoverLink}>
+            Discover →
+          </Link>
+        </div>
         <div className={styles.tabs}>
           <Link href={tabHref("categories")} className={view === "categories" ? styles.tabActive : styles.tab}>
             Categories

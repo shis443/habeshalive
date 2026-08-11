@@ -78,6 +78,15 @@ async function toPublicVod(row: PublicVodRow): Promise<PublicVod> {
   };
 }
 
+const PUBLIC_VOD_SELECT = `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
+            COALESCE(v.category, s.category) AS category, s.thumbnail_url,
+            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at,
+            u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
+     FROM stream_vods v
+     JOIN streams s ON s.id = v.stream_id
+     JOIN users u ON u.id = s.creator_id
+     WHERE v.expires_at > now() AND v.is_published = true AND v.dmca_removed_at IS NULL`;
+
 // Phase 3.3 — category detail page's Videos tab. Same public/is_published
 // gate as listVodsForCreator above, just filtered by category across all
 // creators instead of by username for one. Capped at 24 — this is a
@@ -85,18 +94,26 @@ async function toPublicVod(row: PublicVodRow): Promise<PublicVod> {
 // either the category page or listVodsForCreator's own equivalent.
 export async function listVodsByCategory(category: string): Promise<PublicVod[]> {
   const { rows } = await pool.query<PublicVodRow>(
-    `SELECT v.id, COALESCE(v.title, s.title) AS title, v.description,
-            COALESCE(v.category, s.category) AS category, s.thumbnail_url,
-            v.playback_url, v.duration_seconds, v.views, v.is_published, v.created_at,
-            u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
-     FROM stream_vods v
-     JOIN streams s ON s.id = v.stream_id
-     JOIN users u ON u.id = s.creator_id
-     WHERE COALESCE(v.category, s.category) = $1
-       AND v.expires_at > now() AND v.is_published = true AND v.dmca_removed_at IS NULL
+    `${PUBLIC_VOD_SELECT} AND COALESCE(v.category, s.category) = $1
      ORDER BY v.created_at DESC
      LIMIT 24`,
     [category]
+  );
+  return Promise.all(rows.map(toPublicVod));
+}
+
+// Phase 3.6 — /discover's trending section. Recency-weighted (last 14
+// days), not all-time views — an old viral VOD permanently dominating a
+// "trending" list with no way for new content to surface would make the
+// word "trending" a lie. 14 days rather than clips' own 30 (below) since
+// a VOD expires and disappears from the platform entirely on its own
+// schedule (v.expires_at, db/migrations/0028) — trending here leans
+// toward "still fresh," not just "still technically visible."
+export async function listTrendingVods(): Promise<PublicVod[]> {
+  const { rows } = await pool.query<PublicVodRow>(
+    `${PUBLIC_VOD_SELECT} AND v.created_at > now() - interval '14 days'
+     ORDER BY v.views DESC, v.created_at DESC
+     LIMIT 12`
   );
   return Promise.all(rows.map(toPublicVod));
 }

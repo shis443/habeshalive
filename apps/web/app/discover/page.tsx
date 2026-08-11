@@ -1,0 +1,77 @@
+import Link from "next/link";
+import { BottomNav } from "@/components/BottomNav";
+import { CategoryClipsGrid } from "@/components/CategoryClipsGrid";
+import { CategoryVodsGrid } from "@/components/CategoryVodsGrid";
+import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
+import { StreamCard } from "@/components/StreamCard";
+import { TopNav } from "@/components/TopNav";
+import { getCurrentUser, getLiveStreams, getTrendingClips, getTrendingVods } from "@/lib/api";
+import styles from "./page.module.css";
+
+// Phase 3.6 — the "show me something" surface Twitch's IA splits from
+// Browse ("I know what I want, filter it"). The home page doesn't serve
+// this: it's a live-now grid, sorted, not curated. "Recommended For You"
+// (personalized) stays deferred — there's still no usage/watch-history
+// data to train it on — but the two signals this platform genuinely
+// already has didn't need that data at all: boosted streams
+// (stream_boosts — a creator or the platform paying to be surfaced is a
+// real, existing "promote this" signal, not a new curation mechanism),
+// and recency-weighted view counts on VODs/clips (real numbers, not a
+// placeholder — see listTrendingVods/listTrendingClips's own 14/30-day
+// windows on why this is "trending", not "all-time popular").
+export default async function DiscoverPage() {
+  const [user, allStreams, trendingVods, trendingClips] = await Promise.all([
+    getCurrentUser(),
+    getLiveStreams(),
+    getTrendingVods(),
+    getTrendingClips(),
+  ]);
+  const boostedLive = allStreams.filter((s) => s.isBoosted);
+
+  return (
+    <>
+      <TopNav isAuthed={!!user} />
+      <LiveChannelsSidebar streams={allStreams} />
+      <main className={styles.main}>
+        <h1 className={styles.heading}>Discover</h1>
+        <p className={styles.subtext}>Featured live channels and what's trending right now.</p>
+
+        {boostedLive.length > 0 && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionHeading}>Featured live</h2>
+            <div className={styles.grid}>
+              {boostedLive.map((stream) => (
+                <StreamCard key={stream.id} stream={stream} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {trendingClips.length > 0 && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionHeading}>Trending clips</h2>
+            <CategoryClipsGrid clips={trendingClips} />
+          </section>
+        )}
+
+        {trendingVods.length > 0 && (
+          <section className={styles.section}>
+            <h2 className={styles.sectionHeading}>Trending videos</h2>
+            <CategoryVodsGrid vods={trendingVods} />
+          </section>
+        )}
+
+        {boostedLive.length === 0 && trendingVods.length === 0 && trendingClips.length === 0 && (
+          <p className={styles.empty}>
+            Nothing trending yet — check{" "}
+            <Link href="/browse" className={styles.browseLink}>
+              Browse
+            </Link>{" "}
+            for what's live right now.
+          </p>
+        )}
+      </main>
+      <BottomNav active="explore" />
+    </>
+  );
+}

@@ -8,11 +8,13 @@ import {
   incrementClipViews,
   listClipsByCategory,
   listClipsForCreator,
+  listTrendingClips,
 } from "./clip-service.js";
 import {
   deleteVodOwned,
   incrementVodViews,
   listMyVods,
+  listTrendingVods,
   listVodsByCategory,
   listVodsForCreator,
   publishVod,
@@ -70,6 +72,10 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
     req.query.category ? listVodsByCategory(req.query.category) : []
   );
 
+  // Phase 3.6 — /discover's trending section. Static "trending" segment,
+  // same non-collision reasoning as "/mine" above re: ":username".
+  app.get("/trending", async () => listTrendingVods());
+
   app.get<{ Params: { username: string } }>("/:username", async (req) =>
     listVodsForCreator(req.params.username)
   );
@@ -106,6 +112,13 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
   // be shadowed by the parametric "/:username" route above regardless of
   // registration order — same non-load-bearing-but-worth-noting point as
   // "/mine"'s own comment up top.
+  // Phase 3.6 — /discover's trending section. Registered before
+  // "/clips/:id" below, same non-load-bearing-for-correctness reasoning
+  // as elsewhere in this file (static "trending" can't be shadowed by
+  // parametric ":id" regardless of order) — kept first here anyway since
+  // this one's genuinely easy to misread as colliding at a glance.
+  app.get("/clips/trending", async () => listTrendingClips());
+
   app.get<{ Params: { id: string } }>("/clips/:id", async (req) => {
     const clip = await getPublicClipById(req.params.id);
     if (!clip) throw new AppError(404, "Clip not found");

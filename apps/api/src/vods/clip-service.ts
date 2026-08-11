@@ -195,6 +195,21 @@ export async function listClipsByCategory(category: string): Promise<PublicClip[
   return Promise.all(rows.map(toPublicClip));
 }
 
+// Phase 3.6 — /discover's trending section. Recency-weighted (last 30
+// days — clips don't expire the way VODs do, see listTrendingVods' own
+// comment on why that one uses a tighter 14-day window), not all-time
+// views: an old viral clip permanently dominating "trending" with no way
+// for new content to surface would make the word a lie.
+export async function listTrendingClips(): Promise<PublicClip[]> {
+  const { rows } = await pool.query<PublicClipRow>(
+    `${PUBLIC_CLIP_SELECT}
+     WHERE c.dmca_removed_at IS NULL AND c.created_at > now() - interval '30 days'
+     ORDER BY c.views DESC, c.created_at DESC
+     LIMIT 12`
+  );
+  return Promise.all(rows.map(toPublicClip));
+}
+
 // Public, unauthenticated — same trust level and same "count a play, not
 // an impression" convention as vods/service.ts's incrementVodViews
 // (fired once by the client on first playback, not on page load).
