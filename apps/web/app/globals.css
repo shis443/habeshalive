@@ -75,6 +75,21 @@
   --on-error: #ffffff;
 }
 
+/* Native app's WKWebView (Birq/View/BirqExplore/BirqExploreView.swift)
+   signals itself via layout.tsx's data-native attribute. Its Explore tab
+   sits directly next to the app's own SF Pro camera UI, so Birq's brand
+   faces (Hanken Grotesk/Inter/Geist) read as "a website in a shell" there
+   in a way they don't on a standalone desktop/mobile web page. System
+   font stack only inside that WKWebView, only at phone widths — the
+   marketing/desktop web experience keeps its own type. */
+@media (max-width: 899px) {
+  :root[data-native="true"] {
+    --font-headline: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    --font-label: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  }
+}
+
 *,
 *::before,
 *::after {

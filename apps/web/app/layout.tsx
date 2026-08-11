@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Hanken_Grotesk, Inter } from "next/font/google";
+import { cookies, headers } from "next/headers";
 import type { ReactNode } from "react";
 import { AuthModalRoot } from "@/components/AuthModalRoot";
 import { IntlProvider } from "@/components/IntlProvider";
@@ -46,9 +47,20 @@ const THEME_INIT_SCRIPT = `
   } catch (e) {}
 `;
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+// Same detection BottomNav.tsx uses to suppress its own nav inside the
+// native app's WKWebView — reused here so the embedded Explore tab's type
+// can switch to the system font stack (globals.css's [data-native="true"]
+// rule) instead of Birq's brand faces, which read as "a website in a
+// shell" next to the camera UI's native SF Pro chrome.
+async function isNativeShell() {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  return cookieStore.get("birq_native")?.value === "1" || (headerStore.get("user-agent") ?? "").includes("BirqApp");
+}
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const nativeShell = await isNativeShell();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-native={nativeShell ? "true" : undefined}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
