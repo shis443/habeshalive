@@ -109,11 +109,12 @@ function keyByUser(req: FastifyRequest): string {
 // via POST /2fa/login-verify. If 2FA isn't enabled, behavior is
 // unchanged from before this pass — a real session token, immediately.
 //
-// req.ip is Fastify's own (respects trustProxy — see app.ts's Fastify
-// constructor options — so this is the real client IP behind Fly's
-// proxy, not Fly's own edge IP) — used for both the login_events audit
-// row and the new-device email; 'unknown' user-agent is a real, if rare,
-// possibility (a bare curl/script call), not treated as an error.
+// req.ip is Fastify's own, and actually resolves to the real client IP
+// behind Fly's proxy (not Fly's own edge-proxy address) because app.ts's
+// Fastify constructor sets trustProxy: true — used for both the
+// login_events audit row and the new-device email; 'unknown' user-agent
+// is a real, if rare, possibility (a bare curl/script call), not treated
+// as an error.
 // Shared by every path that actually mints a real session token — this
 // completeLoginOrChallenge, /2fa/login-verify, and /social/:provider —
 // so a sessions row (session-service.ts) always exists for a jti before

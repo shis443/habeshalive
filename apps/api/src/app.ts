@@ -40,7 +40,21 @@ import { vodRoutes } from "./vods/routes.js";
 import { walletRoutes } from "./wallet/routes.js";
 
 export function buildApp() {
-  const app = Fastify({ logger: true });
+  // trustProxy matters well beyond auth: req.ip is also the rate-limit
+  // key-generator fallback in gift-cards/chat/streams/wallet/follows/
+  // dmca/etc. routes (anywhere there's no authenticated user or other
+  // identifier to key on). Without this, every one of those requests
+  // resolves to Fly's own edge-proxy connection address instead of the
+  // real client — one shared bucket for every anonymous visitor rather
+  // than per-visitor limiting, and (what surfaced this) a private/
+  // internal-looking IP in the login_events audit row and "new device"
+  // security email, which is exactly what a phishing email pretending to
+  // be this alert would also produce, undermining the one signal meant
+  // to tell a user something is actually wrong. Fly's edge (fly-proxy) is
+  // the only hop in front of this app in production, so trusting the
+  // X-Forwarded-For it sets is safe here; this has no effect in local
+  // dev, where there's no proxy in front and req.ip is already correct.
+  const app = Fastify({ logger: true, trustProxy: true });
 
   // Explicit allowlist, not `origin: true` (reflects any Origin header) —
   // WEB_PUBLIC_URL is the one legitimate browser origin this API is ever
