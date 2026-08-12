@@ -9,27 +9,27 @@ import { completeSessionFromAuthResponse } from "../route";
 // overloading /api/session's body shape: this one carries a pendingToken +
 // code, not an identifier/phone/email + password/OTP.
 export async function POST(req: NextRequest) {
-  const body = totpLoginVerifySchema.parse(await req.json());
-
-  // Same rationale as /api/session/route.ts's identical try/catch: an
-  // uncaught failure here used to cascade into a second, confusing parse
-  // error on the client.
-  let res: Response;
-  let data: unknown;
+  // Whole handler wrapped, same rationale as /api/session/route.ts's
+  // identical fix — the previous version here only wrapped the fetch,
+  // leaving totpLoginVerifySchema.parse and authResponseSchema.parse
+  // (both real Zod calls that throw on a mismatch) uncaught.
   try {
-    res = await fetch(`${API_INTERNAL_URL}/auth/2fa/login-verify`, {
+    const body = totpLoginVerifySchema.parse(await req.json());
+
+    const res = await fetch(`${API_INTERNAL_URL}/auth/2fa/login-verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    data = await res.json();
-  } catch {
+    const data = await res.json();
+
+    if (!res.ok) {
+      return NextResponse.json(data, { status: res.status });
+    }
+
+    return await completeSessionFromAuthResponse(authResponseSchema.parse(data), req);
+  } catch (err) {
+    console.error("[api/session/2fa] unhandled error:", err);
     return NextResponse.json({ error: "Couldn't reach the server. Please try again." }, { status: 502 });
   }
-
-  if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
-  }
-
-  return completeSessionFromAuthResponse(authResponseSchema.parse(data), req);
 }

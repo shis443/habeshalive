@@ -24,67 +24,75 @@ export async function completeSessionFromAuthResponse(
 }
 
 export async function POST(req: NextRequest) {
-  const rawBody = await req.json();
-  // Three request shapes share this one endpoint — password login
-  // (identifier field, checked first since it's the default returning-user
-  // path), phone OTP (phoneNumber field), and email OTP (email field) —
-  // routed to their matching upstream API endpoint based on which one the
-  // body actually has.
-  const isLogin = typeof rawBody === "object" && rawBody !== null && "identifier" in rawBody;
-  const isEmail = !isLogin && typeof rawBody === "object" && rawBody !== null && "email" in rawBody;
-  const body = isLogin
-    ? loginSchema.parse(rawBody)
-    : isEmail
-      ? verifyEmailOtpSchema.parse(rawBody)
-      : verifyOtpSchema.parse(rawBody);
-  const upstreamPath = isLogin ? "/auth/login" : isEmail ? "/auth/verify-email-otp" : "/auth/verify-otp";
-
-  // Route Handler — runs server-side, needs API_INTERNAL_URL (see config.ts).
-  let res: Response;
-  let data: unknown;
+  // Everything in this handler — request-body parsing, the upstream call,
+  // response-shape validation, and cookie writing — is wrapped in one
+  // try/catch. The earlier version (commit 124d5a3) only wrapped the
+  // upstream fetch+json, on the theory that was the one place failures
+  // happened; that was wrong. loginResultSchema.parse(data) below is a
+  // Zod call that was left completely unguarded, and reset-then-login
+  // (LoginForm.tsx's handleResetPassword: POST /auth/password/reset
+  // directly, then postSession here with the new password) is exactly
+  // the path most likely to hit it — a fresh login immediately after a
+  // password change is a different real-world shape than a normal login,
+  // and any mismatch there threw uncaught, producing the same
+  // empty/malformed-response symptom this route's earlier fix was
+  // supposed to have already closed. Confirmed by re-reading this file
+  // line by line after the same class of error reproduced again live,
+  // not assumed.
   try {
-    res = await fetch(`${API_INTERNAL_URL}${upstreamPath}`, {
+    const rawBody = await req.json();
+    // Three request shapes share this one endpoint — password login
+    // (identifier field, checked first since it's the default returning-user
+    // path), phone OTP (phoneNumber field), and email OTP (email field) —
+    // routed to their matching upstream API endpoint based on which one the
+    // body actually has.
+    const isLogin = typeof rawBody === "object" && rawBody !== null && "identifier" in rawBody;
+    const isEmail = !isLogin && typeof rawBody === "object" && rawBody !== null && "email" in rawBody;
+    const body = isLogin
+      ? loginSchema.parse(rawBody)
+      : isEmail
+        ? verifyEmailOtpSchema.parse(rawBody)
+        : verifyOtpSchema.parse(rawBody);
+    const upstreamPath = isLogin ? "/auth/login" : isEmail ? "/auth/verify-email-otp" : "/auth/verify-otp";
+
+    // Route Handler — runs server-side, needs API_INTERNAL_URL (see config.ts).
+    const res = await fetch(`${API_INTERNAL_URL}${upstreamPath}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    data = await res.json();
-  } catch {
-    // A transient failure here (network error/timeout, or the upstream
-    // returning an empty/truncated body that isn't valid JSON) used to
-    // propagate as an uncaught exception — Next.js's own generic error
-    // response for that isn't valid JSON either, so the CLIENT's own
-    // `await res.json()` in LoginForm.tsx then threw a second time, one
-    // level up, and its generic catch block displayed that raw runtime
-    // parse error as if it were a real message ("The string did not match
-    // the expected pattern" in Safari, "Unexpected end of JSON input" in
-    // Chromium — same underlying failure, worded differently per engine).
-    // Reproduces intermittently and never via a fresh direct request,
-    // consistent with an occasional upstream hiccup rather than a
-    // deterministic bug — this makes that failure mode a real, readable
-    // error instead of a confusing leaked exception, regardless of the
-    // exact transient cause.
+    const data = await res.json();
+
+    if (!res.ok) {
+      return NextResponse.json(data, { status: res.status });
+    }
+
+    // Login now returns one of two shapes (see shared/schemas/auth.ts's
+    // loginResultSchema) — a real AuthResponse (2FA not enabled, unchanged
+    // behavior), or a TotpChallenge (2FA enabled: no session cookie is
+    // written yet, the caller must finish via POST /api/session/2fa with
+    // the returned pendingToken + a code). Parsing the union rather than
+    // authResponseSchema directly is what's fixed here — the old code threw
+    // a Zod error on every 2FA-enabled login instead of surfacing the
+    // challenge.
+    const result = loginResultSchema.parse(data);
+    if ("requiresTotp" in result) {
+      return NextResponse.json(result);
+    }
+
+    return await completeSessionFromAuthResponse(result, req);
+  } catch (err) {
+    // Covers: malformed request body, a Zod validation failure on either
+    // the incoming body or the upstream's response shape, a network
+    // failure/timeout reaching the upstream, an empty/truncated upstream
+    // response, or a cookie-write failure — anything, rather than only
+    // the subset the previous version guessed at. Logged server-side
+    // (visible in Vercel's function logs) so a real bug here is still
+    // diagnosable, while the client only ever sees a clean, readable
+    // error instead of whatever raw exception this was.
+    console.error("[api/session] unhandled error:", err);
     return NextResponse.json({ error: "Couldn't reach the server. Please try again." }, { status: 502 });
   }
-
-  if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
-  }
-
-  // Login now returns one of two shapes (see shared/schemas/auth.ts's
-  // loginResultSchema) — a real AuthResponse (2FA not enabled, unchanged
-  // behavior), or a TotpChallenge (2FA enabled: no session cookie is
-  // written yet, the caller must finish via POST /api/session/2fa with
-  // the returned pendingToken + a code). Parsing the union rather than
-  // authResponseSchema directly is what's fixed here — the old code threw
-  // a Zod error on every 2FA-enabled login instead of surfacing the
-  // challenge.
-  const result = loginResultSchema.parse(data);
-  if ("requiresTotp" in result) {
-    return NextResponse.json(result);
-  }
-
-  return completeSessionFromAuthResponse(result, req);
 }
 
 export async function DELETE(req: NextRequest) {
