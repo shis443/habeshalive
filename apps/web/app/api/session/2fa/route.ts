@@ -11,13 +11,22 @@ import { completeSessionFromAuthResponse } from "../route";
 export async function POST(req: NextRequest) {
   const body = totpLoginVerifySchema.parse(await req.json());
 
-  const res = await fetch(`${API_INTERNAL_URL}/auth/2fa/login-verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  // Same rationale as /api/session/route.ts's identical try/catch: an
+  // uncaught failure here used to cascade into a second, confusing parse
+  // error on the client.
+  let res: Response;
+  let data: unknown;
+  try {
+    res = await fetch(`${API_INTERNAL_URL}/auth/2fa/login-verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    data = await res.json();
+  } catch {
+    return NextResponse.json({ error: "Couldn't reach the server. Please try again." }, { status: 502 });
+  }
 
-  const data = await res.json();
   if (!res.ok) {
     return NextResponse.json(data, { status: res.status });
   }

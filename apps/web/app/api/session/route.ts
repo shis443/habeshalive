@@ -40,13 +40,33 @@ export async function POST(req: NextRequest) {
   const upstreamPath = isLogin ? "/auth/login" : isEmail ? "/auth/verify-email-otp" : "/auth/verify-otp";
 
   // Route Handler — runs server-side, needs API_INTERNAL_URL (see config.ts).
-  const res = await fetch(`${API_INTERNAL_URL}${upstreamPath}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  let data: unknown;
+  try {
+    res = await fetch(`${API_INTERNAL_URL}${upstreamPath}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    data = await res.json();
+  } catch {
+    // A transient failure here (network error/timeout, or the upstream
+    // returning an empty/truncated body that isn't valid JSON) used to
+    // propagate as an uncaught exception — Next.js's own generic error
+    // response for that isn't valid JSON either, so the CLIENT's own
+    // `await res.json()` in LoginForm.tsx then threw a second time, one
+    // level up, and its generic catch block displayed that raw runtime
+    // parse error as if it were a real message ("The string did not match
+    // the expected pattern" in Safari, "Unexpected end of JSON input" in
+    // Chromium — same underlying failure, worded differently per engine).
+    // Reproduces intermittently and never via a fresh direct request,
+    // consistent with an occasional upstream hiccup rather than a
+    // deterministic bug — this makes that failure mode a real, readable
+    // error instead of a confusing leaked exception, regardless of the
+    // exact transient cause.
+    return NextResponse.json({ error: "Couldn't reach the server. Please try again." }, { status: 502 });
+  }
 
-  const data = await res.json();
   if (!res.ok) {
     return NextResponse.json(data, { status: res.status });
   }
