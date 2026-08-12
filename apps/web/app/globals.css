@@ -16,6 +16,11 @@
   --tertiary: #ffb869;
   --error: #ffb4ab;
   --on-error: #690005;
+  /* LoginForm's gradient button end stop. Paired with --primary rather
+     than --primary-container: both need to stay dark-text-legible (see
+     --on-primary above) across the whole gradient, and --primary-container
+     is far too pale here for that. */
+  --login-accent-pink: #ffb3e6;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -73,6 +78,10 @@
   --tertiary: #8a5000;
   --error: #ba1a1a;
   --on-error: #ffffff;
+  /* Same rationale as :root's — kept dark/saturated enough to stay
+     legible under --on-primary's white button text at both gradient
+     stops. */
+  --login-accent-pink: #b8319e;
 }
 
 /* Native app's WKWebView (Birq/View/BirqExplore/BirqExploreView.swift)

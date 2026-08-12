@@ -14,6 +14,7 @@
 html[data-native="true"] .wrap {
   align-items: flex-start;
   padding-top: max(var(--space-5), env(safe-area-inset-top));
+  padding-bottom: max(var(--space-5), env(safe-area-inset-bottom));
 }
 
 .card {
@@ -21,8 +22,24 @@ html[data-native="true"] .wrap {
   max-width: 360px;
   background: var(--surface-container);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: var(--space-4);
+}
+
+/* In the native shell the card fills the available column instead of
+   floating as a boxed panel — matches how the rest of the app's
+   full-screen surfaces (not just this one component) already behave
+   inside the WKWebView, and gives the bottom-pinned submit button
+   (below) somewhere real to pin to. */
+html[data-native="true"] .card {
+  max-width: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: var(--space-4) var(--space-3);
 }
 
 .wordmark {
@@ -68,6 +85,39 @@ html[data-native="true"] .wrap {
   color: var(--on-background);
 }
 
+/* html[data-native="true"] .card's flex column, combined with this,
+   pushes the submit button group (which isn't part of .formBody) to the
+   bottom of the screen — the actual "pin the primary action to the
+   bottom, respecting safe areas" requirement, without an absolutely-
+   positioned overlay that would need its own safe-area math duplicated
+   and would cover form content on short viewports. Inert outside the
+   native shell (a plain block there, matching the previous layout
+   exactly). */
+html[data-native="true"] .formBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Re-keyed by view (see the `key` prop in LoginForm.tsx) so React
+   actually remounts this on every login/signup step change — a CSS
+   transition alone can't replay on a prop change, it needs a fresh
+   element, which is exactly what remounting gives it for free. */
+.formStep {
+  animation: formStepIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes formStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .field {
   margin-bottom: var(--space-3);
 }
@@ -83,20 +133,73 @@ html[data-native="true"] .wrap {
   margin-bottom: var(--space-1);
 }
 
+.inputWrap {
+  position: relative;
+}
+
 .input {
   width: 100%;
   background: var(--surface-container-low);
   border: 1px solid var(--outline-variant);
-  border-radius: 4px;
-  padding: 10px var(--space-2);
+  border-radius: 10px;
+  padding: 12px var(--space-2);
   color: var(--on-background);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 15px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+  color: var(--on-surface-variant);
+  opacity: 0.6;
 }
 
 .input:focus {
   outline: none;
   border-color: var(--secondary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--secondary) 25%, transparent);
+}
+
+/* Both credential fields get flagged together on a failed login rather
+   than guessing which one was wrong — the API only ever returns one
+   "incorrect identifier or password" message, so highlighting just one
+   field would be asserting something we don't actually know, and would
+   leak which half of the credential pair is the wrong one. */
+.inputError {
+  border-color: var(--error);
+}
+
+.inputError:focus {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 25%, transparent);
+}
+
+.passwordToggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.passwordToggle:hover {
+  color: var(--on-background);
+}
+
+.passwordToggle:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 1px;
 }
 
 .hint {
@@ -105,37 +208,128 @@ html[data-native="true"] .wrap {
   margin: var(--space-1) 0 0;
 }
 
+/* Rendered right above the primary button (see LoginForm.tsx) rather
+   than at the top of the card — closer to the field it's actually about
+   and the button that just failed, instead of a message the eye has to
+   travel back up past the whole form to connect to what happened. */
 .error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
   font-size: 13px;
   margin: 0 0 var(--space-3);
 }
 
+.errorIcon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.shake {
+  animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .formStep,
+  .shake {
+    animation: none;
+  }
+}
+
 .submitButton {
   width: 100%;
-  padding: 12px var(--space-3);
-  border-radius: 4px;
-  background: var(--primary);
+  padding: 14px var(--space-3);
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--login-accent-pink) 100%);
   color: var(--on-primary);
   font-family: var(--font-label);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  box-shadow: 0 0 24px rgba(208, 188, 255, 0.35);
+  letter-spacing: 0.03em;
+  box-shadow: 0 4px 24px color-mix(in srgb, var(--primary) 45%, transparent);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .submitButton:disabled {
   opacity: 0.6;
   box-shadow: none;
   cursor: not-allowed;
+  transform: none;
+}
+
+/* Sits below .formBody, so html[data-native="true"]'s flex column keeps
+   it flush at the bottom of the screen above the safe area — the actual
+   primary-action-stays-in-thumb-reach behavior the redesign asked for,
+   without an absolutely-positioned bar that would need to reserve space
+   from the scrollable content itself. */
+.actionArea {
+  padding-top: var(--space-2);
+}
+
+html[data-native="true"] .actionArea {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.terms {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  margin: 0 0 var(--space-2);
+}
+
+.terms a {
+  color: var(--secondary);
+}
+
+.terms a:hover {
+  text-decoration: underline;
 }
 
 .secondaryButton {
   width: 100%;
   padding: 10px var(--space-3);
   margin-top: var(--space-2);
-  border-radius: 4px;
+  border-radius: 999px;
   border: 1px solid var(--outline-variant);
   color: var(--on-background);
   font-family: var(--font-label);
@@ -144,6 +338,7 @@ html[data-native="true"] .wrap {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   background: transparent;
+  cursor: pointer;
 }
 
 .forgotLink {
@@ -153,6 +348,9 @@ html[data-native="true"] .wrap {
   margin-top: var(--space-2);
   color: var(--on-surface-variant);
   font-size: 13px;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
 .forgotLink:hover {
