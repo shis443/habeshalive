@@ -67,6 +67,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(data, { status: res.status });
     }
 
+    // The API wraps every response in a {success, data, error} envelope
+    // (apps/api/src/app.ts's preSerialization hook — applies to every
+    // route, not something specific to auth). The failure branch above
+    // works by coincidence: data.error sits at the envelope's top level,
+    // exactly where LoginForm.tsx's `data.error ?? "..."` already looks.
+    // Success responses don't have that coincidence — the real payload is
+    // nested one level deeper at data.data, and parsing the outer
+    // envelope itself against loginResultSchema (neither {token, user}
+    // nor {requiresTotp, pendingToken}) threw every single time, for
+    // every successful login, unconditionally. Confirmed via actual
+    // production logs (`vercel logs`, not inferred): a live ZodError
+    // with "received": "undefined" on token/user/requiresTotp/
+    // pendingToken — the object being parsed had none of those keys at
+    // its top level because they were all one level down. This is why
+    // every failed-credential test this session looked fine (the
+    // failure path never hit this line) while genuine successes,
+    // including reset-password's guaranteed-correct auto-login, always
+    // broke here.
+    //
     // Login now returns one of two shapes (see shared/schemas/auth.ts's
     // loginResultSchema) — a real AuthResponse (2FA not enabled, unchanged
     // behavior), or a TotpChallenge (2FA enabled: no session cookie is
@@ -75,7 +94,7 @@ export async function POST(req: NextRequest) {
     // authResponseSchema directly is what's fixed here — the old code threw
     // a Zod error on every 2FA-enabled login instead of surfacing the
     // challenge.
-    const result = loginResultSchema.parse(data);
+    const result = loginResultSchema.parse(data.data);
     if ("requiresTotp" in result) {
       return NextResponse.json(result);
     }

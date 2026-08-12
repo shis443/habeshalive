@@ -34,7 +34,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=bridge_expired", req.url));
   }
 
-  const { userId, username, token } = (await res.json()) as { userId: string; username: string; token: string };
+  // The API wraps every response in a {success, data, error} envelope
+  // (apps/api/src/app.ts's preSerialization hook) — the real
+  // {userId, username, token} payload was one level deeper than this
+  // used to read, at .data, not the top level. An unchecked `as` cast
+  // instead of runtime validation meant this never threw: userId/
+  // username/token were silently undefined, and every mobile-app web
+  // tab that goes through this bridge has been writing that broken
+  // session cookie ever since — silently landing on a login screen
+  // instead of the intended already-signed-in webview, with no error
+  // anywhere to point at why. Validated for real now instead of cast,
+  // so a future shape mismatch here fails loudly (falls through to the
+  // bridge_expired redirect below) rather than silently again.
+  const parsed = await res.json();
+  const payload = parsed?.data;
+  if (
+    typeof payload?.userId !== "string" ||
+    typeof payload?.username !== "string" ||
+    typeof payload?.token !== "string"
+  ) {
+    return NextResponse.redirect(new URL("/login?error=bridge_expired", req.url));
+  }
+  const { userId, username, token } = payload as { userId: string; username: string; token: string };
 
   // Same account-merge behavior as apps/web/app/api/session/route.ts's
   // completeSessionFromAuthResponse — a viewer who's already got other

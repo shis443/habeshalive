@@ -30,7 +30,13 @@ export async function GET() {
             isStale: true,
           };
         }
-        const user = authUserSchema.parse(await res.json());
+        // Same envelope-unwrapping fix as /api/session/route.ts — the
+        // real user payload is at .data, not the response body's top
+        // level. Previously fell through to the catch block below on
+        // every account, marking every single one isStale: true
+        // regardless of whether its token was actually still valid.
+        const responseBody = await res.json();
+        const user = authUserSchema.parse(responseBody?.data);
         return {
           userId: user.id,
           username: user.username,

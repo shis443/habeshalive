@@ -27,7 +27,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(data, { status: res.status });
     }
 
-    return await completeSessionFromAuthResponse(authResponseSchema.parse(data), req);
+    // Same envelope-unwrapping fix as /api/session/route.ts — see that
+    // file's comment for the full explanation (confirmed via production
+    // logs, not inferred). The real AuthResponse is at data.data, not
+    // data itself.
+    return await completeSessionFromAuthResponse(authResponseSchema.parse(data.data), req);
   } catch (err) {
     console.error("[api/session/2fa] unhandled error:", err);
     return NextResponse.json({ error: "Couldn't reach the server. Please try again." }, { status: 502 });
