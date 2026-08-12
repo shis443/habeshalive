@@ -27,6 +27,31 @@ async function postSession(body: Record<string, unknown>, addAccount: boolean): 
   });
 }
 
+// A response can be empty or truncated for reasons that have nothing to
+// do with the actual request — a dropped connection, a serverless
+// cold-start timeout, any transient hiccup between the browser and
+// either this app's own server (the /api/session* routes) or, for the
+// handlers below that fetch API_BASE_URL directly, the API host itself.
+// Calling res.json() straight on that throws a raw parser exception —
+// "Unexpected end of JSON input" in Chromium, "The string did not match
+// the expected pattern" in Safari/WebKit for the same underlying
+// failure — which every handler's generic catch block then displayed as
+// if it were a real validation message. This is every .json() call site
+// in this file routed through one place that turns that into an honest,
+// readable error instead. (The equivalent fix on the server side, for
+// the /api/session and /api/session/2fa route handlers' own fetch to the
+// API, already shipped separately — this covers the browser-to-server
+// hop those didn't.)
+async function parseJsonResponse(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) throw new Error("Couldn't reach the server. Please try again.");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("Couldn't reach the server. Please try again.");
+  }
+}
+
 // TEMPORARY — see app/api/diagnostics/log/route.ts. `context` is the
 // handler name so the log line says exactly which request path threw,
 // since all six of this form's handlers otherwise funnel into the same
@@ -207,7 +232,7 @@ export function LoginForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pendingToken, code: totpCode }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error ?? "Invalid code");
       completeAuth();
     } catch (err) {
@@ -237,7 +262,7 @@ export function LoginForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to send code");
       setSignupStep("code");
     } catch (err) {
@@ -255,7 +280,7 @@ export function LoginForm({
     try {
       const identity = method === "phone" ? { phoneNumber } : { email };
       const res = await postSession({ ...identity, code, username, displayName, password }, addAccount);
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to verify code");
       handleSessionResponse(data);
     } catch (err) {
@@ -272,7 +297,7 @@ export function LoginForm({
     setLoading(true);
     try {
       const res = await postSession({ identifier, password }, addAccount);
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to log in");
       handleSessionResponse(data);
     } catch (err) {
@@ -293,7 +318,7 @@ export function LoginForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to send code");
       setLoginView("forgot-code");
     } catch (err) {
@@ -314,14 +339,14 @@ export function LoginForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier, code, newPassword }),
       });
-      const resetData = await resetRes.json();
+      const resetData = await parseJsonResponse(resetRes);
       if (!resetRes.ok) throw new Error(resetData.error ?? "Failed to reset password");
 
       // Reset succeeded — log straight in with the new password rather
       // than sending someone back to a login screen right after they just
       // proved who they are.
       const loginRes = await postSession({ identifier, password: newPassword }, addAccount);
-      const loginData = await loginRes.json();
+      const loginData = await parseJsonResponse(loginRes);
       if (!loginRes.ok) throw new Error(loginData.error ?? "Password reset, but login failed — try logging in");
       handleSessionResponse(loginData);
     } catch (err) {
