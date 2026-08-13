@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { unwrapClientData } from "@/lib/clientApi";
 import { CENTRIFUGO_WS_URL } from "@/lib/config";
+import { formatRelativeTime } from "@/lib/format";
 import styles from "./NotificationBell.module.css";
 import { BellIcon, CloseIcon, GearIcon, GoLiveIcon } from "./icons";
 
@@ -33,15 +34,6 @@ async function fetchToken(): Promise<string> {
 // applications, KYC, ad revenue, donations, PPV) is about the signed-in
 // user's own account/channel.
 const FOLLOWING_TYPES = new Set<NotificationType>(["creator_live"]);
-
-function formatRelativeTime(iso: string): string {
-  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 function NotificationIcon({ type }: { type: NotificationType }) {
   return FOLLOWING_TYPES.has(type) ? <GoLiveIcon /> : <BellIcon />;

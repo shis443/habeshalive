@@ -3,6 +3,7 @@
 import type { PublicVod } from "@birq/shared";
 import Link from "next/link";
 import { useState } from "react";
+import { formatRelativeTime } from "@/lib/format";
 import { VodPlayer } from "./VodPlayer";
 import styles from "./CategoryVodsGrid.module.css";
 
@@ -40,6 +41,9 @@ export function CategoryVodsGrid({ vods }: { vods: PublicVod[] }) {
               ) : (
                 <div className={styles.thumbnailPlaceholder} />
               )}
+              <span className={styles.viewCount}>
+                {vod.views.toLocaleString()} view{vod.views === 1 ? "" : "s"}
+              </span>
               {formatDuration(vod.durationSeconds) && (
                 <span className={styles.duration}>{formatDuration(vod.durationSeconds)}</span>
               )}
@@ -49,9 +53,7 @@ export function CategoryVodsGrid({ vods }: { vods: PublicVod[] }) {
           <Link href={`/watch/${vod.creatorUsername}`} className={styles.creator}>
             {vod.creatorDisplayName}
           </Link>
-          <p className={styles.meta}>
-            {vod.views.toLocaleString()} view{vod.views === 1 ? "" : "s"} · {new Date(vod.createdAt).toLocaleDateString()}
-          </p>
+          <p className={styles.meta}>{formatRelativeTime(vod.createdAt)}</p>
         </div>
       ))}
     </div>

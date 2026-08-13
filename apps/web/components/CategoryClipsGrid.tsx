@@ -1,5 +1,6 @@
 import type { PublicClip } from "@birq/shared";
 import Link from "next/link";
+import { formatRelativeTime } from "@/lib/format";
 import styles from "./CategoryClipsGrid.module.css";
 
 function formatDuration(seconds: number): string {
@@ -24,13 +25,18 @@ export function CategoryClipsGrid({ clips }: { clips: PublicClip[] }) {
       {clips.map((clip) => (
         <Link key={clip.id} href={`/clip/${clip.id}`} className={styles.card}>
           <div className={styles.thumbnail}>
+            {clip.ogImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={clip.ogImageUrl} alt="" className={styles.thumbnailImage} />
+            ) : null}
+            <span className={styles.viewCount}>
+              {clip.views.toLocaleString()} view{clip.views === 1 ? "" : "s"}
+            </span>
             <span className={styles.duration}>{formatDuration(clip.durationSeconds)}</span>
           </div>
           {clip.title && <p className={styles.title}>{clip.title}</p>}
           <p className={styles.creator}>{clip.creatorDisplayName}</p>
-          <p className={styles.meta}>
-            {clip.views.toLocaleString()} view{clip.views === 1 ? "" : "s"}
-          </p>
+          <p className={styles.meta}>{formatRelativeTime(clip.createdAt)}</p>
         </Link>
       ))}
     </div>
