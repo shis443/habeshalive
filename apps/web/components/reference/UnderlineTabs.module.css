@@ -1,0 +1,45 @@
+.tabs {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The underline lives on this inner span, not .tab itself — sized to the
+   label text's own width (TabBarIndicatorSize.label), not the full
+   padded tap target, which is exactly what makes this visually distinct
+   from Birq's previous full-width/pill tab treatment. */
+.label {
+  font-family: var(--font-label);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid transparent;
+  transition: color 180ms ease, border-color 180ms ease;
+}
+
+.labelActive {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .label {
+    transition: none;
+  }
+}

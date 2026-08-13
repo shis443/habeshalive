@@ -1,0 +1,9 @@
+.label {
+  font-family: var(--font-label);
+  font-size: var(--ref-section-label);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--on-surface-variant);
+  margin: var(--space-4) 0 var(--space-2);
+}

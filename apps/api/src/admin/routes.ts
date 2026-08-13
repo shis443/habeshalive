@@ -3,6 +3,7 @@ import {
   createAdCreativeSchema,
   createAdvertiserSchema,
   createAnnouncementSchema,
+  createCategorySchema,
   extendGracePeriodSchema,
   forceEndStreamSchema,
   manualAdjustmentSchema,
@@ -12,6 +13,7 @@ import {
   suspendCreatorSchema,
   updateAdCampaignStatusSchema,
   updateAdLeadStatusSchema,
+  updateCategorySchema,
   updateCreatorSchema,
   updatePlatformConfigSchema,
   updateUserRoleSchema,
@@ -35,6 +37,7 @@ import {
   listSuspiciousGiftCardPurchasers,
 } from "../gift-cards/service.js";
 import { createAnnouncement, deactivateAnnouncement, listAnnouncementsAdmin } from "../announcements/service.js";
+import { createCategory, listCategoriesAdmin, updateCategory } from "../categories/service.js";
 import { listTagsAdmin, mergeTags, setTagBanned } from "../streams/tags-service.js";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
@@ -380,4 +383,21 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { ok: true };
     }
   );
+
+  // --- Content categories (Flutter-reference UI rebuild) ---
+  // Public reads live at categories/routes.ts (GET /categories,
+  // GET /categories/:slug) — this is the write/manage surface only,
+  // same split as every other admin-managed resource in this file.
+
+  app.get("/categories", { preHandler: app.requireAdmin }, async () => listCategoriesAdmin());
+
+  app.post("/categories", { preHandler: app.requireAdmin }, async (req) => {
+    const input = createCategorySchema.parse(req.body);
+    return createCategory(input);
+  });
+
+  app.patch<{ Params: { slug: string } }>("/categories/:slug", { preHandler: app.requireAdmin }, async (req) => {
+    const input = updateCategorySchema.parse(req.body);
+    return updateCategory(req.params.slug, input);
+  });
 };

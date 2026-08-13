@@ -1,3 +1,10 @@
+> **SUPERSEDED** by `docs/FLUTTER_UI_REBUILD_PLAN.md`. Phases 1-4 in this
+> document were implemented and shipped under the "loose inspiration"
+> direction; several of their visual choices (the generated-art
+> `CategoryTile` grid in particular) are explicitly being replaced under
+> the new literal-rebuild direction. Do not use this phase plan for new
+> work — see the rebuild plan instead.
+
 # Twitch-inspired UI implementation plan
 
 Companion to `docs/TWITCH_REFERENCE_FEATURE_AUDIT.md` — read that first for

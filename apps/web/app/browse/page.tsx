@@ -1,16 +1,23 @@
-import { STREAM_CATEGORIES } from "@birq/shared";
 import Link from "next/link";
 import { BottomNav } from "@/components/BottomNav";
 import { BrowseFilterBar } from "@/components/BrowseFilterBar";
-import { CategoryTile } from "@/components/CategoryTile";
+import { CategoryRowCompact } from "@/components/reference/CategoryRowCompact";
+import { UnderlineTabs } from "@/components/reference/UnderlineTabs";
 import { LiveChannelsGrid } from "@/components/LiveChannelsGrid";
-import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
 import { TopNav } from "@/components/TopNav";
-import { getCurrentUser, getLiveStreams, type LiveStreamSort } from "@/lib/api";
+import { getCategories, getCurrentUser, getLiveStreams, type LiveStreamSort } from "@/lib/api";
 import styles from "./page.module.css";
 
 const VALID_SORTS = new Set(["birqRank", "viewers", "recent", "alphabetical"]);
 
+// Flutter-reference UI rebuild — browse.dart is the literal spec here:
+// 40px bold title, underline TabBar (Categories then Live Channels, in
+// that order), Categories view as compact rows (categories_tile_small),
+// Live Channels view as the large feed card (live_tile_large). See
+// docs/FLUTTER_UI_REBUILD_AUDIT.md for the exact extracted values and
+// docs/FLUTTER_UI_REBUILD_PLAN.md for why LiveChannelsSidebar is dropped
+// from this page specifically (redundant with the page's own Live
+// Channels tab; the reference has no side-list concept at all).
 export default async function BrowsePage({
   searchParams,
 }: {
@@ -29,9 +36,9 @@ export default async function BrowsePage({
   const tag = params.tag ?? "";
   const sort = VALID_SORTS.has(params.sort ?? "") ? (params.sort as LiveStreamSort) : "birqRank";
 
-  const [user, allStreams, streams] = await Promise.all([
+  const [user, categories, streams] = await Promise.all([
     getCurrentUser(),
-    getLiveStreams(),
+    view === "categories" ? getCategories() : Promise.resolve([]),
     view === "channels"
       ? getLiveStreams({ category: category || undefined, language: language || undefined, tag: tag || undefined, sort })
       : Promise.resolve([]),
@@ -43,58 +50,31 @@ export default async function BrowsePage({
     return `/browse?${p.toString()}`;
   }
 
-  // Real per-category live-viewer totals, computed from allStreams (already
-  // fetched above for the sidebar) — no second API call, and no fake count.
-  const liveViewersByCategory = new Map<string, number>();
-  for (const stream of allStreams) {
-    if (!stream.category) continue;
-    liveViewersByCategory.set(stream.category, (liveViewersByCategory.get(stream.category) ?? 0) + stream.viewerCount);
-  }
-
-  // Phase 3.3 — category tiles now go to a real destination
-  // (/category/[slug]'s Live/Videos/Clips tabs) instead of just filtering
-  // this same page's Live Channels view. That filter itself is untouched
-  // (BrowseFilterBar's own category-adjacent controls still work exactly
-  // as before) — this only changes where clicking a category *tile*
-  // lands.
-  function categoryHref(cat: string) {
-    return `/category/${encodeURIComponent(cat)}`;
-  }
-
   return (
     <>
       <TopNav isAuthed={!!user} />
-      <LiveChannelsSidebar streams={allStreams} />
       <main className={styles.main}>
         <div className={styles.headerRow}>
           <h1 className={styles.heading}>Browse</h1>
-          {/* Phase 3.6 — Browse ("I know what I want, filter it") and
-              Discover ("show me something") are explicit siblings in the
-              IA this app is modeling, not a tab switch within the same
-              page — a real nav link to the other one, not a third tab
-              here. */}
+          {/* Browse ("I know what I want, filter it") and Discover ("show
+              me something") are explicit siblings in this app's IA, not a
+              tab switch within the same page — a real nav link to the
+              other one. */}
           <Link href="/discover" className={styles.discoverLink}>
             Discover →
           </Link>
         </div>
-        <div className={styles.tabs}>
-          <Link href={tabHref("categories")} className={view === "categories" ? styles.tabActive : styles.tab}>
-            Categories
-          </Link>
-          <Link href={tabHref("channels")} className={view === "channels" ? styles.tabActive : styles.tab}>
-            Live Channels
-          </Link>
-        </div>
+        <UnderlineTabs
+          tabs={[
+            { label: "Categories", href: tabHref("categories"), active: view === "categories" },
+            { label: "Live Channels", href: tabHref("channels"), active: view === "channels" },
+          ]}
+        />
 
         {view === "categories" ? (
-          <div className={styles.categoryGrid}>
-            {STREAM_CATEGORIES.map((cat) => (
-              <CategoryTile
-                key={cat}
-                category={cat}
-                href={categoryHref(cat)}
-                liveViewerCount={liveViewersByCategory.get(cat)}
-              />
+          <div className={styles.categoryList}>
+            {categories.map((cat) => (
+              <CategoryRowCompact key={cat.id} category={cat} />
             ))}
           </div>
         ) : (

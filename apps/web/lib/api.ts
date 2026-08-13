@@ -17,6 +17,7 @@ import {
   blocklistTermSchema,
   boostRevenueByCreatorSchema,
   clipSchema,
+  contentCategorySchema,
   creatorAdsSettingsSchema,
   creatorApplicationAdminItemSchema,
   creatorApplicationCapStatusSchema,
@@ -91,6 +92,7 @@ import {
   type BlocklistTerm,
   type BoostRevenueByCreator,
   type Clip,
+  type ContentCategory,
   type CreatorAdsSettings,
   type CreatorApplicationAdminItem,
   type CreatorApplicationCapStatus,
@@ -376,6 +378,31 @@ export async function getClipsByCategory(category: string): Promise<PublicClip[]
   });
   if (!res.ok) return [];
   return publicClipSchema.array().parse(await unwrapData(res));
+}
+
+// Flutter-reference UI rebuild — the real content_categories catalog
+// (db/migrations/0046), replacing STREAM_CATEGORIES as the source of
+// category metadata (description/artwork/tags/real aggregates) on Browse/
+// Discover/Category pages. STREAM_CATEGORIES itself is untouched — still
+// the valid-value list streams.category/category_follows.category check
+// against, this is purely the metadata layer on top.
+export async function getCategories(): Promise<ContentCategory[]> {
+  const res = await fetch(`${API_INTERNAL_URL}/categories`, { cache: "no-store" });
+  if (!res.ok) {
+    console.error(`Failed to load categories (${res.status})`);
+    return [];
+  }
+  return contentCategorySchema.array().parse(await unwrapData(res));
+}
+
+export async function getCategoryBySlug(slug: string): Promise<ContentCategory | null> {
+  const res = await fetch(`${API_INTERNAL_URL}/categories/${encodeURIComponent(slug)}`, { cache: "no-store" });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    console.error(`Failed to load category ${slug} (${res.status})`);
+    return null;
+  }
+  return contentCategorySchema.parse(await unwrapData(res));
 }
 
 // Phase 3.6 — /discover's trending section. Same degrade-to-empty-list

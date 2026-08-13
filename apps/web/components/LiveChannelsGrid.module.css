@@ -1,10 +1,17 @@
+/* live_tile_large.dart is a full-width feed card, not a grid tile — this
+   stays a single column on mobile (the reference's only real layout) and
+   becomes a responsive multi-column tiling at wider viewports rather than
+   forcing an infinite single-column scroll on desktop, per
+   docs/FLUTTER_UI_REBUILD_PLAN.md's "same hierarchy, not the old
+   sidebar-and-grid pattern" desktop guidance. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--space-3) var(--space-4);
 }
 
 .empty {
   color: var(--on-surface-variant);
-  font-size: 14px;
+  font-size: var(--ref-body);
+  line-height: 1.5;
 }

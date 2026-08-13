@@ -1,14 +1,14 @@
 .main {
   padding: calc(var(--shell-top-height) + var(--space-3)) var(--space-3)
     calc(var(--shell-bottom-height) + var(--space-4));
-  max-width: 1200px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
 @media (min-width: 900px) {
   .main {
-    margin-left: 240px;
-    max-width: none;
+    max-width: 1100px;
+    padding-inline: var(--space-5);
   }
 }
 
@@ -17,14 +17,17 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
+/* browse.dart: fontSize 40.0/bold, left padding 20 on the title itself
+   (Following/Discover use container-level left:15 instead — see
+   docs/FLUTTER_UI_REBUILD_AUDIT.md). */
 .heading {
   font-family: var(--font-headline);
-  font-weight: 700;
-  font-size: clamp(22px, 3vw, 28px);
-  letter-spacing: -0.025em;
+  font-weight: var(--ref-title-weight);
+  font-size: clamp(28px, 6vw, var(--ref-title));
+  letter-spacing: -0.02em;
   color: var(--on-background);
   margin: 0;
 }
@@ -35,62 +38,28 @@
   font-weight: 600;
   color: var(--primary);
   white-space: nowrap;
+  text-decoration: none;
 }
 
-.discoverLink:focus-visible,
-.tab:focus-visible,
-.tabActive:focus-visible,
-.categoryTile:focus-visible,
-.clearFilter:focus-visible {
+.discoverLink:hover {
+  text-decoration: underline;
+}
+
+.discoverLink:focus-visible {
   outline: 2px solid var(--secondary);
   outline-offset: 2px;
 }
 
-.tabs {
+.categoryList {
   display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
-
-.tab,
-.tabActive {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 9999px;
-  text-decoration: none;
-  font-family: var(--font-label);
-  font-size: 13px;
-  font-weight: 500;
-  transition: background-color 150ms ease, color 150ms ease;
-}
-
-.tab {
-  background: var(--surface-container-high);
-  color: var(--on-surface-variant);
-}
-
-.tab:hover {
-  background: var(--surface-container-highest);
-  color: var(--on-background);
-}
-
-.tabActive {
-  background: var(--primary);
-  color: var(--on-primary);
-}
-
-.categoryGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
-  gap: var(--space-3);
+  flex-direction: column;
+  padding-top: var(--space-2);
 }
 
 .activeFilter {
   color: var(--on-surface-variant);
   font-size: 13px;
-  margin-bottom: var(--space-3);
+  margin: var(--space-3) 0;
 }
 
 .clearFilter {
@@ -98,14 +67,7 @@
   text-decoration: none;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-  gap: var(--space-4) var(--space-3);
-}
-
-.empty {
-  color: var(--on-surface-variant);
-  font-size: 14px;
-  line-height: 1.5;
+.clearFilter:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
 }

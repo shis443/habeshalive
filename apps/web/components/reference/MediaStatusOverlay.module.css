@@ -1,0 +1,47 @@
+.overlay {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-label);
+  font-size: var(--ref-badge);
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.live {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--error);
+  color: var(--on-error);
+}
+
+.dark {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.topLeft {
+  top: 6px;
+  left: 6px;
+}
+
+.topRight {
+  top: 6px;
+  right: 6px;
+}
+
+.bottomLeft {
+  bottom: 6px;
+  left: 6px;
+}
+
+.bottomRight {
+  bottom: 6px;
+  right: 6px;
+}

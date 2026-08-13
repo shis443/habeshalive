@@ -12,6 +12,7 @@ import { authRoutes } from "./auth/routes.js";
 import { touchAndCheckSession } from "./auth/session-service.js";
 import { isNonSessionToken } from "./auth/token-guards.js";
 import { avatarRoutes } from "./avatars/routes.js";
+import { categoryRoutes } from "./categories/routes.js";
 import { chatRoutes } from "./chat/routes.js";
 import { env } from "./common/env.js";
 import { AppError } from "./common/errors.js";
@@ -369,6 +370,7 @@ export function buildApp() {
   app.register(authRoutes, { prefix: "/auth" });
   app.register(announcementRoutes, { prefix: "/announcements" });
   app.register(avatarRoutes, { prefix: "/avatars" });
+  app.register(categoryRoutes, { prefix: "/categories" });
   app.register(chatRoutes, { prefix: "/chat" });
   app.register(followRoutes, { prefix: "/follows" });
   app.register(creatorRoutes, { prefix: "/creators" });

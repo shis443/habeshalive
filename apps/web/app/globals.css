@@ -33,6 +33,20 @@
   --font-body: var(--font-inter), sans-serif;
   --font-label: var(--font-geist), sans-serif;
 
+  /* Flutter-reference UI rebuild type scale — Birq's own tokens (see
+     docs/FLUTTER_UI_REBUILD_AUDIT.md's "no shared type-scale exists in the
+     reference" finding: the source has no scale to port, only recurring
+     hardcoded per-component sizes — 40/25/16/14/13/12px — which these
+     tokens generalize into a real, reusable scale using Birq's own
+     licensed fonts). */
+  --ref-title: 40px;
+  --ref-title-weight: 700;
+  --ref-section-label: 13px;
+  --ref-body-lg: 16px;
+  --ref-body: 14px;
+  --ref-caption: 12px;
+  --ref-badge: 11px;
+
   --shell-top-height: 56px;
   --shell-bottom-height: 64px;
 

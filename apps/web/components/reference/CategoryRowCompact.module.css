@@ -1,0 +1,101 @@
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 5px var(--space-3) 5px 20px;
+  text-decoration: none;
+  border-radius: 8px;
+  transition: background-color 150ms ease;
+}
+
+.row:hover {
+  background: color-mix(in srgb, var(--surface-container-high) 60%, transparent);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    transition: none;
+  }
+}
+
+.artWrap {
+  flex-shrink: 0;
+  width: 50px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.artImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.art {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.initial {
+  font-family: var(--font-headline);
+  font-weight: 700;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.variantA {
+  background: linear-gradient(150deg, var(--primary), var(--primary-container));
+}
+
+.variantB {
+  background: linear-gradient(150deg, var(--secondary), color-mix(in srgb, var(--secondary) 40%, var(--primary)));
+}
+
+.variantC {
+  background: linear-gradient(150deg, var(--tertiary), color-mix(in srgb, var(--tertiary) 40%, var(--error)));
+}
+
+.variantD {
+  background: linear-gradient(150deg, var(--error), color-mix(in srgb, var(--error) 45%, var(--primary)));
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.name {
+  margin: 0;
+  font-family: var(--font-headline);
+  font-weight: 700;
+  font-size: var(--ref-body-lg);
+  color: var(--on-background);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  margin: 3px 0 0;
+  font-family: var(--font-label);
+  font-size: 14px;
+  color: var(--on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}

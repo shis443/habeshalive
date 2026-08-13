@@ -1,3 +1,14 @@
+> **SUPERSEDED.** This audit's conclusion — "apply the reference's
+> information density to Birq's existing real data" as loose inspiration,
+> keeping Birq's own card system — has been explicitly overridden. The
+> Flutter reference is now the literal layout specification (component
+> dimensions, spacing, densities, tab style). See
+> `docs/FLUTTER_UI_REBUILD_AUDIT.md` for the numeric specs and
+> `docs/FLUTTER_UI_REBUILD_PLAN.md` for the rebuild plan. The functional
+> findings below (what's real vs. dead in the reference, which Birq
+> endpoints already exist) are still accurate and still used — only the
+> "loose inspiration, keep Birq's card system" conclusion is overridden.
+
 # Twitch-Clone-Flutter reference audit
 
 Reference: `fluttership/Twitch-Clone-Flutter`, checked out locally at

@@ -4,7 +4,7 @@ import type { LiveStream } from "@birq/shared";
 import { useEffect, useState } from "react";
 import { unwrapClientData } from "@/lib/clientApi";
 import { API_BASE_URL } from "@/lib/config";
-import { StreamCard } from "./StreamCard";
+import { LiveCardLarge } from "./reference/LiveCardLarge";
 import styles from "./LiveChannelsGrid.module.css";
 
 // The Live Channels grid (apps/web/app/browse/page.tsx) used to be a
@@ -76,7 +76,7 @@ export function LiveChannelsGrid({
   return (
     <div className={styles.grid}>
       {streams.map((stream) => (
-        <StreamCard key={stream.id} stream={stream} />
+        <LiveCardLarge key={stream.id} stream={stream} />
       ))}
     </div>
   );
