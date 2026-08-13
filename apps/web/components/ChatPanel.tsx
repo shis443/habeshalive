@@ -21,6 +21,29 @@ import { RecentGiftersStrip } from "./RecentGiftersStrip";
 import { StreamActivityStrip } from "./StreamActivityStrip";
 import { ViewerListPanel } from "./ViewerListPanel";
 
+// Every response from the API (hit directly here via API_BASE_URL, or
+// through the /api/backend/* proxy which passes bodies through
+// unmodified) is wrapped in {success, data, error} — apps/api/src/app.ts's
+// preSerialization hook, the same envelope lib/api.ts's own unwrapData
+// already accounts for server-side. That helper isn't exported (and
+// lib/api.ts isn't safe to import into a "use client" file — it relies on
+// server-only cookie access elsewhere), so this is the client-side
+// equivalent. Every raw fetch(...).then(res => res.json()) in this file
+// used to read the envelope itself instead of its nested data field —
+// e.g. syncHistory's `.then((history: ChatMessage[]) => ...)` was a
+// compile-time-only type assertion; at runtime `history` was actually
+// {success, data, error}, and history.filter(...) a few lines later threw
+// exactly the kind of "X is not a function" crash reported live on a
+// stream's watch page. Silent versions of the same bug: sent chat
+// messages got appended with undefined fields (reading sent.id off the
+// envelope instead of the real message), and the wallet balance shown in
+// chat never rendered (data.balanceSantim was always undefined).
+async function unwrapChatData<T>(res: Response): Promise<T> {
+  const body = await res.json();
+  if (!body.success) throw new Error(body.error ?? "Request failed");
+  return body.data as T;
+}
+
 const BADGE_EMOJI: Record<GifterBadgeTier, string> = {
   none: "",
   bronze: "🥉",
@@ -99,8 +122,8 @@ async function fetchChatToken(): Promise<string> {
   // the proxy itself requires one regardless of what the target route
   // needs. See apps/api/src/chat/token.ts.
   const res = await fetch(`${API_BASE_URL}/chat/token`, { method: "POST" });
-  const data = await res.json();
-  return data.token as string;
+  const data = await unwrapChatData<{ token: string }>(res);
+  return data.token;
 }
 
 export function ChatPanel({
@@ -171,8 +194,8 @@ export function ChatPanel({
   useEffect(() => {
     if (!isAuthed || !currentUserId || currentUserId === creatorId) return;
     fetch(`/api/backend/moderation/channel/${creatorId}/moderators`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((mods: { userId: string }[]) => {
+      .then((res) => (res.ok ? unwrapChatData<{ userId: string }[]>(res) : []))
+      .then((mods) => {
         setIsGrantedChannelMod(mods.some((m) => m.userId === currentUserId));
       })
       .catch(() => {});
@@ -193,7 +216,7 @@ export function ChatPanel({
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/chat/${streamId}/pinned`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapChatData<PinnedMessage | null>(res) : null))
       .then(setPinnedMessage)
       .catch(() => {});
   }, [streamId]);
@@ -201,7 +224,7 @@ export function ChatPanel({
   useEffect(() => {
     if (!isAuthed) return;
     fetch("/api/backend/wallet/balance")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapChatData<{ balanceSantim: number }>(res) : null))
       .then((data) => {
         if (data) setBalanceSantim(data.balanceSantim);
       })
@@ -224,8 +247,8 @@ export function ChatPanel({
     // permanent gap in that viewer's chat until they manually reload.
     function syncHistory() {
       fetch(`${API_BASE_URL}/chat/${streamId}/messages`)
-        .then((res) => res.json())
-        .then((history: ChatMessage[]) => {
+        .then((res) => unwrapChatData<ChatMessage[]>(res))
+        .then((history) => {
           if (cancelled) return;
           setMessages((prev) => {
             const existingIds = new Set(prev.map((entry) => entry.id));
@@ -320,7 +343,7 @@ export function ChatPanel({
       // echo can (and often does) reach the client before this fetch's
       // response does — without this check, both paths append the same
       // message and it shows up twice.
-      const sent: ChatMessage = await res.json();
+      const sent = await unwrapChatData<ChatMessage>(res);
       setMessages((prev) => {
         if (prev.some((entry) => entry.id === sent.id)) return prev;
         return [...prev, toEntry(sent)];
@@ -358,7 +381,7 @@ export function ChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messageId }),
       });
-      if (res.ok) setPinnedMessage(await res.json());
+      if (res.ok) setPinnedMessage(await unwrapChatData<PinnedMessage>(res));
     } catch {
       // Pinning is a moderation nicety, not core chat — a failure here
       // just leaves the old pin (or none) in place.
