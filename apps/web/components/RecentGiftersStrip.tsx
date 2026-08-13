@@ -20,10 +20,15 @@ export function RecentGiftersStrip({ streamId }: { streamId: string }) {
   useEffect(() => {
     let cancelled = false;
     function load() {
+      // Every API response is wrapped in {success, data, error} — see
+      // ChatPanel.tsx's unwrapChatData comment for the full explanation.
+      // This used to set gifters to that envelope directly instead of
+      // its nested data array, so gifters.map(...) below threw as soon
+      // as the first poll landed.
       fetch(`${API_BASE_URL}/chat/${streamId}/recent-gifters`)
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data: RecentGifter[]) => {
-          if (!cancelled) setGifters(data);
+        .then((res) => (res.ok ? res.json() : { data: [] }))
+        .then((body: { data: RecentGifter[] }) => {
+          if (!cancelled) setGifters(body.data);
         })
         .catch(() => {});
     }

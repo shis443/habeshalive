@@ -27,9 +27,14 @@ export function AnnouncementBanner() {
 
   useEffect(() => {
     setDismissed(readDismissed());
+    // Every API response is wrapped in {success, data, error} — see
+    // ChatPanel.tsx's unwrapChatData comment for the full explanation.
+    // This used to set announcements to that envelope directly instead
+    // of its nested data array, so announcements.filter(...) below threw
+    // on every mount, everywhere this banner renders.
     fetch(`${API_BASE_URL}/announcements`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then(setAnnouncements)
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((body: { data: Announcement[] }) => setAnnouncements(body.data))
       .catch(() => {});
   }, []);
 

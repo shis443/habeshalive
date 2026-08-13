@@ -23,9 +23,13 @@ export function ViewerListPanel({ streamId }: { streamId: string }) {
 
   useEffect(() => {
     if (!dropdown.open) return;
+    // Every API response is wrapped in {success, data, error} — see
+    // ChatPanel.tsx's unwrapChatData comment for the full explanation.
+    // list.viewers below was reading that envelope directly instead of
+    // its nested data field.
     fetch(`${API_BASE_URL}/streams/${streamId}/viewers`)
       .then((res) => (res.ok ? res.json() : null))
-      .then(setList)
+      .then((body) => setList(body ? (body.data as ViewerList) : null))
       .catch(() => {});
   }, [dropdown.open, streamId]);
 
