@@ -23,11 +23,21 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: opacity 0.25s ease;
 }
 
 .thumbnailPlaceholder {
   width: 100%;
   height: 100%;
+  transition: opacity 0.25s ease;
+}
+
+/* Applied once StreamCardPreview's <video> actually starts playing
+   (real playback, not just "attempted") — the thumbnail stays under it
+   at opacity 0 rather than being unmounted, so losing visibility can
+   just flip this back off instantly with no layout/paint cost. */
+.thumbnailHidden {
+  opacity: 0;
 }
 
 .liveBadge {

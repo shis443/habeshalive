@@ -2,8 +2,8 @@ import { STREAM_CATEGORIES } from "@birq/shared";
 import Link from "next/link";
 import { BottomNav } from "@/components/BottomNav";
 import { BrowseFilterBar } from "@/components/BrowseFilterBar";
+import { LiveChannelsGrid } from "@/components/LiveChannelsGrid";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
-import { StreamCard } from "@/components/StreamCard";
 import { TopNav } from "@/components/TopNav";
 import { getCurrentUser, getLiveStreams, type LiveStreamSort } from "@/lib/api";
 import styles from "./page.module.css";
@@ -96,15 +96,13 @@ export default async function BrowsePage({
                 </Link>
               </p>
             )}
-            {streams.length === 0 ? (
-              <p className={styles.empty}>No live streams match these filters right now.</p>
-            ) : (
-              <div className={styles.grid}>
-                {streams.map((stream) => (
-                  <StreamCard key={stream.id} stream={stream} />
-                ))}
-              </div>
-            )}
+            <LiveChannelsGrid
+              initialStreams={streams}
+              category={category}
+              language={language}
+              tag={tag}
+              sort={sort}
+            />
           </>
         )}
       </main>
