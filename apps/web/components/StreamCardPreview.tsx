@@ -58,8 +58,17 @@ export function StreamCardPreview({
     }
     video.addEventListener("playing", handlePlaying);
 
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari/iOS decode HLS natively — no hls.js needed or wanted here.
+    // Same gate as VideoPlayer.tsx's proven one, and for the exact same
+    // documented reason (hls.js's own guidance): canPlayType alone can
+    // report support without the browser actually being able to play a
+    // live manifest — confirmed live here too, not just in that file's
+    // comment. Without the ManagedMediaSource check, this branch was
+    // taken by a Chromium build that claimed HLS support, set video.src
+    // directly to the raw manifest, and then never decoded a single
+    // frame — readyState stuck at 0, videoWidth/videoHeight both 0,
+    // permanently blank despite .ts segment requests actually firing.
+    if (video.canPlayType("application/vnd.apple.mpegurl") && "ManagedMediaSource" in window) {
+      // Safari/iOS 17.1+ decode HLS natively — no hls.js needed or wanted here.
       video.src = playbackUrl;
     } else if (Hls.isSupported()) {
       hls = new Hls();
