@@ -83,42 +83,8 @@
 
 .categoryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
   gap: var(--space-3);
-}
-
-.categoryTile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 96px;
-  padding: var(--space-5) var(--space-3);
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--outline-variant) 55%, transparent);
-  background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container));
-  color: var(--on-background);
-  text-decoration: none;
-  font-family: var(--font-headline);
-  font-weight: 700;
-  font-size: 16px;
-  text-align: center;
-  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
-}
-
-.categoryTile:hover {
-  border-color: color-mix(in srgb, var(--primary) 65%, var(--outline-variant));
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
-  transform: translateY(-2px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .categoryTile {
-    transition: none;
-  }
-
-  .categoryTile:hover {
-    transform: none;
-  }
 }
 
 .activeFilter {

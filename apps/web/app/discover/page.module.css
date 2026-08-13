@@ -48,6 +48,23 @@
   gap: var(--space-4) var(--space-3);
 }
 
+.categoryRail {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: 2px 2px var(--space-2);
+  margin: 0 -2px;
+  scrollbar-width: thin;
+}
+
+.categoryRailItem {
+  flex: 0 0 auto;
+  width: 160px;
+  scroll-snap-align: start;
+}
+
 .empty {
   color: var(--on-surface-variant);
   font-size: 14px;

@@ -22,10 +22,33 @@
 
 .heading {
   font-family: var(--font-headline);
-  font-weight: 600;
-  font-size: 22px;
+  font-weight: 700;
+  font-size: clamp(22px, 3vw, 28px);
+  letter-spacing: -0.025em;
   color: var(--on-background);
+  margin: 0 0 4px;
+}
+
+/* Real, database-backed numbers only: liveViewerCount is a live sum over
+   this category's currently-fetched GET /streams/live results,
+   followerCount comes straight from GET /follows/category/:category/status
+   (category-service.ts's getCategoryFollowerCount) — no invented stat. */
+.stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.statsDot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--on-surface-variant);
+  flex-shrink: 0;
 }
 
 .tabs {
@@ -36,12 +59,16 @@
 
 .tab,
 .tabActive {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   padding: var(--space-2) var(--space-3);
   border-radius: 9999px;
   text-decoration: none;
   font-family: var(--font-label);
   font-size: 13px;
   font-weight: 500;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 .tab {
@@ -59,13 +86,20 @@
   color: var(--on-primary);
 }
 
+.tab:focus-visible,
+.tabActive:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-4) var(--space-3);
 }
 
 .empty {
   color: var(--on-surface-variant);
   font-size: 14px;
+  line-height: 1.5;
 }

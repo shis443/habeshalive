@@ -1,0 +1,22 @@
+.rail {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: 2px 2px var(--space-2);
+  margin: 0 -2px;
+  scrollbar-width: thin;
+}
+
+.item {
+  flex: 0 0 auto;
+  width: min(85vw, 320px);
+  scroll-snap-align: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail {
+    scroll-behavior: auto;
+  }
+}

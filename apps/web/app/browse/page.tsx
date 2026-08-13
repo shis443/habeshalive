@@ -2,6 +2,7 @@ import { STREAM_CATEGORIES } from "@birq/shared";
 import Link from "next/link";
 import { BottomNav } from "@/components/BottomNav";
 import { BrowseFilterBar } from "@/components/BrowseFilterBar";
+import { CategoryTile } from "@/components/CategoryTile";
 import { LiveChannelsGrid } from "@/components/LiveChannelsGrid";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
 import { TopNav } from "@/components/TopNav";
@@ -42,6 +43,14 @@ export default async function BrowsePage({
     return `/browse?${p.toString()}`;
   }
 
+  // Real per-category live-viewer totals, computed from allStreams (already
+  // fetched above for the sidebar) — no second API call, and no fake count.
+  const liveViewersByCategory = new Map<string, number>();
+  for (const stream of allStreams) {
+    if (!stream.category) continue;
+    liveViewersByCategory.set(stream.category, (liveViewersByCategory.get(stream.category) ?? 0) + stream.viewerCount);
+  }
+
   // Phase 3.3 — category tiles now go to a real destination
   // (/category/[slug]'s Live/Videos/Clips tabs) instead of just filtering
   // this same page's Live Channels view. That filter itself is untouched
@@ -80,9 +89,12 @@ export default async function BrowsePage({
         {view === "categories" ? (
           <div className={styles.categoryGrid}>
             {STREAM_CATEGORIES.map((cat) => (
-              <Link key={cat} href={categoryHref(cat)} className={styles.categoryTile}>
-                {cat}
-              </Link>
+              <CategoryTile
+                key={cat}
+                category={cat}
+                href={categoryHref(cat)}
+                liveViewerCount={liveViewersByCategory.get(cat)}
+              />
             ))}
           </div>
         ) : (

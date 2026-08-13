@@ -15,6 +15,7 @@ import {
   getLiveStreams,
   getVodsByCategory,
 } from "@/lib/api";
+import { formatViewerCount } from "@/lib/format";
 import styles from "./page.module.css";
 
 type CategoryTab = "live" | "videos" | "clips";
@@ -41,16 +42,20 @@ export default async function CategoryPage({
   const rawTab = (await searchParams).tab;
   const tab: CategoryTab = rawTab === "videos" || rawTab === "clips" ? rawTab : "live";
 
-  // Only the active tab's data is fetched — same reasoning as
-  // watch/[username]/page.tsx already applies to its own tab set.
-  const [user, sidebarStreams, liveStreams, vods, clips, followStatus] = await Promise.all([
+  // categoryLiveStreams (unlike vods/clips below) is always fetched,
+  // regardless of the active tab — the header's "N watching now" stat
+  // needs a real, current count on every tab, not just while the Live tab
+  // happens to be selected. Reused as-is for the grid when tab === "live",
+  // same call, no second fetch.
+  const [user, sidebarStreams, categoryLiveStreams, vods, clips, followStatus] = await Promise.all([
     getCurrentUser(),
     getLiveStreams(),
-    tab === "live" ? getLiveStreams({ category }) : Promise.resolve([]),
+    getLiveStreams({ category }),
     tab === "videos" ? getVodsByCategory(category) : Promise.resolve([]),
     tab === "clips" ? getClipsByCategory(category) : Promise.resolve([]),
     getCategoryFollowStatus(category),
   ]);
+  const liveViewerCount = categoryLiveStreams.reduce((sum, stream) => sum + stream.viewerCount, 0);
 
   function tabHref(next: CategoryTab) {
     return next === "live" ? `/category/${encodeURIComponent(category)}` : `/category/${encodeURIComponent(category)}?tab=${next}`;
@@ -62,7 +67,14 @@ export default async function CategoryPage({
       <LiveChannelsSidebar streams={sidebarStreams} />
       <main className={styles.main}>
         <div className={styles.headerRow}>
-          <h1 className={styles.heading}>{category}</h1>
+          <div>
+            <h1 className={styles.heading}>{category}</h1>
+            <p className={styles.stats}>
+              {liveViewerCount > 0 ? `${formatViewerCount(liveViewerCount)} watching now` : "No one watching right now"}
+              <span className={styles.statsDot} aria-hidden="true" />
+              {formatViewerCount(followStatus.followerCount)} {followStatus.followerCount === 1 ? "follower" : "followers"}
+            </p>
+          </div>
           <CategoryFollowButton category={category} isAuthed={!!user} initialFollowing={followStatus.following} />
         </div>
         <div className={styles.tabs}>
@@ -78,11 +90,11 @@ export default async function CategoryPage({
         </div>
 
         {tab === "live" &&
-          (liveStreams.length === 0 ? (
+          (categoryLiveStreams.length === 0 ? (
             <p className={styles.empty}>No one is streaming {category} right now.</p>
           ) : (
             <div className={styles.grid}>
-              {liveStreams.map((stream) => (
+              {categoryLiveStreams.map((stream) => (
                 <StreamCard key={stream.id} stream={stream} />
               ))}
             </div>

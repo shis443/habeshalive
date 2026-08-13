@@ -1,9 +1,11 @@
+import { STREAM_CATEGORIES } from "@birq/shared";
 import Link from "next/link";
 import { BottomNav } from "@/components/BottomNav";
 import { CategoryClipsGrid } from "@/components/CategoryClipsGrid";
+import { CategoryTile } from "@/components/CategoryTile";
 import { CategoryVodsGrid } from "@/components/CategoryVodsGrid";
+import { FeaturedLiveRail } from "@/components/FeaturedLiveRail";
 import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
-import { StreamCard } from "@/components/StreamCard";
 import { TopNav } from "@/components/TopNav";
 import { getCurrentUser, getLiveStreams, getTrendingClips, getTrendingVods } from "@/lib/api";
 import styles from "./page.module.css";
@@ -28,6 +30,15 @@ export default async function DiscoverPage() {
   ]);
   const boostedLive = allStreams.filter((s) => s.isBoosted);
 
+  // Real per-category live-viewer totals from the same allStreams call
+  // already made above for the sidebar — no second fetch, matches
+  // /browse's identical computation for its Categories tab.
+  const liveViewersByCategory = new Map<string, number>();
+  for (const stream of allStreams) {
+    if (!stream.category) continue;
+    liveViewersByCategory.set(stream.category, (liveViewersByCategory.get(stream.category) ?? 0) + stream.viewerCount);
+  }
+
   return (
     <>
       <TopNav isAuthed={!!user} />
@@ -39,13 +50,24 @@ export default async function DiscoverPage() {
         {boostedLive.length > 0 && (
           <section className={styles.section}>
             <h2 className={styles.sectionHeading}>Featured live</h2>
-            <div className={styles.grid}>
-              {boostedLive.map((stream) => (
-                <StreamCard key={stream.id} stream={stream} />
-              ))}
-            </div>
+            <FeaturedLiveRail streams={boostedLive} />
           </section>
         )}
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionHeading}>Explore categories</h2>
+          <div className={styles.categoryRail}>
+            {STREAM_CATEGORIES.map((cat) => (
+              <div key={cat} className={styles.categoryRailItem}>
+                <CategoryTile
+                  category={cat}
+                  href={`/category/${encodeURIComponent(cat)}`}
+                  liveViewerCount={liveViewersByCategory.get(cat)}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
 
         {trendingClips.length > 0 && (
           <section className={styles.section}>
