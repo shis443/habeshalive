@@ -3,9 +3,32 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
   background: var(--surface-container-lowest);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, var(--primary) 60%, var(--outline-variant));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+
+  .card:hover {
+    transform: none;
+  }
 }
 
 /* Used on /following to visually separate live creators from offline ones

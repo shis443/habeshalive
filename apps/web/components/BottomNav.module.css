@@ -7,11 +7,13 @@
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding-bottom: env(safe-area-inset-bottom);
-  background: color-mix(in srgb, var(--surface-container) 60%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid var(--outline-variant);
+  padding: 4px max(var(--space-2), env(safe-area-inset-right)) env(safe-area-inset-bottom)
+    max(var(--space-2), env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--surface-container) 68%, transparent);
+  backdrop-filter: blur(22px) saturate(1.25);
+  -webkit-backdrop-filter: blur(22px) saturate(1.25);
+  border-top: 1px solid color-mix(in srgb, var(--outline-variant) 75%, transparent);
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.12);
   z-index: 50;
 }
 
@@ -20,8 +22,11 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  min-width: 58px;
+  min-height: 48px;
+  justify-content: center;
   padding: var(--space-1) var(--space-3);
-  border-radius: 8px;
+  border-radius: 12px;
   color: var(--on-surface-variant);
   font-family: var(--font-label);
   font-size: 10px;
@@ -32,5 +37,11 @@
 
 .itemActive {
   color: var(--primary);
-  background: rgba(208, 188, 255, 0.14);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.item:focus-visible,
+.itemActive:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
 }

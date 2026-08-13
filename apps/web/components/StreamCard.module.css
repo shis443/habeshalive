@@ -2,6 +2,13 @@
   display: block;
   container-type: inline-size;
   container-name: stream-card;
+  min-width: 0;
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 5px;
+  border-radius: 12px;
 }
 
 .cardInner {
@@ -12,11 +19,19 @@
 .thumbnailWrap {
   position: relative;
   aspect-ratio: 16 / 9;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
   background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container-lowest));
   margin-bottom: var(--space-2);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.card:hover .thumbnailWrap {
+  border-color: color-mix(in srgb, var(--primary) 72%, var(--outline-variant));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  transform: translateY(-2px);
 }
 
 .thumbnail {
@@ -44,15 +59,15 @@
   position: absolute;
   top: var(--space-2);
   left: var(--space-2);
-  background: var(--primary);
-  color: var(--on-primary);
+  background: #e91916;
+  color: #ffffff;
   font-family: var(--font-label);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .boostedBadge {
@@ -92,14 +107,14 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(6, 14, 32, 0.75);
-  color: var(--on-background);
+  background: rgba(5, 8, 18, 0.82);
+  color: #ffffff;
   font-family: var(--font-label);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .info {
@@ -111,7 +126,7 @@
 .title {
   margin: 0;
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 650;
   font-size: 15px;
   color: var(--on-background);
   overflow: hidden;
@@ -123,7 +138,7 @@
   margin: 0;
   font-family: var(--font-label);
   font-size: 13px;
-  color: var(--on-surface-variant);
+  color: color-mix(in srgb, var(--on-surface-variant) 87%, transparent);
 }
 
 .tags {
@@ -133,7 +148,7 @@
 }
 
 .tag {
-  background: var(--surface-container-high);
+  background: var(--surface-container-highest);
   color: var(--on-surface-variant);
   font-family: var(--font-label);
   font-size: 10px;
@@ -142,6 +157,17 @@
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbnailWrap,
+  .thumbnail {
+    transition: none;
+  }
+
+  .card:hover .thumbnailWrap {
+    transform: none;
+  }
 }
 
 /* Container query math, grounded in the real grid this card lives in

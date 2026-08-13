@@ -2,7 +2,9 @@
   display: flex;
   gap: var(--space-2);
   overflow-x: auto;
-  padding: var(--space-1) 0;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: var(--space-1) 0 var(--space-2);
 }
 
 .pill,
@@ -10,9 +12,10 @@
   flex: none;
   display: inline-block;
   white-space: nowrap;
-  padding: var(--space-2) var(--space-3);
+  min-height: 36px;
+  padding: var(--space-2) 14px;
+  border: 1px solid transparent;
   border-radius: 9999px;
-  border: none;
   cursor: pointer;
   text-decoration: none;
   font-family: var(--font-label);
@@ -27,7 +30,7 @@
 }
 
 .pill {
-  background: var(--surface-container-high);
+  background: color-mix(in srgb, var(--surface-container-high) 82%, transparent);
   color: var(--on-surface-variant);
 }
 
@@ -44,4 +47,11 @@
 .pillActive {
   background: var(--primary);
   color: var(--on-primary);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.pill:focus-visible,
+.pillActive:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
 }

@@ -1,7 +1,7 @@
 .main {
-  padding: calc(var(--shell-top-height) + var(--space-3)) var(--space-3)
-    calc(var(--shell-bottom-height) + var(--space-4));
-  max-width: 1200px;
+  padding: calc(var(--shell-top-height) + var(--space-4)) var(--space-3)
+    calc(var(--shell-bottom-height) + var(--space-5));
+  max-width: 1320px;
   margin: 0 auto;
 }
 
@@ -14,19 +14,28 @@
 
 .heading {
   font-family: var(--font-headline);
-  font-weight: 600;
-  font-size: 22px;
+  font-weight: 700;
+  font-size: clamp(22px, 3vw, 28px);
+  letter-spacing: -0.025em;
   color: var(--on-background);
-  margin: var(--space-4) 0 var(--space-3);
+  margin: var(--space-5) 0 var(--space-3);
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--space-4) var(--space-3);
 }
 
 .empty {
+  margin: var(--space-3) 0;
   color: var(--on-surface-variant);
   font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (min-width: 600px) {
+  .main {
+    padding-inline: var(--space-4);
+  }
 }
