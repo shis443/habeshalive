@@ -2,6 +2,7 @@
 
 import type { Vod } from "@birq/shared";
 import { useState } from "react";
+import { formatRelativeTime } from "@/lib/format";
 import styles from "./PastBroadcasts.module.css";
 import { VodPlayer } from "./VodPlayer";
 
@@ -35,15 +36,16 @@ export function PastBroadcasts({ vods }: { vods: Vod[] }) {
                 ) : (
                   <div className={styles.thumbnailPlaceholder} />
                 )}
+                <span className={styles.viewCount}>
+                  {vod.views.toLocaleString()} view{vod.views === 1 ? "" : "s"}
+                </span>
                 {formatDuration(vod.durationSeconds) && (
                   <span className={styles.duration}>{formatDuration(vod.durationSeconds)}</span>
                 )}
               </button>
             )}
             <p className={styles.title}>{vod.title}</p>
-            <p className={styles.meta}>
-              {vod.views.toLocaleString()} view{vod.views === 1 ? "" : "s"} · {new Date(vod.createdAt).toLocaleDateString()}
-            </p>
+            <p className={styles.meta}>{formatRelativeTime(vod.createdAt)}</p>
           </div>
         ))}
       </div>

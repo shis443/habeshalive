@@ -69,10 +69,19 @@ Two real options, not a fake-data shortcut either way:
    route, object storage, public read API) but a materially bigger lift for
    4 static categories with no product request for admin-editable copy yet.
 
-This audit recommends option 1 now and documents option 2 as an explicitly
-deferred decision requiring product sign-off (does Birq want per-category
-admin-editable art/copy, and where does the upload pipeline live) before any
-migration is written for it.
+**Decision (closed):** option 1 was built and shipped — `components/CategoryTile.tsx`,
+used on `/browse`'s Categories tab, `/discover`'s category rail, and (via the
+same visual language) the category detail header. Option 2 remains explicitly
+deferred, not silently dropped: no `category_metadata` migration, admin route,
+or upload pipeline exists, and none should be started without a real product
+decision on (a) whether categories need admin-editable descriptions/curated
+tags at all for a 4-value fixed list, and (b) where uploaded cover art would
+live (this repo has no object-storage pipeline wired up for anything today —
+see GoLivePanel.tsx's own comment on thumbnailUrl being a client-compressed
+data: URI specifically *because* no object storage exists yet). Revisit this
+decision if/when Birq's category list stops being a small fixed set, since
+that's the point at which a hardcoded per-category variant map (as
+`CategoryTile.tsx` uses today) stops scaling.
 
 ## Non-functional controls intentionally NOT cloned
 

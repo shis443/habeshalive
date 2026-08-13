@@ -10,7 +10,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
   flex-shrink: 0;
 }
 
@@ -125,15 +125,21 @@
 }
 
 .dismissButton:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--on-background) 10%, transparent);
   color: var(--on-background);
+}
+
+.dismissButton:focus-visible,
+.iconButton:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
 }
 
 .counters {
   display: flex;
   gap: var(--space-3);
   padding: var(--space-1) var(--space-3);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid color-mix(in srgb, var(--outline-variant) 40%, transparent);
   flex-shrink: 0;
 }
 
@@ -148,7 +154,7 @@
 
 .inputArea {
   padding: var(--space-2) var(--space-3);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
   flex-shrink: 0;
 }
 
@@ -170,8 +176,9 @@
   font-size: 13px;
 }
 
-.input:focus {
-  outline: none;
+.input:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 1px;
   border-color: var(--secondary);
 }
 
@@ -187,7 +194,7 @@
 }
 
 .iconButton:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--on-background) 6%, transparent);
   color: var(--on-background);
 }
 

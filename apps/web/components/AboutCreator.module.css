@@ -1,12 +1,13 @@
 .section {
   padding: var(--space-3) 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
 }
 
 .heading {
   font-family: var(--font-headline);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 16px;
+  letter-spacing: -0.01em;
   color: var(--on-background);
   margin: 0 0 var(--space-1);
 }

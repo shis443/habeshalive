@@ -6,13 +6,15 @@
 
 .heading {
   font-family: var(--font-headline);
+  font-weight: 700;
   font-size: 18px;
+  letter-spacing: -0.015em;
   margin: 0 0 var(--space-3);
 }
 
 .row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
   gap: var(--space-3);
 }
 
@@ -29,10 +31,27 @@
   aspect-ratio: 9 / 16;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
   background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container-lowest));
   padding: 0;
   cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.playButton:hover {
+  border-color: color-mix(in srgb, var(--primary) 60%, var(--outline-variant));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+}
+
+.playButton:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playButton {
+    transition: none;
+  }
 }
 
 .playButton::before {

@@ -14,9 +14,22 @@
   padding: 0 var(--space-3) calc(var(--shell-bottom-height) + var(--space-4));
 }
 
+/* AboutCreator.module.css's .section is deliberately horizontal-padding-
+   free (it relies on this .body's own padding when rendered live) — but
+   the offline-creator path (this page's !stream branch) renders it
+   directly under ChannelTabs with no equivalent padded wrapper, so
+   without this it sits flush against the viewport edge unlike every
+   other offline tab (FeaturedClips/PastBroadcasts self-pad). Only used
+   there. */
+.offlineTabContent {
+  padding: 0 var(--space-3);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
 .chatColumn {
   height: 480px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
 }
 
 @media (min-width: 900px) {
@@ -46,6 +59,6 @@
        underneath the nav bar instead of above it. */
     padding-bottom: var(--shell-bottom-height);
     border-top: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 1px solid color-mix(in srgb, var(--outline-variant) 60%, transparent);
   }
 }

@@ -90,7 +90,9 @@ export default async function WatchPage({
           </>
         )}
         {tab === "about" && (
-          <AboutCreator displayName={profile.displayName} bio={profile.bio} followerCount={profile.followerCount} />
+          <div className={styles.offlineTabContent}>
+            <AboutCreator displayName={profile.displayName} bio={profile.bio} followerCount={profile.followerCount} />
+          </div>
         )}
         {tab === "videos" && <PastBroadcasts vods={vods} />}
         {tab === "clips" && <FeaturedClips clips={clips} />}
