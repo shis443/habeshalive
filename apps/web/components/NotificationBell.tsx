@@ -4,6 +4,7 @@ import type { Notification, NotificationType } from "@birq/shared";
 import { Centrifuge } from "centrifuge";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import { CENTRIFUGO_WS_URL } from "@/lib/config";
 import styles from "./NotificationBell.module.css";
 import { BellIcon, CloseIcon, GearIcon, GoLiveIcon } from "./icons";
@@ -21,8 +22,8 @@ import { BellIcon, CloseIcon, GearIcon, GoLiveIcon } from "./icons";
 // {"error":{"code":103,"message":"permission denied"}}).
 async function fetchToken(): Promise<string> {
   const res = await fetch("/api/backend/chat/token", { method: "POST" });
-  const data = await res.json();
-  return data.token as string;
+  const data = await unwrapClientData<{ token: string }>(res);
+  return data.token;
 }
 
 // Twitch-style two-tab split ("Following" vs "My Channel"), derived from
@@ -76,11 +77,11 @@ export function NotificationBell({ isAuthed }: { isAuthed: boolean }) {
   useEffect(() => {
     if (!isAuthed) return;
     fetch("/api/backend/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<{ id: string }>(res) : null))
       .then((data) => data && setUserId(data.id))
       .catch(() => {});
     fetch("/api/backend/notifications/unread-count")
-      .then((res) => (res.ok ? res.json() : { count: 0 }))
+      .then((res) => (res.ok ? unwrapClientData<{ count: number }>(res) : { count: 0 }))
       .then((data) => setUnreadCount(data.count ?? 0))
       .catch(() => {});
   }, [isAuthed]);
@@ -107,7 +108,7 @@ export function NotificationBell({ isAuthed }: { isAuthed: boolean }) {
     setOpen((o) => !o);
     if (!open && items === null) {
       fetch("/api/backend/notifications")
-        .then((res) => (res.ok ? res.json() : []))
+        .then((res) => (res.ok ? unwrapClientData<Notification[]>(res) : []))
         .then(setItems)
         .catch(() => setItems([]));
     }

@@ -10,6 +10,7 @@ import {
   streamDetailSchema,
 } from "@birq/shared";
 import { useEffect, useRef, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import { SRS_WHIP_URL } from "@/lib/config";
 import { SquadPanel } from "./SquadPanel";
 import { StreamKeyRow } from "./StreamKeyRow";
@@ -115,7 +116,7 @@ export function GoLivePanel({
 
   useEffect(() => {
     fetch("/api/backend/streams/boost-price")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<{ priceSantim: number }>(res) : null))
       .then((data) => {
         if (data) setBoostPriceSantim(data.priceSantim);
       })
@@ -148,7 +149,7 @@ export function GoLivePanel({
   useEffect(() => {
     if (initialIsLive) return;
     fetch("/api/backend/streams/defaults")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<unknown>(res) : null))
       .then((data) => {
         if (!data) return;
         const defaults = streamDefaultsSchema.parse(data);
@@ -237,8 +238,11 @@ export function GoLivePanel({
           copyrightCertified: setupCopyrightCertified,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to go live");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to go live");
+      }
+      const data = await unwrapClientData<unknown>(res);
       streamDetailSchema.parse(data);
       setIsLive(true);
     } catch (err) {
@@ -288,8 +292,11 @@ export function GoLivePanel({
           copyrightCertified: setupCopyrightCertified,
         }),
       });
-      const goLiveData = await goLiveRes.json();
-      if (!goLiveRes.ok) throw new Error(goLiveData.error ?? "Failed to start the stream");
+      if (!goLiveRes.ok) {
+        const body = await goLiveRes.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to start the stream");
+      }
+      const goLiveData = await unwrapClientData<unknown>(goLiveRes);
       streamDetailSchema.parse(goLiveData);
 
       const pc = new RTCPeerConnection();
@@ -384,8 +391,11 @@ export function GoLivePanel({
     setBoostError(null);
     try {
       const res = await fetch("/api/backend/streams/boost", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to boost stream");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to boost stream");
+      }
+      const data = await unwrapClientData<unknown>(res);
       const boost = boostStreamResponseSchema.parse(data);
       setBoostedUntil(boost.endsAt);
     } catch (err) {

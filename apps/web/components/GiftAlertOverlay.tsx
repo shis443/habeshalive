@@ -4,6 +4,7 @@ import { formatSantimAsBirr, type StreamAlert } from "@birq/shared";
 import { Centrifuge } from "centrifuge";
 import { useEffect, useState } from "react";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./GiftAlertOverlay.module.css";
 
 // Same connection-token endpoint ChatPanel.tsx uses — a Centrifugo
@@ -13,8 +14,8 @@ import styles from "./GiftAlertOverlay.module.css";
 // just because this is a different channel.
 async function fetchConnectionToken(): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/chat/token`, { method: "POST" });
-  const data = await res.json();
-  return data.token as string;
+  const data = await unwrapClientData<{ token: string }>(res);
+  return data.token;
 }
 
 const DISPLAY_MS = 6000;

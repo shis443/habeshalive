@@ -12,6 +12,7 @@ import {
 } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./AdminQueue.module.css";
 import filterStyles from "./PayoutHistoryFilters.module.css";
 import formStyles from "./ManualAdjustmentForm.module.css";
@@ -217,7 +218,7 @@ function CreativeManager({ campaignId }: { campaignId: string }) {
 
   async function load() {
     const res = await fetch(`/api/backend/admin/ad-campaigns/${campaignId}/creatives`);
-    if (res.ok) setCreatives(await res.json());
+    if (res.ok) setCreatives(await unwrapClientData<AdCreativeAdminItem[]>(res));
   }
   if (creatives === null) {
     load();

@@ -2,6 +2,7 @@
 
 import { formatSantimAsBirr, type LedgerTransactionLookup } from "@birq/shared";
 import { useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./AdminQueue.module.css";
 import filterStyles from "./PayoutHistoryFilters.module.css";
 
@@ -15,7 +16,7 @@ export function LedgerLookup() {
     setLoading(true);
     try {
       const res = await fetch(`/api/backend/admin/ledger/lookup?q=${encodeURIComponent(query.trim())}`);
-      setResults(res.ok ? await res.json() : []);
+      setResults(res.ok ? await unwrapClientData<LedgerTransactionLookup[]>(res) : []);
     } finally {
       setLoading(false);
     }

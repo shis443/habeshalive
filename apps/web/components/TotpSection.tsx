@@ -2,6 +2,7 @@
 
 import qrcode from "qrcode-generator";
 import { useMemo, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./AccountSection.module.css";
 
 type Step = "idle" | "setup" | "confirm" | "enabled" | "disable";
@@ -35,8 +36,11 @@ export function TotpSection({ initialEnabled }: { initialEnabled: boolean }) {
     setError(null);
     try {
       const res = await fetch("/api/backend/auth/2fa/setup", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to start setup");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to start setup");
+      }
+      const data = await unwrapClientData<{ secret: string; otpauthUri: string }>(res);
       setSecret(data.secret);
       setOtpauthUri(data.otpauthUri);
       setStep("setup");

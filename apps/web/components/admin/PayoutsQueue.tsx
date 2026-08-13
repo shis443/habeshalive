@@ -3,6 +3,7 @@
 import { formatSantimAsBirr, type CreatorPayoutContext, type PayoutQueueItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./AdminQueue.module.css";
 
 function formatDate(iso: string): string {
@@ -30,7 +31,7 @@ export function PayoutsQueue({ items }: { items: PayoutQueueItem[] }) {
     setContextLoading(true);
     try {
       const res = await fetch(`/api/backend/wallet/payouts/creator-context/${item.creatorId}`);
-      if (res.ok) setContext(await res.json());
+      if (res.ok) setContext(await unwrapClientData<CreatorPayoutContext>(res));
     } finally {
       setContextLoading(false);
     }

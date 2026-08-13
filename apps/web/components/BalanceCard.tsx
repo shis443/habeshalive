@@ -3,6 +3,7 @@
 import { formatSantimAsBirr, payoutResponseSchema, type PayoutMethod } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./BalanceCard.module.css";
 
 export function BalanceCard({
@@ -36,8 +37,11 @@ export function BalanceCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amountSantim: Number(amount), method, destination }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to request withdrawal");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to request withdrawal");
+      }
+      const data = await unwrapClientData<unknown>(res);
       const payout = payoutResponseSchema.parse(data);
       setSuccess(
         payout.requiresManualApproval

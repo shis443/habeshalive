@@ -11,6 +11,7 @@ import {
 } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { playGurshaSuccessSound, triggerGurshaHaptic } from "@/lib/ui-feedback";
 import { CloseIcon } from "./icons";
@@ -120,7 +121,7 @@ export function GurshaModal({
   useEffect(() => {
     if (!isAuthed) return;
     fetch(`/api/backend/wallet/gifter-badge/${creatorId}`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<GifterBadge>(res) : null))
       .then((data) => data && setBadge(data))
       .catch(() => {
         // Non-critical — the progress bar just doesn't render without it.
@@ -128,13 +129,13 @@ export function GurshaModal({
     // Platform-wide, unlike the per-creator badge above — same endpoint
     // regardless of which creator's stream this modal was opened from.
     fetch(`/api/backend/wallet/rank`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<UserRank>(res) : null))
       .then((data) => data && setRank(data))
       .catch(() => {
         // Non-critical — the rank block just doesn't render without it.
       });
     fetch(`/api/backend/subscriptions/platform/mine`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<PlatformSubscription>(res) : null))
       .then((data) => data && setPlatformSub(data))
       .catch(() => {
         // Non-critical — defaults to "not subscribed" UI.
@@ -167,8 +168,11 @@ export function GurshaModal({
           isAnonymous,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to send Gursha");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to send Gursha");
+      }
+      const data = await unwrapClientData<{ badge: GifterBadge; rank: UserRank }>(res);
       setBadge(data.badge);
       setRank(data.rank);
       setSuccess(true);
@@ -196,8 +200,11 @@ export function GurshaModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amountSantim: subAmount }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to start subscription");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to start subscription");
+      }
+      const data = await unwrapClientData<PlatformSubscription>(res);
       setPlatformSub(data);
       setSubSuccess(true);
       router.refresh();

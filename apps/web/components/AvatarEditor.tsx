@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ChangeEvent } from "react";
 import { resolveAvatarUrl } from "@/lib/avatar";
+import { unwrapClientData } from "@/lib/clientApi";
 import { AvatarCategoryTabs } from "./AvatarCategoryTabs";
 import { AvatarPartGrid } from "./AvatarPartGrid";
 import { AvatarPreviewHero } from "./AvatarPreviewHero";
@@ -156,8 +157,11 @@ export function AvatarEditor({
       const formData = new FormData();
       formData.append("photo", file);
       const res = await fetch("/api/backend/avatars/photo", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to upload photo");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to upload photo");
+      }
+      const data = await unwrapClientData<{ avatarUrl: string }>(res);
       setPhotoUrl(data.avatarUrl);
       router.refresh();
     } catch (err) {

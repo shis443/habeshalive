@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./StreamTagsInput.module.css";
 
 const MAX_TAGS = 5;
@@ -16,8 +17,8 @@ export function StreamTagsInput({ tags, onChange }: { tags: string[]; onChange: 
     }
     const controller = new AbortController();
     fetch(`/api/backend/streams/tags/search?q=${encodeURIComponent(input.trim())}`, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((names: string[]) => setSuggestions(names.filter((n) => !tags.includes(n))))
+      .then((res) => (res.ok ? unwrapClientData<string[]>(res) : []))
+      .then((names) => setSuggestions(names.filter((n) => !tags.includes(n))))
       .catch(() => {});
     return () => controller.abort();
   }, [input, tags]);

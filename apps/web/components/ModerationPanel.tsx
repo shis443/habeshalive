@@ -2,6 +2,7 @@
 
 import type { ChannelBlock, ChannelModerator } from "@birq/shared";
 import { useEffect, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./ModerationPanel.module.css";
 
 // Module 5 — real per-channel moderator RBAC + channel blocks, replacing
@@ -17,11 +18,11 @@ export function ModerationPanel({ creatorId }: { creatorId: string }) {
 
   function refresh() {
     fetch(`/api/backend/moderation/channel/${creatorId}/moderators`)
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => (res.ok ? unwrapClientData<ChannelModerator[]>(res) : []))
       .then(setModerators)
       .catch(() => setModerators([]));
     fetch(`/api/backend/moderation/channel/${creatorId}/blocks`)
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => (res.ok ? unwrapClientData<ChannelBlock[]>(res) : []))
       .then(setBlocks)
       .catch(() => setBlocks([]));
   }

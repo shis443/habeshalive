@@ -2,6 +2,7 @@
 
 import { topupResponseSchema } from "@birq/shared";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./AddFundsRow.module.css";
 
 export function AddFundsRow({
@@ -28,8 +29,11 @@ export function AddFundsRow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amountSantim: Number(amount) * 100 }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to start top-up");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to start top-up");
+      }
+      const data = await unwrapClientData<{ checkoutUrl: string }>(res);
       const { checkoutUrl } = topupResponseSchema.parse(data);
       // Chapa's hosted checkout page handles the actual payment (Telebirr/CBE
       // Birr/HelloCash method selection happens there, not here) and calls

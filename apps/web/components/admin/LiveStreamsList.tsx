@@ -2,6 +2,7 @@
 
 import type { LiveStream } from "@birq/shared";
 import { useEffect, useRef, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./AdminQueue.module.css";
 import liveStyles from "./LiveStreamsList.module.css";
 
@@ -18,7 +19,7 @@ export function LiveStreamsList({ initialStreams }: { initialStreams: LiveStream
   useEffect(() => {
     pollRef.current = setInterval(async () => {
       const res = await fetch("/api/backend/admin/streams/live");
-      if (res.ok) setStreams(await res.json());
+      if (res.ok) setStreams(await unwrapClientData<LiveStream[]>(res));
     }, POLL_INTERVAL_MS);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);

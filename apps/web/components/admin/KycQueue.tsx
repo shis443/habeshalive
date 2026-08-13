@@ -3,6 +3,7 @@
 import type { KycAdminItem } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./AdminQueue.module.css";
 
 export function KycQueue({ items }: { items: KycAdminItem[] }) {
@@ -14,8 +15,11 @@ export function KycQueue({ items }: { items: KycAdminItem[] }) {
     setError(null);
     try {
       const res = await fetch(`/api/backend/admin/kyc/${id}/document-url`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load document");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to load document");
+      }
+      const data = await unwrapClientData<{ url: string }>(res);
       window.open(data.url, "_blank", "noopener,noreferrer");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

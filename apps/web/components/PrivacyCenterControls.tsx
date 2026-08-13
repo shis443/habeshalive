@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./PrivacyCenterControls.module.css";
 
 // Same fetch/PATCH pair as TopNav's Labeled Content settings sub-panel —
@@ -16,7 +17,7 @@ export function PrivacyCenterControls({ isAuthed }: { isAuthed: boolean }) {
   useEffect(() => {
     if (!isAuthed) return;
     fetch("/api/backend/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<{ showSensitiveContent: boolean }>(res) : null))
       .then((data) => {
         if (data) setSensitivePref(Boolean(data.showSensitiveContent));
       })

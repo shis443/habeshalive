@@ -2,6 +2,7 @@
 
 import { birrToSantim, type GiftCardDeliveryMethod, type GiftCardDesignTheme } from "@birq/shared";
 import { useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./GiftCardPurchaseForm.module.css";
 
 // Real illustrated card art per occasion isn't available yet (same
@@ -53,8 +54,11 @@ export function GiftCardPurchaseForm() {
           scheduledDeliveryAt: scheduledDate ? new Date(scheduledDate).toISOString() : undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to purchase gift card");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to purchase gift card");
+      }
+      const data = await unwrapClientData<{ code: string; redemptionUrl: string }>(res);
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

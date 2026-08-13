@@ -2,6 +2,7 @@
 
 import type { Squad } from "@birq/shared";
 import { useEffect, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./GoLivePanel.module.css";
 
 // Module 3 — grid-view squad co-streaming controls, shown in GoLivePanel
@@ -16,7 +17,7 @@ export function SquadPanel() {
 
   function refresh() {
     fetch("/api/backend/streams/squad/mine")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<Squad | null>(res) : null))
       .then(setSquad)
       .catch(() => setSquad(null));
   }
@@ -28,8 +29,11 @@ export function SquadPanel() {
     setError(null);
     try {
       const res = await fetch("/api/backend/streams/squad", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to create squad");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to create squad");
+      }
+      const data = await unwrapClientData<Squad>(res);
       setSquad(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -47,8 +51,11 @@ export function SquadPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inviteCode: joinCode }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to join squad");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to join squad");
+      }
+      const data = await unwrapClientData<Squad>(res);
       setSquad(data);
       setJoinCode("");
     } catch (err) {

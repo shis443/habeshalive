@@ -2,6 +2,7 @@
 
 import { MAX_CLIP_DURATION_SECONDS, type Clip, type Vod } from "@birq/shared";
 import { useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./ClipCreatorPanel.module.css";
 
 function parseTimecode(input: string): number | null {
@@ -46,8 +47,11 @@ export function ClipCreatorPanel({ vods }: { vods: Vod[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ startSeconds, durationSeconds, title: title.trim() || undefined }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to create clip");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to create clip");
+      }
+      const data = await unwrapClientData<Clip>(res);
       setCreated(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

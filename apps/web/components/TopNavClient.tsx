@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { resolveAvatarUrl } from "@/lib/avatar";
+import { unwrapClientData } from "@/lib/clientApi";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { useDropdown } from "@/lib/useDropdown";
 import { UI_LANGUAGES, useLanguage } from "@/lib/useLanguage";
@@ -91,7 +92,7 @@ export function TopNavClient({ isAuthed }: { isAuthed: boolean }) {
   useEffect(() => {
     if (settingsView !== "labeled-content" || !isAuthed || sensitivePref !== null) return;
     fetch("/api/backend/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<{ showSensitiveContent: boolean }>(res) : null))
       .then((data) => {
         if (data) setSensitivePref(Boolean(data.showSensitiveContent));
       })
@@ -110,13 +111,13 @@ export function TopNavClient({ isAuthed }: { isAuthed: boolean }) {
   useEffect(() => {
     if (!account.open || !isAuthed || accountData !== null) return;
     fetch("/api/backend/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<AccountMenuData>(res) : null))
       .then((data) => {
         if (data) setAccountData({ username: data.username, displayName: data.displayName, avatarUrl: data.avatarUrl, role: data.role });
       })
       .catch(() => {});
     fetch("/api/backend/wallet/balance")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? unwrapClientData<{ balanceSantim: number }>(res) : null))
       .then((data) => {
         if (data) setWalletBalanceSantim(data.balanceSantim);
       })

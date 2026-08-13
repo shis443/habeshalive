@@ -3,6 +3,7 @@
 import { formatSantimAsBirr, type DonateResponse } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { CloseIcon } from "./icons";
 import styles from "./GurshaModal.module.css";
@@ -61,8 +62,11 @@ export function DonateModal({
           isAnonymous,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to send donation");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to send donation");
+      }
+      const data = await unwrapClientData<DonateResponse>(res);
       setSuccess(data);
       router.refresh();
       setTimeout(onClose, 1400);

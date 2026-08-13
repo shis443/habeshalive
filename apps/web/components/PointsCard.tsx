@@ -3,6 +3,7 @@
 import { formatSantimAsBirr, POINTS_PER_SANTIM, redeemPointsResponseSchema } from "@birq/shared";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { unwrapClientData } from "@/lib/clientApi";
 import styles from "./BalanceCard.module.css";
 
 // Module 4 — Watch-to-Earn balance + redemption. Reuses BalanceCard's own
@@ -32,8 +33,11 @@ export function PointsCard({ balance }: { balance: number }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ points: pointsValue }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to redeem points");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to redeem points");
+      }
+      const data = await unwrapClientData<unknown>(res);
       const result = redeemPointsResponseSchema.parse(data);
       setSuccess(`Redeemed for ${formatSantimAsBirr(result.creditedSantim)} — added to your wallet balance.`);
       setShowForm(false);

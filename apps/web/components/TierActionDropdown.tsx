@@ -4,6 +4,7 @@ import { formatSantimAsBirr, subscribeResponseSchema, type SubscriptionTier } fr
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useDropdown } from "@/lib/useDropdown";
+import { unwrapClientData } from "@/lib/clientApi";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { ChevronRightIcon } from "./icons";
 import styles from "./TierActionDropdown.module.css";
@@ -49,8 +50,11 @@ export function TierActionDropdown({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ creatorId, tierId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to subscribe");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to subscribe");
+      }
+      const data = await unwrapClientData<unknown>(res);
       const sub = subscribeResponseSchema.parse(data);
       setMessage({ text: `Subscribed (${sub.tierName})!`, isError: false });
       router.refresh();
