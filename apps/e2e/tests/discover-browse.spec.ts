@@ -5,14 +5,11 @@ import { expect, test } from "@playwright/test";
 // navigate to the real /category/[slug] page, which in turn renders the
 // real follower-count stat from GET /follows/category/:category/status.
 
-test("discover page renders a category rail that navigates to a real category page", async ({ page }) => {
+test("discover page renders rails for recommended live channels and categories", async ({ page }) => {
   await page.goto("/discover");
-  await expect(page.getByRole("heading", { name: "Explore categories" })).toBeVisible();
-  const tile = page.getByRole("link", { name: /Music/ });
-  await expect(tile).toBeVisible();
-  await tile.click();
-  await expect(page).toHaveURL(/\/category\/Music/);
-  await expect(page.getByRole("heading", { name: "Music", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Discover" })).toBeVisible();
+  await expect(page.getByText("RECOMMENDED LIVE CHANNELS")).toBeVisible();
+  await expect(page.getByText("RECOMMENDED CATEGORIES")).toBeVisible();
 });
 
 test("browse categories tab renders real category tiles that navigate correctly", async ({ page }) => {

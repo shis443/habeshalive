@@ -5,9 +5,10 @@ import { CategoryClipsGrid } from "@/components/CategoryClipsGrid";
 import { CategoryTile } from "@/components/CategoryTile";
 import { CategoryVodsGrid } from "@/components/CategoryVodsGrid";
 import { FeaturedLiveRail } from "@/components/FeaturedLiveRail";
-import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
+import LiveCardMedium from "@/components/reference/LiveCardMedium";
+import CategoryRailCard from "@/components/reference/CategoryRailCard";
 import { TopNav } from "@/components/TopNav";
-import { getCurrentUser, getLiveStreams, getTrendingClips, getTrendingVods } from "@/lib/api";
+import { getCurrentUser, getLiveStreams, getTrendingClips, getTrendingVods, getCategories } from "@/lib/api";
 import styles from "./page.module.css";
 
 // Phase 3.6 — the "show me something" surface Twitch's IA splits from
@@ -22,13 +23,14 @@ import styles from "./page.module.css";
 // placeholder — see listTrendingVods/listTrendingClips's own 14/30-day
 // windows on why this is "trending", not "all-time popular").
 export default async function DiscoverPage() {
-  const [user, allStreams, trendingVods, trendingClips] = await Promise.all([
+  const [user, allStreams, trendingVods, trendingClips, categories] = await Promise.all([
     getCurrentUser(),
-    getLiveStreams(),
+    getLiveStreams({ sort: "birqRank" }),
     getTrendingVods(),
     getTrendingClips(),
+    getCategories(),
   ]);
-  const boostedLive = allStreams.filter((s) => s.isBoosted);
+  const recommendedLive = allStreams.slice(0, 12);
 
   // Real per-category live-viewer totals from the same allStreams call
   // already made above for the sidebar — no second fetch, matches
@@ -42,29 +44,23 @@ export default async function DiscoverPage() {
   return (
     <>
       <TopNav isAuthed={!!user} />
-      <LiveChannelsSidebar streams={allStreams} />
       <main className={styles.main}>
         <h1 className={styles.heading}>Discover</h1>
-        <p className={styles.subtext}>Featured live channels and what's trending right now.</p>
-
-        {boostedLive.length > 0 && (
-          <section className={styles.section}>
-            <h2 className={styles.sectionHeading}>Featured live</h2>
-            <FeaturedLiveRail streams={boostedLive} />
-          </section>
-        )}
 
         <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>Explore categories</h2>
+          <h2 className={styles.sectionHeading}>RECOMMENDED LIVE CHANNELS</h2>
+          <div className={styles.liveRail} role="list">
+            {recommendedLive.map((s) => (
+              <LiveCardMedium key={s.id} stream={s} />
+            ))}
+          </div>
+        </section>
+
+        <section className={styles.section}>
+          <h2 className={styles.sectionHeading}>RECOMMENDED CATEGORIES</h2>
           <div className={styles.categoryRail}>
-            {STREAM_CATEGORIES.map((cat) => (
-              <div key={cat} className={styles.categoryRailItem}>
-                <CategoryTile
-                  category={cat}
-                  href={`/category/${encodeURIComponent(cat)}`}
-                  liveViewerCount={liveViewersByCategory.get(cat)}
-                />
-              </div>
+            {categories.map((cat) => (
+              <CategoryRailCard key={cat.slug} category={cat} />
             ))}
           </div>
         </section>
@@ -83,7 +79,7 @@ export default async function DiscoverPage() {
           </section>
         )}
 
-        {boostedLive.length === 0 && trendingVods.length === 0 && trendingClips.length === 0 && (
+        {recommendedLive.length === 0 && trendingVods.length === 0 && trendingClips.length === 0 && (
           <p className={styles.empty}>
             Nothing trending yet — check{" "}
             <Link href="/browse" className={styles.browseLink}>
