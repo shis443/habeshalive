@@ -12,12 +12,13 @@ export const creatorSearchResultSchema = z.object({
 });
 export type CreatorSearchResult = z.infer<typeof creatorSearchResultSchema>;
 
-// Phase 3.5 — /following's new-content badge. A new type rather than
-// adding hasNewContent onto creatorSearchResultSchema itself: that type
-// is also used by /search's real creator results, where "new content
-// since I last visited /following" isn't a meaningful concept at all.
+// Phase B — /following's unseen-content counter is intentionally a distinct
+// follow-feed field, not a flag bolted onto the generic creator result type.
+// The value is the real number of VODs + clips published since the viewer's
+// last visit to /following.
 export const followedCreatorSchema = creatorSearchResultSchema.extend({
-  hasNewContent: z.boolean(),
+  newContentCount: z.number().int().nonnegative(),
+  currentStream: streamDetailSchema.nullable().optional(),
 });
 export type FollowedCreator = z.infer<typeof followedCreatorSchema>;
 

@@ -10,20 +10,28 @@ interface FollowedCreatorRow {
   bio: string | null;
   category: string | null;
   is_live: boolean;
-  has_new_content: boolean;
+  new_content_count: number;
+  stream_id?: string | null;
+  stream_title?: string | null;
+  stream_category?: string | null;
+  stream_language?: string | null;
+  stream_thumbnail_url?: string | null;
+  stream_playback_url?: string | null;
+  stream_started_at?: string | null;
+  stream_aspect_ratio?: string | null;
+  stream_peak_viewers?: number | null;
+  stream_is_boosted?: boolean | null;
+  stream_is_sensitive?: boolean | null;
+  stream_is_ppv?: boolean | null;
+  stream_ppv_price_santim?: number | null;
+  stream_tags?: string[] | null;
 }
 
-// Phase 3.5 — new-content badge. NULL following_last_seen_at (never
-// visited /following) reads as "-infinity" here, so a fresh follower with
-// zero visit history sees every followed creator's existing content as
-// new — there's no prior baseline for them, so that's the honest answer,
-// not a special "hide badges on day one" case worth extra logic for.
-//
-// Reuses CreatorSearchResult's fields (search/service.ts) plus
-// hasNewContent — see followedCreatorSchema's own comment for why that's
-// a new type instead of bolting the field onto the shared one. Live
-// creators first (ORDER BY is_live DESC) so the /following page can
-// render live ones up top without re-sorting client-side.
+// Phase B — real unseen-content count, not a boolean. NULL
+// following_last_seen_at is treated as "-infinity" so a fresh follower sees
+// every followed creator's existing content as new until the viewer marks the
+// page as seen. Live creators first so the /following page can render live ones
+// up top without re-sorting client-side.
 export async function getFollowedCreators(followerId: string): Promise<FollowedCreator[]> {
   const { rows: userRows } = await pool.query<{ following_last_seen_at: string | null }>(
     `SELECT following_last_seen_at FROM users WHERE id = $1`,
@@ -33,24 +41,42 @@ export async function getFollowedCreators(followerId: string): Promise<FollowedC
 
   const { rows } = await pool.query<FollowedCreatorRow>(
     `SELECT u.id, u.username, u.display_name, u.avatar_url, u.bio, cp.category,
-            EXISTS (SELECT 1 FROM streams s WHERE s.creator_id = u.id AND s.status = 'live') AS is_live,
+            s.id AS stream_id,
+            s.title AS stream_title,
+            s.category AS stream_category,
+            s.language AS stream_language,
+            s.thumbnail_url AS stream_thumbnail_url,
+            s.playback_url AS stream_playback_url,
+            s.started_at AS stream_started_at,
+            s.aspect_ratio AS stream_aspect_ratio,
+            s.peak_viewers AS stream_peak_viewers,
+            (EXISTS (SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now())) AS stream_is_boosted,
+            s.is_sensitive AS stream_is_sensitive,
+            s.is_ppv AS stream_is_ppv,
+            s.ppv_price_santim AS stream_ppv_price_santim,
+            COALESCE((SELECT array_agg(st.name ORDER BY st.name)
+                      FROM stream_tag_links stl JOIN stream_tags st ON st.id = stl.tag_id WHERE stl.stream_id = s.id), ARRAY[]::text[]) AS stream_tags,
             (
-              EXISTS (
-                SELECT 1 FROM stream_vods v JOIN streams s2 ON s2.id = v.stream_id
+              SELECT COALESCE(COUNT(*), 0)
+              FROM (
+                SELECT v.id
+                FROM stream_vods v
+                JOIN streams s2 ON s2.id = v.stream_id
                 WHERE s2.creator_id = u.id AND v.is_published = true AND v.dmca_removed_at IS NULL
                   AND v.created_at > COALESCE($2::timestamptz, '-infinity'::timestamptz)
-              )
-              OR EXISTS (
-                SELECT 1 FROM clips c
+                UNION ALL
+                SELECT c.id
+                FROM clips c
                 WHERE c.creator_id = u.id AND c.dmca_removed_at IS NULL
                   AND c.created_at > COALESCE($2::timestamptz, '-infinity'::timestamptz)
-              )
-            ) AS has_new_content
+              ) new_content
+            ) AS new_content_count
      FROM follows f
      JOIN users u ON u.id = f.creator_id
+     LEFT JOIN streams s ON s.creator_id = u.id AND s.status = 'live'
      LEFT JOIN creator_profiles cp ON cp.user_id = u.id
      WHERE f.follower_id = $1
-     ORDER BY is_live DESC, u.display_name ASC`,
+     ORDER BY (s.id IS NOT NULL) DESC, u.display_name ASC`,
     [followerId, lastSeenAt]
   );
   return rows.map((row) => ({
@@ -60,8 +86,36 @@ export async function getFollowedCreators(followerId: string): Promise<FollowedC
     avatarUrl: row.avatar_url,
     bio: row.bio,
     category: row.category,
-    isLive: row.is_live,
-    hasNewContent: row.has_new_content,
+    isLive: !!row.stream_id,
+    newContentCount: row.new_content_count,
+    currentStream: row.stream_id
+      ? {
+          status: "live",
+          id: row.stream_id,
+          title: row.stream_title ?? "",
+          category: row.stream_category ?? null,
+          language: row.stream_language ?? null,
+          thumbnailUrl: row.stream_thumbnail_url ?? null,
+          playbackUrl: null,
+          startedAt: row.stream_started_at ?? null,
+          aspectRatio: (row.stream_aspect_ratio as any) ?? "16:9",
+          viewerCount: row.stream_peak_viewers ?? 0,
+          isBoosted: !!row.stream_is_boosted,
+          isSensitive: !!row.stream_is_sensitive,
+          tags: row.stream_tags ?? [],
+          isPpv: !!row.stream_is_ppv,
+          ppvPriceSantim: row.stream_ppv_price_santim ?? null,
+          hasPpvAccess: !row.stream_is_ppv,
+          creator: {
+            id: row.id,
+            username: row.username,
+            displayName: row.display_name,
+            avatarUrl: row.avatar_url,
+            bio: row.bio,
+            isVerified: false,
+          },
+        }
+      : null,
   }));
 }
 
