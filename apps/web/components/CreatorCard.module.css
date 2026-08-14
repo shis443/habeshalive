@@ -92,15 +92,26 @@
   color: var(--on-background);
 }
 
-/* New VOD/clip since the viewer last opened /following — a dot next to
-   the name (not stacked on the avatar's existing Live badge corner,
-   which would fight for the same space) so it reads at a glance without
-   competing with live status. */
-.newContentDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.displayNameText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newContentBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
   background: var(--secondary);
+  color: var(--on-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
   flex-shrink: 0;
 }
 
