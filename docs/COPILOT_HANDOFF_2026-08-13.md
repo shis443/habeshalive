@@ -259,6 +259,57 @@ operation through existing secret-managed CI/deployment configuration:
 
 ## Separate iOS crash track — do not conflate with web rebuild
 
+## Final local release-readiness audit (2026-08-15)
+
+Committed consumer-surface rebuilds:
+
+- `5a6f472` — `Flutter reference literal rebuild: Browse + real category catalog`
+- `af29608` — `Flutter reference rebuild: Following compact rows`
+- `a6f4c7f` — `Phase B: creator card unseen-count badge and typings cleanup`
+- `e1cee6b` — `Flutter reference rebuild: Discover rails`
+- `a6b1372` — `Flutter reference rebuild: Category detail`
+- `de441a5` — `Flutter reference rebuild: Watch channel hierarchy`
+
+Production safety status:
+
+- Migration `0046` is present locally in the repository but not applied to production.
+- No web or API deployment was run from this workspace.
+- No `DATABASE_URL` or other production secret was retrieved, printed, requested, or exposed.
+- The protected native/web glass bottom navigation remains untouched.
+
+Local verification status:
+
+- `npm run typecheck --workspace=apps/web` — passed
+- `npm run typecheck --workspace=apps/api` — passed
+- `npm run test --workspace=apps/api` — failed locally because Postgres is absent (`ECONNREFUSED 127.0.0.1:5432`)
+- local browser/e2e route verification — blocked because the app server is not running on `http://localhost:3000` (`ERR_CONNECTION_REFUSED`)
+- `git diff --check` — passed
+
+Notes:
+
+- The watch/channel refinement is limited to the live metadata hierarchy and real metadata chip treatment in `apps/web/components/StreamMeta.tsx` and `apps/web/components/StreamMeta.module.css`.
+- No protected navigation, production migration, or unrelated verification scripts were modified.
+
+## Final local verification status (as of 2026-08-15)
+
+- Completed Phase D commit: `a6b1372` — `Flutter reference rebuild: Category detail`
+- Web TypeScript check: passed
+  - `npm run typecheck --workspace=apps/web`
+- API TypeScript check: passed
+  - `npm run typecheck --workspace=apps/api`
+- API Vitest status: failed because local Postgres is not running
+  - `Error: connect ECONNREFUSED 127.0.0.1:5432`
+- Playwright status: failed because the local app is not running on `http://localhost:3000`
+  - `ERR_CONNECTION_REFUSED`
+- `git diff --check`: passed
+
+## Release-readiness note
+
+- Production deploys were not executed.
+- No `DATABASE_URL` or production secrets were accessed or printed.
+- The category detail rebuild is in place locally and committed, but the full end-to-end database-backed verification requires a local Postgres instance and a running web server before the API/Playwright checks can pass.
+
+
 Canonical iOS checkout:
 
 `/Users/adem/Downloads/moblin-main`
@@ -305,6 +356,29 @@ instruction:
 - `verify_video.mjs`
 - `verify_watch_video2.mjs`
 - `verify_watch_video3.mjs`
+
+## Blocked-test prerequisites (owner must run locally)
+
+- **Local Postgres:** a development Postgres instance must be reachable at `127.0.0.1:5432` and the development migrations applied (including `db/migrations/0046_content_categories.sql`) before running API Vitest suites.
+- **Web dev server:** start the local web app so Playwright can connect to `http://localhost:3000`. Example:
+
+```bash
+npm run dev --workspace=apps/web
+```
+
+- **Verification commands (owner):**
+
+```bash
+npm run typecheck --workspace=apps/web
+npm run typecheck --workspace=apps/api
+npm run test --workspace=apps/api
+npm run test --workspace=apps/e2e
+git diff --check
+```
+
+Notes:
+- Do not use production `DATABASE_URL` or production secrets to run the tests. Use the approved local/test DB only.
+- The API tests fail with `ECONNREFUSED 127.0.0.1:5432` when Postgres is not running locally; the Playwright tests fail with `ERR_CONNECTION_REFUSED` when the web dev server is not running.
 
 ## Suggested starting instruction for Copilot
 
