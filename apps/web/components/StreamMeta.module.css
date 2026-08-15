@@ -30,15 +30,19 @@
   min-width: 0;
 }
 
-.creatorName {
+.nameRow {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.creatorName {
+  margin: 0;
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 14px;
   color: var(--on-background);
-  margin: 0 0 2px;
 }
 
 .verifiedIcon {
@@ -53,15 +57,26 @@
 }
 
 .liveBadge {
-  background: var(--primary);
-  color: var(--on-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--on-background);
   font-family: var(--font-label);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 20%, transparent);
 }
 
 .viewerCount {
@@ -83,39 +98,17 @@
 .title {
   font-family: var(--font-headline);
   font-weight: 700;
-  font-size: clamp(18px, 2.2vw, 20px);
-  letter-spacing: -0.01em;
+  font-size: clamp(20px, 2.4vw, 28px);
+  letter-spacing: -0.02em;
   color: var(--on-background);
-  margin: 0 0 var(--space-1);
+  margin: 0 0 var(--space-2);
 }
 
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.tag {
-  font-family: var(--font-label);
-  font-size: 11px;
-  color: var(--on-surface-variant);
-  background: var(--surface-container-high);
-  padding: 4px 10px;
-  border-radius: 9999px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-decoration: none;
-  transition: background-color 150ms ease, color 150ms ease;
-}
-
-a.tag:hover {
-  background: var(--surface-container-highest);
-  color: var(--on-background);
-}
-
-a.tag:focus-visible {
-  outline: 2px solid var(--secondary);
-  outline-offset: 2px;
+  gap: 8px;
+  margin-top: var(--space-1);
 }
 
 .sensitiveNotice {

@@ -1,7 +1,7 @@
 import type { StreamDetail } from "@birq/shared";
-import Link from "next/link";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { formatViewerCount } from "@/lib/format";
+import { MetadataChip } from "./reference/MetadataChip";
 import styles from "./StreamMeta.module.css";
 import { PersonIcon, VerifiedIcon } from "./icons";
 import { StreamDurationTimer } from "./StreamDurationTimer";
@@ -18,12 +18,15 @@ export function StreamMeta({ stream }: { stream: StreamDetail }) {
           <span className={styles.avatarPlaceholder} />
         )}
         <div className={styles.headerInfo}>
-          <p className={styles.creatorName}>
-            {stream.creator.displayName}
+          <div className={styles.nameRow}>
+            <p className={styles.creatorName}>{stream.creator.displayName}</p>
             {stream.creator.isVerified && <VerifiedIcon className={styles.verifiedIcon} />}
-          </p>
+          </div>
           <div className={styles.statusRow}>
-            <span className={styles.liveBadge}>Live</span>
+            <span className={styles.liveBadge}>
+              <span className={styles.liveDot} aria-hidden="true" />
+              Live
+            </span>
             <span className={styles.viewerCount}>
               <PersonIcon />
               {formatViewerCount(stream.viewerCount)} watching
@@ -38,16 +41,10 @@ export function StreamMeta({ stream }: { stream: StreamDetail }) {
       </div>
       <h1 className={styles.title}>{stream.title}</h1>
       <div className={styles.tags}>
-        {stream.category && (
-          <Link href={`/browse?view=channels&category=${encodeURIComponent(stream.category)}`} className={styles.tag}>
-            {stream.category}
-          </Link>
-        )}
-        {stream.language && <span className={styles.tag}>{stream.language}</span>}
+        {stream.category && <MetadataChip>{stream.category}</MetadataChip>}
+        {stream.language && <MetadataChip>{stream.language}</MetadataChip>}
         {stream.tags.map((tag) => (
-          <span key={tag} className={styles.tag}>
-            {tag}
-          </span>
+          <MetadataChip key={tag}>{tag}</MetadataChip>
         ))}
       </div>
       {stream.isSensitive && (
