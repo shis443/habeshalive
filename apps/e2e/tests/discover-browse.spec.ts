@@ -28,3 +28,13 @@ test("category page shows real follower and viewer stats, not placeholders", asy
   await expect(page.getByText(/(watching now|No one watching right now)/)).toBeVisible();
   await expect(page.getByText(/follower/)).toBeVisible();
 });
+
+test("category tabs keep URL state authoritative", async ({ page }) => {
+  await page.goto("/category/Just%20Chatting?tab=videos");
+  await expect(page).toHaveURL(/\/category\/Just%20Chatting\?tab=videos/);
+  await expect(page.getByRole("link", { name: "Videos" })).toHaveAttribute("aria-current", "page");
+
+  await page.goto("/category/Just%20Chatting?tab=clips");
+  await expect(page).toHaveURL(/\/category\/Just%20Chatting\?tab=clips/);
+  await expect(page.getByRole("link", { name: "Clips" })).toHaveAttribute("aria-current", "page");
+});

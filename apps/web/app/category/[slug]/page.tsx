@@ -1,21 +1,20 @@
 import { STREAM_CATEGORIES } from "@birq/shared";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
-import { CategoryClipsGrid } from "@/components/CategoryClipsGrid";
-import { CategoryFollowButton } from "@/components/CategoryFollowButton";
-import { CategoryVodsGrid } from "@/components/CategoryVodsGrid";
-import { LiveChannelsSidebar } from "@/components/LiveChannelsSidebar";
-import { StreamCard } from "@/components/StreamCard";
+import CategoryHero from "@/components/reference/CategoryHero";
+import { ClipFeedCard } from "@/components/reference/ClipFeedCard";
+import { LiveCardLarge } from "@/components/reference/LiveCardLarge";
+import { UnderlineTabs } from "@/components/reference/UnderlineTabs";
+import { VodCardReference } from "@/components/reference/VodCardReference";
 import { TopNav } from "@/components/TopNav";
 import {
+  getCategoryBySlug,
   getCategoryFollowStatus,
   getClipsByCategory,
   getCurrentUser,
   getLiveStreams,
   getVodsByCategory,
 } from "@/lib/api";
-import { formatViewerCount } from "@/lib/format";
 import styles from "./page.module.css";
 
 type CategoryTab = "live" | "videos" | "clips";
@@ -47,15 +46,16 @@ export default async function CategoryPage({
   // needs a real, current count on every tab, not just while the Live tab
   // happens to be selected. Reused as-is for the grid when tab === "live",
   // same call, no second fetch.
-  const [user, sidebarStreams, categoryLiveStreams, vods, clips, followStatus] = await Promise.all([
+  const [user, categoryLiveStreams, vods, clips, followStatus, categoryMeta] = await Promise.all([
     getCurrentUser(),
-    getLiveStreams(),
     getLiveStreams({ category }),
     tab === "videos" ? getVodsByCategory(category) : Promise.resolve([]),
     tab === "clips" ? getClipsByCategory(category) : Promise.resolve([]),
     getCategoryFollowStatus(category),
+    getCategoryBySlug(category),
   ]);
   const liveViewerCount = categoryLiveStreams.reduce((sum, stream) => sum + stream.viewerCount, 0);
+  if (!categoryMeta) return notFound();
 
   function tabHref(next: CategoryTab) {
     return next === "live" ? `/category/${encodeURIComponent(category)}` : `/category/${encodeURIComponent(category)}?tab=${next}`;
@@ -64,30 +64,21 @@ export default async function CategoryPage({
   return (
     <>
       <TopNav isAuthed={!!user} />
-      <LiveChannelsSidebar streams={sidebarStreams} />
       <main className={styles.main}>
-        <div className={styles.headerRow}>
-          <div>
-            <h1 className={styles.heading}>{category}</h1>
-            <p className={styles.stats}>
-              {liveViewerCount > 0 ? `${formatViewerCount(liveViewerCount)} watching now` : "No one watching right now"}
-              <span className={styles.statsDot} aria-hidden="true" />
-              {formatViewerCount(followStatus.followerCount)} {followStatus.followerCount === 1 ? "follower" : "followers"}
-            </p>
-          </div>
-          <CategoryFollowButton category={category} isAuthed={!!user} initialFollowing={followStatus.following} />
-        </div>
-        <div className={styles.tabs}>
-          <Link href={tabHref("live")} className={tab === "live" ? styles.tabActive : styles.tab}>
-            Live Channels
-          </Link>
-          <Link href={tabHref("videos")} className={tab === "videos" ? styles.tabActive : styles.tab}>
-            Videos
-          </Link>
-          <Link href={tabHref("clips")} className={tab === "clips" ? styles.tabActive : styles.tab}>
-            Clips
-          </Link>
-        </div>
+        <CategoryHero
+          category={categoryMeta}
+          followerCount={followStatus.followerCount}
+          liveViewerCount={liveViewerCount}
+          isAuthed={!!user}
+          initialFollowing={followStatus.following}
+        />
+        <UnderlineTabs
+          tabs={[
+            { label: "Live Channels", href: tabHref("live"), active: tab === "live" },
+            { label: "Videos", href: tabHref("videos"), active: tab === "videos" },
+            { label: "Clips", href: tabHref("clips"), active: tab === "clips" },
+          ]}
+        />
 
         {tab === "live" &&
           (categoryLiveStreams.length === 0 ? (
@@ -95,12 +86,24 @@ export default async function CategoryPage({
           ) : (
             <div className={styles.grid}>
               {categoryLiveStreams.map((stream) => (
-                <StreamCard key={stream.id} stream={stream} />
+                <LiveCardLarge key={stream.id} stream={stream} />
               ))}
             </div>
           ))}
-        {tab === "videos" && <CategoryVodsGrid vods={vods} />}
-        {tab === "clips" && <CategoryClipsGrid clips={clips} />}
+        {tab === "videos" && (
+          <div className={styles.grid}>
+            {vods.map((vod) => (
+              <VodCardReference key={vod.id} vod={vod} />
+            ))}
+          </div>
+        )}
+        {tab === "clips" && (
+          <div className={styles.grid}>
+            {clips.map((clip) => (
+              <ClipFeedCard key={clip.id} clip={clip} />
+            ))}
+          </div>
+        )}
       </main>
       <BottomNav active="explore" />
     </>
