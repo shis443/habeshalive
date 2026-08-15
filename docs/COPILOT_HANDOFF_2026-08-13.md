@@ -272,8 +272,8 @@ Committed consumer-surface rebuilds:
 
 Production safety status:
 
-- Migration `0046` is present locally in the repository but not applied to production.
-- No web or API deployment was run from this workspace.
+- Migration `0046` was applied to production on 2026-08-15 as part of the coordinated Flutter-reference UI release.
+- API release is deployed to Fly (`habeshalive`, machine version 63) and the web release is deployed through Vercel to `https://www.birq.live` / `https://birq.live`.
 - No `DATABASE_URL` or other production secret was retrieved, printed, requested, or exposed.
 - The protected native/web glass bottom navigation remains untouched.
 
@@ -305,9 +305,11 @@ Notes:
 
 ## Release-readiness note
 
-- Production deploys were not executed.
+- **Released 2026-08-15:** committed consumer-surface work through Watch Phase E is deployed.
+- Production checks passed: `https://habeshalive.fly.dev/streams/live` and `/categories` returned HTTP 200; `/categories` returned four catalog records. Public `/browse`, `/discover`, `/following`, and `/category/Music` routes each returned HTTP 200.
+- Local API Vitest and Playwright remain environment-blocked until a development Postgres and web server are running; these are still required follow-up verification, not production-deployment blockers that were bypassed.
 - No `DATABASE_URL` or production secrets were accessed or printed.
-- The category detail rebuild is in place locally and committed, but the full end-to-end database-backed verification requires a local Postgres instance and a running web server before the API/Playwright checks can pass.
+- The full end-to-end local database-backed verification still requires a local Postgres instance and a running web server before the API/Playwright checks can pass.
 
 
 Canonical iOS checkout:
@@ -351,8 +353,6 @@ logs/workspace files. Preserve them.
 Do not delete or fold these into the UI rebuild without the owner's explicit
 instruction:
 
-- `docs/COPILOT_HANDOFF_2026-08-13.md` — this handoff document
-- `apps/web/next-env.d.ts`
 - `verify_video.mjs`
 - `verify_watch_video2.mjs`
 - `verify_watch_video3.mjs`
@@ -384,9 +384,8 @@ Notes:
 
 > Read `docs/COPILOT_HANDOFF_2026-08-13.md`, then
 > `docs/FLUTTER_UI_REBUILD_AUDIT.md` and
-> `docs/FLUTTER_UI_REBUILD_PLAN.md`. Do not deploy, migrate production, or
-> access production secrets. Preserve unrelated uncommitted files. Continue
-> Phase B (Following) completely: implement real compact live/offline rows,
-> add a truthful unseen VOD/clip count through shared schema → API service →
-> typed helper → UI → tests, verify at mobile/desktop, and commit only that
-> phase. Keep the existing glass bottom navigation unchanged.
+> `docs/FLUTTER_UI_REBUILD_PLAN.md`. The Flutter consumer-surface release is
+> complete and deployed. Do not make another production deployment or access
+> production secrets without explicit owner authorization. Preserve unrelated
+> uncommitted verification scripts. Next work is only the blocked local
+> API/Playwright verification and the separate iOS crash verification track.
