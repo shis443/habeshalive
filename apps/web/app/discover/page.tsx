@@ -7,6 +7,7 @@ import { CategoryVodsGrid } from "@/components/CategoryVodsGrid";
 import { FeaturedLiveRail } from "@/components/FeaturedLiveRail";
 import LiveCardMedium from "@/components/reference/LiveCardMedium";
 import CategoryRailCard from "@/components/reference/CategoryRailCard";
+import { SectionLabel } from "@/components/reference/SectionLabel";
 import { TopNav } from "@/components/TopNav";
 import { getCurrentUser, getLiveStreams, getTrendingClips, getTrendingVods, getCategories } from "@/lib/api";
 import styles from "./page.module.css";
@@ -48,7 +49,7 @@ export default async function DiscoverPage() {
         <h1 className={styles.heading}>Discover</h1>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>RECOMMENDED LIVE CHANNELS</h2>
+          <SectionLabel>RECOMMENDED LIVE CHANNELS</SectionLabel>
           <div className={styles.liveRail} role="list">
             {recommendedLive.map((s) => (
               <LiveCardMedium key={s.id} stream={s} />
@@ -57,7 +58,7 @@ export default async function DiscoverPage() {
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>RECOMMENDED CATEGORIES</h2>
+          <SectionLabel>RECOMMENDED CATEGORIES</SectionLabel>
           <div className={styles.categoryRail}>
             {categories.map((cat) => (
               <CategoryRailCard key={cat.slug} category={cat} />
@@ -67,14 +68,14 @@ export default async function DiscoverPage() {
 
         {trendingClips.length > 0 && (
           <section className={styles.section}>
-            <h2 className={styles.sectionHeading}>Trending clips</h2>
+            <SectionLabel>Trending clips</SectionLabel>
             <CategoryClipsGrid clips={trendingClips} />
           </section>
         )}
 
         {trendingVods.length > 0 && (
           <section className={styles.section}>
-            <h2 className={styles.sectionHeading}>Trending videos</h2>
+            <SectionLabel>Trending videos</SectionLabel>
             <CategoryVodsGrid vods={trendingVods} />
           </section>
         )}

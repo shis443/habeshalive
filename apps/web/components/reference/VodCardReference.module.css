@@ -6,11 +6,13 @@
   color: inherit;
 }
 
+/* video_tile_medium.dart's main cover image has no ClipRRect — the 5px
+   radii in that source are on the LIVE/duration/views badges, not the
+   image itself. */
 .thumbnailWrap {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 10px;
   overflow: hidden;
   background: var(--surface-container-high);
 }

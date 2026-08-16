@@ -8,12 +8,14 @@
   color: inherit;
 }
 
+/* live_tile_small.dart's _liveImage() uses ClipRRect(borderRadius:
+   Radius.circular(3.0)) — 3px, not the 6px this previously had. */
 .thumbWrap {
   position: relative;
   width: 120px;
   height: 70px;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
   background: var(--surface-container-high);
 }

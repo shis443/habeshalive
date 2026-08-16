@@ -52,11 +52,13 @@
   font-size: 12px;
 }
 
+/* clip_tile_large.dart's _imageCover() has no ClipRRect — the
+   borderRadius:10 elsewhere in that source is on the unrelated share
+   MaterialButton's shape, not the media. */
 .mediaWrap {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 12px;
   overflow: hidden;
   background: var(--surface-container-high);
 }

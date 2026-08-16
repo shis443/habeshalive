@@ -3,6 +3,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { CreatorCard } from "@/components/CreatorCard";
 import LiveRowCompact from "@/components/reference/LiveRowCompact";
 import FollowingOfflineRow from "@/components/reference/FollowingOfflineRow";
+import { SectionLabel } from "@/components/reference/SectionLabel";
 import { FollowingSeenBeacon } from "@/components/FollowingSeenBeacon";
 import { TopNav } from "@/components/TopNav";
 import { getCurrentUser, getFollowedCreators } from "@/lib/api";
@@ -41,7 +42,7 @@ export default async function FollowingPage() {
               {totalNewContent > 0 ? ` · ${totalNewContent} new video${totalNewContent === 1 ? "" : "s"}` : ""}
             </p>
             <section>
-              <h2 className={styles.sectionLabel}>LIVE CHANNELS</h2>
+              <SectionLabel>LIVE CHANNELS</SectionLabel>
               <div className={styles.list}>
                 {creators
                   .filter((c) => c.isLive && c.currentStream)
@@ -52,7 +53,7 @@ export default async function FollowingPage() {
             </section>
 
             <section>
-              <h2 className={styles.sectionLabel}>OFFLINE CHANNELS</h2>
+              <SectionLabel>OFFLINE CHANNELS</SectionLabel>
               <div className={styles.list}>
                 {creators
                   .filter((c) => !c.isLive)

@@ -23,11 +23,12 @@
   }
 }
 
+/* categories_tile_small.dart's _imageCover() has no ClipRRect — unrounded
+   in the reference. */
 .artWrap {
   flex-shrink: 0;
   width: 50px;
   height: 80px;
-  border-radius: 6px;
   overflow: hidden;
 }
 
