@@ -78,8 +78,9 @@
   min-width: 0;
 }
 
+/* live_tile_small.dart's username text has no explicit fontWeight. */
 .creatorName {
-  font-weight: 700;
+  font-weight: 400;
   font-size: 14px;
 }
 

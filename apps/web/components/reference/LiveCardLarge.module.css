@@ -68,7 +68,9 @@
   margin: 0;
   font-family: var(--font-label);
   font-size: var(--ref-body-lg);
-  font-weight: 600;
+  /* live_tile_large.dart's Text(widget.model.user, ...) sets no explicit
+     fontWeight — plain body weight in the reference. */
+  font-weight: 400;
   color: var(--on-background);
 }
 

@@ -21,8 +21,10 @@
   flex-direction: column;
 }
 
+/* channel_tile_medium.dart (actually ChannelTileSmall) sets no explicit
+   fontWeight on the row title. */
 .name {
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .count {

@@ -72,8 +72,10 @@
   min-width: 0;
 }
 
+/* live_tile_medium is "identical to large" per the audit — no explicit
+   fontWeight on the creator name in the reference. */
 .creatorName {
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .streamTitle {

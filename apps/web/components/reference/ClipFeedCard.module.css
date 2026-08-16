@@ -40,8 +40,9 @@
   min-width: 0;
 }
 
+/* clip_tile_large.dart: creator name 16px, no explicit fontWeight. */
 .creatorName {
-  font-weight: 600;
+  font-weight: 400;
   color: var(--on-surface);
 }
 
@@ -95,10 +96,12 @@
   bottom: 8px;
 }
 
+/* clip_tile_large.dart's Description text (16px) has no explicit
+   fontWeight. */
 .title {
   margin: 12px 0 10px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.35;
   color: var(--on-surface);
 }

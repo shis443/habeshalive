@@ -84,8 +84,10 @@
   min-width: 0;
 }
 
+/* video_tile_medium.dart shares live_tile_medium's text hierarchy — no
+   explicit fontWeight on the creator name. */
 .creatorName {
-  font-weight: 600;
+  font-weight: 400;
   color: var(--on-surface);
 }
 
@@ -94,9 +96,11 @@
   font-size: 12px;
 }
 
+/* video_tile_medium.dart's description text (13px) has no explicit
+   fontWeight. */
 .title {
   margin: 10px 0 0;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.35;
   color: var(--on-surface);
 }

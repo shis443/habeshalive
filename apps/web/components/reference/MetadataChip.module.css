@@ -1,13 +1,18 @@
+/* text_tag.dart: EdgeInsets.symmetric(horizontal: 10.0) only — no
+   vertical padding, height comes from the text's own line-height — and
+   no explicit fontWeight (12px, regular). border-radius 9999px vs the
+   reference's literal circular(15.0) render identically at this chip's
+   actual height, so that one stays as the standard CSS pill idiom. */
 .chip {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  padding: 3px 10px;
+  padding: 0 10px;
   border-radius: 9999px;
   background: var(--surface-container-high);
   color: var(--on-surface-variant);
   font-family: var(--font-label);
   font-size: var(--ref-caption);
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
 }
