@@ -484,9 +484,11 @@ type an extra flag.
 
 ## 10. Release-hardening verification record
 
-Final pass, moblin-main commits `51c355a`..`25f5f71` (environment
-profiles, Debug/Release framework embedding, real bugs found and fixed
-via interactive testing, write-path/visual-tour integration tests).
+### Pass 1 — moblin-main `51c355a`..`25f5f71`
+
+Environment profiles, Debug/Release framework embedding, real bugs found
+and fixed via interactive testing, write-path/visual-tour integration
+tests.
 
 - `flutter build ios-framework` (all three configs) + `xcodebuild
   -configuration Release -destination generic/platform=iOS archive
@@ -503,12 +505,55 @@ via interactive testing, write-path/visual-tour integration tests).
 - `integration_test/app_test.dart` (navigation, no Docker dependency):
   **4/4 passing** against the final commits.
 - `integration_test/write_paths_test.dart`: login, profile update,
-  notification read/read-all, wallet display, and search all passed
-  against the final commits; the PPV-purchase and chat-send steps
-  require a live local test stream (ffmpeg → Docker-hosted SRS/
-  Centrifugo), which had gone down earlier in this session and wasn't
-  re-established for this pass — those two steps were verified in the
-  prior release-hardening pass (real local wallet debit, real chat
-  connect/subscribe/send) but not re-run against these exact final
-  commits. Disclosed as a known gap, not silently assumed still-passing.
+  notification read/read-all, wallet display, and search all passed;
+  PPV-purchase and chat-send required the local test stream (ffmpeg →
+  Docker-hosted SRS/Centrifugo), which had gone down earlier in this
+  session — disclosed as not re-run against this pass's exact commits
+  rather than silently assumed still-passing.
+
+### Pass 2 — moblin-main `d60ad2b` (restored stream stack, full suite)
+
+Restored the local ffmpeg → Docker SRS/Centrifugo test-stream stack and
+re-ran the full write-path suite, closing Pass 1's disclosed gap.
+
+- Getting PPV-purchase and chat-send to pass in one continuous run
+  surfaced and fixed several more real bugs, not previously caught:
+  - `BirqGradientScaffold`'s body sat in a plain `DecoratedBox` between
+    every screen's content and the Scaffold's own Material ancestor —
+    any `ListTile`/`InkWell` on a screen using this scaffold had its ink
+    splash silently hidden behind the decoration (a real Flutter
+    framework assertion, not cosmetic — it was also destabilizing test
+    runs that touched Activity's notification list). Fixed with a
+    transparent `Material` wrapper.
+  - Explore/Discover/Browse/Profile/Login's title-row headers had the
+    same unprotected-`Text`-in-a-`Row` overflow already fixed once on
+    Category/Activity/`BirqSectionHeader`, just not yet audited here —
+    "Explore" (7 chars) already overflowed by 4.3px at real device
+    width.
+  - Three real test-finder bugs (not app bugs, but real nonetheless):
+    Watch is reached via a *push* from Search, not a replace, so leaving
+    it needs two pops, not one; "Following" is ambiguous between the
+    follow button's own label and the bottom nav tab label still in the
+    tree underneath a pushed Watch screen; with enough real chat
+    history the input row is genuinely below the fold and isn't built
+    into the element tree until scrolled into view (Flutter's Sliver
+    machinery only builds near the viewport regardless of `ListView` vs.
+    `.builder`).
+- `integration_test/write_paths_test.dart`: **full journey passing,
+  zero exceptions** — login, profile update, notification read/read-all,
+  wallet, search, real PPV purchase (local wallet debited, zero external
+  payment gateway touched), follow/unfollow, and real chat send (posted
+  via REST, received back over the real Centrifugo websocket
+  subscription, confirmed via direct diagnostic instrumentation showing
+  the exact correct JSON arriving and decoding).
+- `integration_test/app_test.dart`: **4/4 passing**.
+- `flutter analyze` / `dart format --set-exit-if-changed` / `flutter
+  test`: clean, 15/15 unit tests.
+- Frameworks rebuilt and the Debug Simulator build + Release archive
+  (`CODE_SIGNING_ALLOWED=NO`) re-run against `d60ad2b`: **BUILD SUCCEEDED**
+  / **ARCHIVE SUCCEEDED**. Embedded `App.framework`: single-arch arm64,
+  7.25MB, confirmed AOT/Release.
 - `git diff --check`: clean.
+- See `docs/FLUTTER_CONSUMER_DEVICE_VALIDATION_CHECKLIST.md` for the
+  physical-device pass this environment cannot perform (no Apple
+  Developer signing identity, no connected device).
