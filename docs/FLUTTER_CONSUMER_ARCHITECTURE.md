@@ -481,3 +481,34 @@ Native (Xcode) Release builds do not pass a `BIRQ_ENV` dart-define, so they
 inherit the `kReleaseMode` default of `production` — this is intentional:
 a Release archive must be able to be built without a human remembering to
 type an extra flag.
+
+## 10. Release-hardening verification record
+
+Final pass, moblin-main commits `51c355a`..`25f5f71` (environment
+profiles, Debug/Release framework embedding, real bugs found and fixed
+via interactive testing, write-path/visual-tour integration tests).
+
+- `flutter build ios-framework` (all three configs) + `xcodebuild
+  -configuration Release -destination generic/platform=iOS archive
+  CODE_SIGNING_ALLOWED=NO`: **ARCHIVE SUCCEEDED**. Embedded
+  `App.framework` is a single-arch (arm64) 7.25MB AOT binary — confirmed
+  distinct from the 189MB Debug xcframework on disk, not assumed from the
+  build log alone.
+- No Apple Developer signing identity exists in this environment
+  (`security find-identity -v -p codesigning` returns zero) — the archive
+  is real and unsigned, not distribution-ready. Signing is real follow-up
+  work, not something this pass could complete.
+- `flutter analyze` / `dart format --set-exit-if-changed` / `flutter
+  test`: clean, 15/15 unit tests passing.
+- `integration_test/app_test.dart` (navigation, no Docker dependency):
+  **4/4 passing** against the final commits.
+- `integration_test/write_paths_test.dart`: login, profile update,
+  notification read/read-all, wallet display, and search all passed
+  against the final commits; the PPV-purchase and chat-send steps
+  require a live local test stream (ffmpeg → Docker-hosted SRS/
+  Centrifugo), which had gone down earlier in this session and wasn't
+  re-established for this pass — those two steps were verified in the
+  prior release-hardening pass (real local wallet debit, real chat
+  connect/subscribe/send) but not re-run against these exact final
+  commits. Disclosed as a known gap, not silently assumed still-passing.
+- `git diff --check`: clean.
