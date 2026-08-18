@@ -415,3 +415,69 @@ git diff --check
 Visual evidence required per shipped screen: screenshots at 390×844 and one
 larger-device size, captured from a running Simulator build against real
 (local, non-production) API data — not a static design comparison alone.
+
+## 9. Environment configuration (release-hardening addendum)
+
+Added during the release-hardening pass, after Phase 5 had already shipped
+with a single hardcoded default (`https://api.birq.live`) for every build
+mode — safe for the "real data, no mocks" mandate the phases above
+required, but wrong for Debug/test builds and CI, which should never touch
+production by default. `lib/config/env.dart` now resolves three named
+profiles instead of one URL:
+
+| Profile | `apiBaseUrl` | `centrifugoWsUrl` | `webUrl` | When it's used |
+| --- | --- | --- | --- | --- |
+| `local` | `http://localhost:4000` | `ws://localhost:8000/connection/websocket` | `http://localhost:3000` | **Default for every non-Release build** (Debug, profile, `flutter test`) |
+| `staging` | same as `local` today | same as `local` today | same as `local` today | Reserved name for a real staging deployment — see note below |
+| `production` | `https://api.birq.live` | `wss://rt.birq.live/connection/websocket` | `https://birq.live` | **Default only for Release builds**, or explicit override |
+
+**No real staging deployment exists in this project** — grepping the
+habeshalive repo's docs for "staging" turns up only planning language
+(`ROADMAP.md`, `HANDOFF-2026-08-04.md`), never an actual host. Rather than
+fabricate a staging URL, the `staging` profile is a real, named seam that
+today points at the same local dev stack as `local`; the moment a real
+staging host exists, three constants in `env.dart` change and every call
+site is unaffected.
+
+**Resolution order** (`BirqEnv` in `lib/config/env.dart`):
+1. `--dart-define=BIRQ_ENV=local|staging|production` — explicit, always wins.
+2. Absent that: `kReleaseMode ? 'production' : 'local'` — a Debug or
+   profile build (and `flutter test`, which runs in JIT/non-release mode)
+   can never resolve to `production` without an explicit override typed by
+   a human.
+3. Any of `BIRQ_API_BASE_URL` / `BIRQ_CENTRIFUGO_WS_URL` / `BIRQ_WEB_URL`
+   still individually override the resolved profile's value, for one-off
+   cases (e.g. a teammate's LAN IP) without inventing a fourth profile.
+
+**Defense in depth**: `BirqEnv.assertSafeForBuildMode()` (called once from
+`main()`) throws in Debug/profile if `apiBaseUrl` ever resolves to the
+literal production URL without `BIRQ_ENV=production` having been passed
+explicitly — compiled out entirely in Release via `assert()`, so it adds
+zero Release overhead and cannot itself gate a real release build.
+`main.dart` also renders a small non-interactive banner
+(`_BirqEnvBanner`, Debug/profile only) naming the live profile and URL on
+every screen, specifically so interactive Simulator testing can never
+mistake which backend is answering — directly motivated by the
+production-autofill incident during Phase 3 interactive testing (see the
+Final Report delivered after Phase 5).
+
+**Running against each profile:**
+
+```bash
+# Debug, local backend (default — no flags needed)
+flutter run
+
+# Debug, explicitly against a real staging host once one exists
+flutter run --dart-define=BIRQ_ENV=staging
+
+# Debug against production, only ever done deliberately and briefly
+flutter run --dart-define=BIRQ_ENV=production
+
+# Release archive — production by default, no dart-define required
+flutter build ios-framework --release
+```
+
+Native (Xcode) Release builds do not pass a `BIRQ_ENV` dart-define, so they
+inherit the `kReleaseMode` default of `production` — this is intentional:
+a Release archive must be able to be built without a human remembering to
+type an extra flag.
