@@ -541,52 +541,68 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
 
     await client.query("COMMIT");
 
-    if (input.message) {
-      await flagIfMatched("gift_message", ledgerTransactionId, senderId, input.message);
-    }
+    // Isolated from the money movement above on purpose: the 2026-09-05
+    // health audit's own fix pass found this exact block live and broken
+    // in production-shaped code — a real gift-send committed correctly,
+    // then this alert-info query threw (a wrong column reference,
+    // separately fixed), leaving the buyer charged with a 500 response
+    // and the creator's on-stream alert/notification silently lost. None
+    // of what happens in here (content-moderation flagging, the alert
+    // banner, the notify() call) can undo or needs to undo the gift that
+    // already happened — a failure here should be logged, never thrown.
+    try {
+      if (input.message) {
+        await flagIfMatched("gift_message", ledgerTransactionId, senderId, input.message);
+      }
 
-    const { rows: alertRows } = await pool.query<{
-      username: string;
-      display_name: string;
-      gift_name: string;
-      animation_key: string;
-      recipient_username: string | null;
-    }>(
-      `SELECT u.username, u.display_name, gt.name AS gift_name, gt.animation_key,
-              (SELECT username FROM users WHERE id = $3) AS recipient_username
-       FROM users u, gift_types gt
-       WHERE u.id = $1 AND gt.id = $2`,
-      [senderId, input.giftTypeId, input.recipientId ?? null]
-    );
-    const alertInfo = alertRows[0];
-    if (alertInfo) {
-      const isAnonymous = input.isAnonymous ?? false;
-      await publishStreamAlert({
-        kind: "gift",
-        id: ledgerTransactionId,
-        streamId: input.streamId,
-        senderId,
-        senderUsername: isAnonymous ? null : alertInfo.username,
-        senderDisplayName: isAnonymous ? null : alertInfo.display_name,
-        isAnonymous,
-        recipientUsername: alertInfo.recipient_username,
-        giftTypeId: input.giftTypeId,
-        giftName: alertInfo.gift_name,
-        animationKey: alertInfo.animation_key,
-        quantity: input.quantity,
-        totalSantim: totalAmount,
-        message: input.message ?? null,
-        badgeTier: badge.tier,
-        createdAt: new Date().toISOString(),
-      });
-
-      const isAnonymousForNotify = input.isAnonymous ?? false;
-      await notify(
-        stream.creator_id,
-        "gursha_received",
-        isAnonymousForNotify ? "You received a Gursha" : `${alertInfo.display_name} sent you a Gursha`,
-        { body: `${alertInfo.gift_name} x${input.quantity}`, linkUrl: "/wallet" }
+      const { rows: alertRows } = await pool.query<{
+        username: string;
+        display_name: string;
+        gift_name: string;
+        animation_key: string;
+        tier_key: GiftTierKey;
+        recipient_username: string | null;
+      }>(
+        `SELECT u.username, u.display_name, gt.name AS gift_name, gt.animation_key, gtier.key AS tier_key,
+                (SELECT username FROM users WHERE id = $3) AS recipient_username
+         FROM users u, gift_types gt
+         JOIN gift_tiers gtier ON gtier.id = gt.gift_tier_id
+         WHERE u.id = $1 AND gt.id = $2`,
+        [senderId, input.giftTypeId, input.recipientId ?? null]
       );
+      const alertInfo = alertRows[0];
+      if (alertInfo) {
+        const isAnonymous = input.isAnonymous ?? false;
+        await publishStreamAlert({
+          kind: "gift",
+          id: ledgerTransactionId,
+          streamId: input.streamId,
+          senderId,
+          senderUsername: isAnonymous ? null : alertInfo.username,
+          senderDisplayName: isAnonymous ? null : alertInfo.display_name,
+          isAnonymous,
+          recipientUsername: alertInfo.recipient_username,
+          giftTypeId: input.giftTypeId,
+          giftName: alertInfo.gift_name,
+          animationKey: alertInfo.animation_key,
+          giftTierKey: alertInfo.tier_key,
+          quantity: input.quantity,
+          totalSantim: totalAmount,
+          message: input.message ?? null,
+          badgeTier: badge.tier,
+          createdAt: new Date().toISOString(),
+        });
+
+        const isAnonymousForNotify = input.isAnonymous ?? false;
+        await notify(
+          stream.creator_id,
+          "gursha_received",
+          isAnonymousForNotify ? "You received a Gursha" : `${alertInfo.display_name} sent you a Gursha`,
+          { body: `${alertInfo.gift_name} x${input.quantity}`, linkUrl: "/wallet" }
+        );
+      }
+    } catch (err) {
+      console.error(`[wallet] sendGift post-commit alert/notify failed for ${ledgerTransactionId}:`, err);
     }
 
     return { id: ledgerTransactionId, badge, rank };
