@@ -14,13 +14,30 @@ import { useEffect, useRef, useState } from "react";
 import { unwrapClientData } from "@/lib/clientApi";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { playGurshaSuccessSound, triggerGurshaHaptic } from "@/lib/ui-feedback";
+import { flyIconToVideo } from "@/lib/flyToVideo";
 import { CloseIcon } from "./icons";
+import { SuccessCheck } from "./SuccessCheck";
+import { TierCelebration } from "./TierCelebration";
 import styles from "./GurshaModal.module.css";
 
 // Real illustrated mulmul-bread/buna/tej art isn't available yet (same
 // art-blocked, not code-blocked, situation as the avatar system) — these
 // are CSS-styled placeholders keyed off gift_types.animation_key,
 // swappable for real assets later without touching the data model.
+// Real interim tier art (Birq Gursha Kit asset pack) — the tier-selector
+// row below has never had any icon at all (text-only buttons), unlike
+// the per-gift THEME_STYLE grid which already has real emoji for every
+// seeded animation_key. Deliberately a separate, tier-keyed map rather
+// than folding into THEME_STYLE: only one image exists per tier, not per
+// gift type — see flutter_consumer's BirqGiftVisual for the same
+// reasoning applied on that platform.
+const TIER_FALLBACK_IMAGE: Record<string, string> = {
+  mulmul: "/gifts/_fallback_mulmul.webp",
+  buna: "/gifts/_fallback_buna.webp",
+  tej: "/gifts/_fallback_tej.webp",
+  kurt: "/gifts/_fallback_kurt.webp",
+};
+
 const THEME_STYLE: Record<string, { emoji: string; color: string }> = {
   mulmul_classic: { emoji: "🍞", color: "#a67c52" },
   buna_jebena: { emoji: "☕", color: "#6f4518" },
@@ -88,6 +105,13 @@ export function GurshaModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [celebration, setCelebration] = useState<{ label: string; title: string; elaborateness: number } | null>(
+    null
+  );
+  // Populated via each theme tile's ref callback below so handleSend can
+  // find the tapped gift's on-screen position for the fly-to-video
+  // animation without threading a ref through render.
+  const themeTileRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const [subExpanded, setSubExpanded] = useState(false);
   const [platformSub, setPlatformSub] = useState<PlatformSubscription | null>(null);
@@ -153,6 +177,16 @@ export function GurshaModal({
       return;
     }
 
+    // Captured before the response overwrites badge/rank state below —
+    // this render's badge/rank values *are* "before the send", since
+    // setBadge/setRank only take effect next render.
+    const prevBadgeTier = badge?.tier ?? "none";
+    const prevRank = rank?.rank ?? "newari";
+
+    const originEl = themeTileRefs.current.get(selectedThemeId);
+    const themeStyle = selectedTheme ? THEME_STYLE[selectedTheme.animationKey] ?? { emoji: "🎁", color: "#8B5E34" } : null;
+    if (originEl && themeStyle) flyIconToVideo(originEl, themeStyle.emoji, themeStyle.color);
+
     setLoading(true);
     setError(null);
     try {
@@ -175,11 +209,22 @@ export function GurshaModal({
       const data = await unwrapClientData<{ badge: GifterBadge; rank: UserRank }>(res);
       setBadge(data.badge);
       setRank(data.rank);
-      setSuccess(true);
       playGurshaSuccessSound();
       triggerGurshaHaptic();
+
+      const badgeOrder = Object.keys(TIER_LABEL);
+      const rankOrder = Object.keys(RANK_LABEL);
+      const rankUp = rankOrder.indexOf(data.rank.rank) > rankOrder.indexOf(prevRank);
+      const badgeUp = badgeOrder.indexOf(data.badge.tier) > badgeOrder.indexOf(prevBadgeTier);
+      if (rankUp) {
+        setCelebration({ label: "Rank up", title: RANK_LABEL[data.rank.rank], elaborateness: 1 });
+      } else if (badgeUp) {
+        setCelebration({ label: "New badge", title: TIER_LABEL[data.badge.tier], elaborateness: 0.35 });
+      } else {
+        setSuccess(true);
+      }
       router.refresh();
-      setTimeout(onClose, 1400);
+      setTimeout(onClose, rankUp || badgeUp ? 1900 : 1400);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -327,16 +372,25 @@ export function GurshaModal({
         <div className={styles.field}>
           <label className={styles.fieldLabel}>Gift Tier</label>
           <div className={styles.tierRow}>
-            {giftTiers.map((tier) => (
+            {giftTiers.map((tier, index) => (
               <button
                 key={tier.key}
                 type="button"
-                className={selectedTierKey === tier.key ? styles.tierButtonActive : styles.tierButton}
+                className={`${styles.giftTierButton} ${selectedTierKey === tier.key ? styles.tierButtonActive : styles.tierButton}`}
+                style={{ "--tier-weight": index / Math.max(1, giftTiers.length - 1) } as React.CSSProperties}
                 onClick={() => {
                   setSelectedTierKey(tier.key);
                   setSelectedThemeId(tier.giftTypes[0]?.id ?? null);
                 }}
               >
+                {TIER_FALLBACK_IMAGE[tier.key] && (
+                  <img
+                    src={TIER_FALLBACK_IMAGE[tier.key]}
+                    alt=""
+                    aria-hidden="true"
+                    className={styles.tierButtonIcon}
+                  />
+                )}
                 {tier.displayName}
               </button>
             ))}
@@ -347,19 +401,41 @@ export function GurshaModal({
           <label className={styles.fieldLabel}>
             Theme{selectedTier ? ` (${formatSantimAsBirr(selectedTier.basePriceSantim)} each)` : ""}
           </label>
-          <div className={styles.grid}>
-            {(selectedTier?.giftTypes ?? []).map((theme) => {
+          {/* Keyed by tier so switching tiers remounts the grid and the
+              cascade-in replays, rather than only firing once on first
+              mount. */}
+          <div className={styles.grid} key={selectedTierKey}>
+            {(selectedTier?.giftTypes ?? []).map((theme, index) => {
               const style = THEME_STYLE[theme.animationKey] ?? { emoji: "🎁", color: "#8B5E34" };
               return (
                 <button
                   key={theme.id}
+                  ref={(el) => {
+                    if (el) themeTileRefs.current.set(theme.id, el);
+                    else themeTileRefs.current.delete(theme.id);
+                  }}
                   type="button"
                   className={`${styles.themeTile} ${selectedThemeId === theme.id ? styles.themeTileSelected : ""}`}
-                  style={{ borderColor: selectedThemeId === theme.id ? style.color : undefined }}
+                  style={{ borderColor: selectedThemeId === theme.id ? style.color : undefined, "--i": index } as React.CSSProperties}
                   onClick={() => setSelectedThemeId(theme.id)}
                 >
                   <span className={styles.themeEmoji} style={{ backgroundColor: `${style.color}33` }}>
-                    {style.emoji}
+                    {/* Real interim tier art — only one image exists per
+                        tier (not per individual gift type, see
+                        TIER_FALLBACK_IMAGE's own comment above), so every
+                        gift within the selected tier shares it. Falls
+                        back to the existing per-gift emoji if no tier art
+                        is registered for some reason. */}
+                    {selectedTierKey && TIER_FALLBACK_IMAGE[selectedTierKey] ? (
+                      <img
+                        src={TIER_FALLBACK_IMAGE[selectedTierKey]}
+                        alt=""
+                        aria-hidden="true"
+                        className={styles.themeImage}
+                      />
+                    ) : (
+                      style.emoji
+                    )}
                   </span>
                   <span className={styles.giftName}>{theme.name}</span>
                 </button>
@@ -419,7 +495,7 @@ export function GurshaModal({
         <p className={styles.total}>Total: {formatSantimAsBirr(totalSantim)}</p>
 
         {error && <p className={styles.error}>{error}</p>}
-        {success && <p className={styles.success}>Gursha sent!</p>}
+        {success && <SuccessCheck title="Gursha sent!" />}
 
         <button
           type="button"
@@ -429,6 +505,15 @@ export function GurshaModal({
         >
           {loading ? "Sending..." : "Send Gursha"}
         </button>
+
+        {celebration && (
+          <TierCelebration
+            label={celebration.label}
+            title={celebration.title}
+            elaborateness={celebration.elaborateness}
+            onDone={() => setCelebration(null)}
+          />
+        )}
 
         {/* Separate from the gift send above — adjusting/starting the
             platform-wide subscription is its own transaction, not part

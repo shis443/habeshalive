@@ -18,7 +18,18 @@ async function fetchConnectionToken(): Promise<string> {
   return data.token;
 }
 
-const DISPLAY_MS = 6000;
+// Real Birr amount → 0.0-1.0, logarithmic — same bounds and reasoning as
+// flutter_consumer's birqGiftAlertIntensity: 500 santim is donateSchema's
+// own 5 ETB floor, 250,000 is kurt's real ceiling (100x quantity cap at a
+// 2,500 santim base price). Kept identical across platforms so a gift
+// never reads as a different "size" depending which client is watching.
+function gurshaIntensity(amountSantim: number): number {
+  const floor = 500;
+  const ceiling = 250000;
+  const clamped = Math.min(ceiling, Math.max(floor, amountSantim));
+  const t = (Math.log(clamped) - Math.log(floor)) / (Math.log(ceiling) - Math.log(floor));
+  return Math.min(1, Math.max(0, t));
+}
 
 // The Gursha Menu — the four gift_tiers rows (db/migrations/0025_gursha_
 // gift_economy.sql). gift_types.animation_key always starts with its
@@ -32,12 +43,67 @@ type GurshaTier = "mulmul" | "buna" | "tej" | "kurt";
 // GiftAlertOverlay.module.css (tierMulmul/tierBuna/tierTej/tierKurt) —
 // safe given noUncheckedIndexedAccess types every `styles.x` access as
 // possibly-undefined regardless of whether the class actually exists.
-const GURSHA_TIER_META: Record<GurshaTier, { icon: string; animationClass: string; soundSrc: string }> = {
-  mulmul: { icon: "🍞", animationClass: styles.tierMulmul!, soundSrc: "/sounds/gursha/mulmul.mp3" },
-  buna: { icon: "☕", animationClass: styles.tierBuna!, soundSrc: "/sounds/gursha/buna.mp3" },
-  tej: { icon: "🍯", animationClass: styles.tierTej!, soundSrc: "/sounds/gursha/tej.mp3" },
-  kurt: { icon: "🥩", animationClass: styles.tierKurt!, soundSrc: "/sounds/gursha/kurt.mp3" },
+// Real interim art (Birq Gursha Kit asset pack, ~/Desktop/birq-gursha-assets)
+// — one hero image per tier, not per gift type, same reasoning as
+// flutter_consumer's BirqGiftVisual: the DB has far more gift_types per
+// tier than commissioned art, but every real animation_key already
+// starts with a valid tier prefix, so a tier-keyed fallback image covers
+// every real gift with no chance of a miss. `icon` (emoji) kept as the
+// alt-text/no-JS fallback, not removed.
+const GURSHA_TIER_META: Record<
+  GurshaTier,
+  { icon: string; imageSrc: string; animationClass: string; soundSrc: string }
+> = {
+  mulmul: {
+    icon: "🍞",
+    imageSrc: "/gifts/_fallback_mulmul.webp",
+    animationClass: styles.tierMulmul!,
+    soundSrc: "/sounds/gursha/mulmul.mp3",
+  },
+  buna: {
+    icon: "☕",
+    imageSrc: "/gifts/_fallback_buna.webp",
+    animationClass: styles.tierBuna!,
+    soundSrc: "/sounds/gursha/buna.mp3",
+  },
+  tej: {
+    icon: "🍯",
+    imageSrc: "/gifts/_fallback_tej.webp",
+    animationClass: styles.tierTej!,
+    soundSrc: "/sounds/gursha/tej.mp3",
+  },
+  kurt: {
+    icon: "🥩",
+    imageSrc: "/gifts/_fallback_kurt.webp",
+    animationClass: styles.tierKurt!,
+    soundSrc: "/sounds/gursha/kurt.mp3",
+  },
 };
+
+// Birq Gursha Kit §08: hold time is always a whole number of the tier's
+// own performance cycle (enter + N loops + exit), so an alert never cuts
+// off mid-cycle — same fix as flutter_consumer's
+// birq_gift_alert_overlay.dart, applied here for platform parity. Was a
+// flat 6000ms regardless of tier or amount.
+const TIER_PERFORM_MS: Record<GurshaTier, number> = { mulmul: 1600, buna: 2400, tej: 3000, kurt: 4000 };
+const ENTER_MS = 320;
+const EXIT_MS = 300;
+const MIN_HOLD_MS = 2600;
+const MAX_HOLD_MS = 8000;
+// Donations have no tier signature of their own — mulmul's cadence (the
+// shortest) is the reasonable default rather than inventing a fifth one.
+const DONATION_PERFORM_MS = TIER_PERFORM_MS.mulmul;
+
+function loopCountFor(intensity: number): number {
+  return 1 + Math.floor(intensity * 2); // 1..3
+}
+
+function holdMsFor(tier: GurshaTier | null, intensity: number): number {
+  const n = loopCountFor(intensity);
+  const performMs = tier ? TIER_PERFORM_MS[tier] : DONATION_PERFORM_MS;
+  const ms = ENTER_MS + n * performMs + EXIT_MS;
+  return Math.min(MAX_HOLD_MS, Math.max(MIN_HOLD_MS, ms));
+}
 
 function gurshaTierFromAnimationKey(animationKey: string): GurshaTier | null {
   const tier = animationKey.split("_")[0];
@@ -50,6 +116,7 @@ interface QueuedAlert {
   amountLabel: string;
   message: string | null;
   tier: GurshaTier | null;
+  intensity: number;
 }
 
 function toQueuedAlert(alert: StreamAlert): QueuedAlert {
@@ -61,6 +128,7 @@ function toQueuedAlert(alert: StreamAlert): QueuedAlert {
       amountLabel: formatSantimAsBirr(alert.totalSantim),
       message: alert.message,
       tier: gurshaTierFromAnimationKey(alert.animationKey),
+      intensity: gurshaIntensity(alert.totalSantim),
     };
   }
   const name = alert.isAnonymous ? "Someone" : (alert.donorDisplayName ?? "Someone");
@@ -70,6 +138,7 @@ function toQueuedAlert(alert: StreamAlert): QueuedAlert {
     amountLabel: formatSantimAsBirr(alert.amountSantim),
     message: alert.message,
     tier: null,
+    intensity: gurshaIntensity(alert.amountSantim),
   };
 }
 
@@ -122,7 +191,7 @@ export function GiftAlertOverlay({ streamId }: { streamId: string }) {
   useEffect(() => {
     if (!current) return;
     if (current.tier) playGurshaSound(current.tier);
-    const timer = setTimeout(() => setCurrent(null), DISPLAY_MS);
+    const timer = setTimeout(() => setCurrent(null), holdMsFor(current.tier, current.intensity));
     return () => clearTimeout(timer);
   }, [current]);
 
@@ -135,7 +204,23 @@ export function GiftAlertOverlay({ streamId }: { streamId: string }) {
       className={`${styles.alert} ${tierMeta?.animationClass ?? ""} ${current.tier === "kurt" ? styles.banner : ""}`}
       key={current.key}
     >
-      {tierMeta && <span className={styles.tierIcon}>{tierMeta.icon}</span>}
+      {tierMeta && (
+        // Decorative — the headline below already states sender, gift and
+        // amount in full sentence form (§accessibility: "never let the
+        // icon carry the meaning"), so this needs no alt text of its own.
+        // Falls back to the emoji if the interim WebP ever fails to load.
+        <img
+          src={tierMeta.imageSrc}
+          alt=""
+          aria-hidden="true"
+          className={styles.tierIcon}
+          onError={(e) => {
+            const img = e.currentTarget;
+            img.style.display = "none";
+            img.insertAdjacentHTML("afterend", `<span class="${styles.tierIcon}">${tierMeta.icon}</span>`);
+          }}
+        />
+      )}
       <p className={styles.headline}>{current.headline}</p>
       <p className={styles.amount}>{current.amountLabel}</p>
       {current.message && <p className={styles.message}>&ldquo;{current.message}&rdquo;</p>}

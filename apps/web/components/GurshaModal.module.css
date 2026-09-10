@@ -154,20 +154,44 @@
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: var(--surface-container);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  /* Cascades in on mount, staggered by --i (set inline per tile); the grid
+     is re-keyed by tier in GurshaModal.tsx so switching tiers replays it. */
+  animation: themeTileIn 0.28s var(--ease-spring-smooth) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
 
 .themeTileSelected {
   box-shadow: 0 0 16px rgba(208, 188, 255, 0.2);
 }
 
+@keyframes themeTileIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .themeEmoji {
   font-size: 22px;
-  width: 36px;
-  height: 36px;
+  /* Bumped from 36px — real tier art (not just an emoji glyph) reads as
+     too small at the old size, per direct feedback. */
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+}
+
+.themeImage {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .giftName {
@@ -210,11 +234,36 @@
   border: 1px solid var(--outline-variant);
   background: var(--surface-container);
   color: var(--on-background);
+  transition: border-color 0.15s ease, background-color 0.15s ease, font-weight 0.15s ease;
 }
 
 .tierButtonActive {
   border-color: var(--primary);
   background: rgba(208, 188, 255, 0.15);
+}
+
+/* mulmul -> kurt should visually read as "more" the further right it is —
+   --tier-weight (0 at mulmul, 1 at kurt) is set inline per button in
+   GurshaModal.tsx. Scoped to .giftTierButton only: .tierButton/.tierRow
+   are shared with the plain Quantity and subscription-amount rows, which
+   have no such escalation. */
+.giftTierButton {
+  font-weight: calc(600 + var(--tier-weight, 0) * 200);
+  border-width: calc(1px + var(--tier-weight, 0) * 1px);
+  letter-spacing: calc(var(--tier-weight, 0) * 0.03em);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+/* Real interim tier art (Birq Gursha Kit asset pack) — the tier row was
+   text-only before this. */
+.tierButtonIcon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .input {
@@ -272,6 +321,13 @@
 
 .sendButtonBounce {
   animation: gurshaSuccessBounce 480ms var(--ease-spring-bounce);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .themeTile,
+  .sendButtonBounce {
+    animation: none;
+  }
 }
 
 .error {
