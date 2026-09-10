@@ -1,27 +1,8 @@
 import { loginResultSchema, loginSchema, verifyEmailOtpSchema, verifyOtpSchema, type AuthResponse } from "@birq/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
-import { clearSessionCookie, getSessionCookie, MAX_ACCOUNTS, writeSessionCookie } from "@/lib/session";
-
-// Shared by this route's normal login/signup completion and
-// api/session/2fa/route.ts's post-TOTP-challenge completion — both reach
-// the same "we now have a real {token, user}" point and need the same
-// account-switcher-aware cookie write (E.2).
-export async function completeSessionFromAuthResponse(
-  { token, user }: AuthResponse,
-  req: NextRequest
-): Promise<NextResponse> {
-  const addAccount = req.nextUrl.searchParams.get("addAccount") === "true";
-  const existing = addAccount ? await getSessionCookie() : null;
-
-  const newEntry = { userId: user.id, username: user.username, token };
-  const withoutThisUser = (existing?.accounts ?? []).filter((a) => a.userId !== user.id);
-  const accounts = [...withoutThisUser, newEntry].slice(-MAX_ACCOUNTS);
-
-  await writeSessionCookie({ activeUserId: user.id, accounts });
-
-  return NextResponse.json({ user });
-}
+import { clearSessionCookie, getSessionCookie } from "@/lib/session";
+import { completeSessionFromAuthResponse } from "@/lib/completeSession";
 
 export async function POST(req: NextRequest) {
   // Everything in this handler — request-body parsing, the upstream call,

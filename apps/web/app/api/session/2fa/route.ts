@@ -1,7 +1,7 @@
 import { authResponseSchema, totpLoginVerifySchema } from "@birq/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { API_INTERNAL_URL } from "@/lib/config";
-import { completeSessionFromAuthResponse } from "../route";
+import { completeSessionFromAuthResponse } from "@/lib/completeSession";
 
 // Second step of a 2FA-gated login — the caller already has a pendingToken
 // from POST /api/session (its {requiresTotp, pendingToken} response) and
