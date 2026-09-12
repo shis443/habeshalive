@@ -73,7 +73,8 @@ function stubSrsWithPublisher(name: string) {
       }
       if (href.includes("/api/v1/clients/") && init?.method === "DELETE") {
         deleted.push(href);
-        return new Response("{}", { status: 200 });
+        // SRS's real shape for a successful kill: HTTP 200, {"code":0}.
+        return new Response(JSON.stringify({ code: 0 }), { status: 200 });
       }
       return new Response("{}", { status: 200 });
     })
@@ -200,9 +201,15 @@ describe("killPublisherConfirmed behind a load balancer", () => {
         }
         if (init?.method === "DELETE") {
           state.deletes++;
-          // First DELETE lands on the wrong node — SRS 404s on an unknown
-          // client id. The retry must survive that.
-          return new Response("{}", { status: state.deletes === 1 ? 404 : 200 });
+          // First DELETE lands on the wrong node. SRS's real behavior,
+          // confirmed live against a running instance: HTTP 200 with
+          // {"code":2049} (ERROR_RTMP_CLIENT_NOT_FOUND) — never a 404. A
+          // naive `res.ok` check would misread this as success; the retry
+          // must survive it by reading the body's code.
+          return new Response(
+            JSON.stringify({ code: state.deletes === 1 ? 2049 : 0 }),
+            { status: 200 }
+          );
         }
         return new Response("{}", { status: 200 });
       })
@@ -239,5 +246,106 @@ describe("killPublisherConfirmed behind a load balancer", () => {
     await expect(forceEndStream(streamId, admin.id, "test: partial cluster")).rejects.toThrow(
       /only reached 1 of 2/i
     );
+  });
+});
+
+// Regression suite for the fast path added after finding SRS's on_publish
+// hook already sends client_id/server_id (srs_app_http_hooks.cpp) — using
+// it directly, instead of searching the cluster by stream name, closes a
+// real race: a name-based search can be confused by a creator's encoder
+// reconnecting mid-kill, since SRS assigns a fresh client_id per
+// connection. Also exercises parseSrsDeleteResult's {"code":0} contract
+// directly, since the fallback suite above already covers {"code":2049}.
+describe("killPublisherConfirmed with a known client_id", () => {
+  it("targets the known id directly, without listing the cluster at all", async () => {
+    const admin = await createAdmin();
+    const { streamId, creatorId } = await createLiveStream();
+    await pool.query(`UPDATE streams SET srs_client_id = 'c-known-1' WHERE id = $1`, [streamId]);
+
+    let listCalls = 0;
+    const deleted: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        const href = url.toString();
+        if (href.includes("/api/v1/clients/?")) {
+          listCalls++;
+          return new Response(JSON.stringify({ server: "srs-1", clients: [] }), { status: 200 });
+        }
+        if (init?.method === "DELETE") {
+          deleted.push(href);
+          return new Response(JSON.stringify({ code: 0 }), { status: 200 });
+        }
+        return new Response("{}", { status: 200 });
+      })
+    );
+
+    const result = await forceEndStream(streamId, admin.id, "test: known client id fast path");
+
+    expect(result.enforced).toBe(true);
+    expect(result.killed).toBe(1);
+    expect(deleted).toEqual([expect.stringContaining("/api/v1/clients/c-known-1")]);
+    // The point of the fast path: it never lists the cluster at all.
+    expect(listCalls).toBe(0);
+    void creatorId;
+  });
+
+  it("is not fooled by a stale client_id if the session already ended (code 2049)", async () => {
+    const admin = await createAdmin();
+    const { streamId } = await createLiveStream();
+    await pool.query(`UPDATE streams SET srs_client_id = 'c-gone' WHERE id = $1`, [streamId]);
+    setNodeCount(1);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ code: 2049 }), { status: 200 }))
+    );
+
+    const result = await forceEndStream(streamId, admin.id, "test: already gone");
+
+    // Not found IS the goal state — the session had already ended by the
+    // time the kill ran. Reporting failure here would be exactly the kind
+    // of false alarm that trains admins to ignore real ones.
+    expect(result.enforced).toBe(true);
+    expect(result.killed).toBe(0);
+  });
+
+  it("retries a known client_id past a wrong-node miss before confirming absence", async () => {
+    const admin = await createAdmin();
+    const { streamId } = await createLiveStream();
+    await pool.query(`UPDATE streams SET srs_client_id = 'c-live-elsewhere' WHERE id = $1`, [streamId]);
+    setNodeCount(2);
+
+    let deletes = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string | URL, init?: RequestInit) => {
+        if (init?.method === "DELETE") {
+          deletes++;
+          // Reachable on the second attempt (the "other" node).
+          return new Response(JSON.stringify({ code: deletes === 1 ? 2049 : 0 }), { status: 200 });
+        }
+        return new Response("{}", { status: 200 });
+      })
+    );
+
+    const result = await forceEndStream(streamId, admin.id, "test: known id, wrong node first");
+
+    expect(result.enforced).toBe(true);
+    expect(result.killed).toBe(1);
+    expect(deletes).toBe(2);
+  });
+
+  it("falls back to cluster search when no client_id was ever captured", async () => {
+    const admin = await createAdmin();
+    const { streamId, creatorId } = await createLiveStream();
+    // srs_client_id is NULL by default — a WHIP session, or a row
+    // predating migration 0051.
+    const deleted = stubSrsWithPublisher(creatorId);
+
+    const result = await forceEndStream(streamId, admin.id, "test: no captured identity");
+
+    expect(result.enforced).toBe(true);
+    expect(result.killed).toBe(1);
+    expect(deleted).toHaveLength(1);
   });
 });

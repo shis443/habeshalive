@@ -743,10 +743,10 @@ export async function forceEndStream(
   reason: string
 ): Promise<ForceEndResult> {
   // Matches 'starting' too — same reasoning as endStream() above.
-  const { rows } = await pool.query<{ id: string; creator_id: string; title: string }>(
+  const { rows } = await pool.query<{ id: string; creator_id: string; title: string; srs_client_id: string | null }>(
     `UPDATE streams SET status = 'ended', ended_at = now()
      WHERE id = $1 AND status IN ('starting', 'live')
-     RETURNING id, creator_id, title`,
+     RETURNING id, creator_id, title, srs_client_id`,
     [streamId]
   );
   const stream = rows[0];
@@ -775,7 +775,14 @@ export async function forceEndStream(
 
   let killed: number;
   try {
-    killed = await killPublisherConfirmed(providerStreamId);
+    // Prefers the client_id captured at this exact publish (migration
+    // 0051) over a cluster-wide search — see killPublisherConfirmed's own
+    // comment for why that also closes a reconnect race the search alone
+    // cannot. Falls back to search automatically when absent (a WHIP
+    // session, or a row from before this was captured).
+    killed = await killPublisherConfirmed(providerStreamId, {
+      knownClientId: stream.srs_client_id ?? undefined,
+    });
   } catch (err) {
     await pool.query(
       `UPDATE stream_controls
@@ -1108,7 +1115,20 @@ export async function promoteStartingStreams(): Promise<void> {
 // publish, and it previously never checked is_suspended/is_banned at all —
 // only the browser go-live path (goLive()) did, so a suspended creator
 // could keep publishing over raw RTMP with a previously-issued key.
-export async function markLiveByProviderStreamId(providerStreamId: string, providedKey: string | null): Promise<void> {
+export async function markLiveByProviderStreamId(
+  providerStreamId: string,
+  providedKey: string | null,
+  // Captured from SRS's on_publish payload (srsCallbackSchema) and stored
+  // on the row so an emergency kill can target this exact session by
+  // client_id later, instead of searching the whole cluster by name — see
+  // migration 0051's own comment for why that distinction matters (a
+  // reconnect gets a fresh client_id, so a stale one is never confused
+  // with a live one). Optional because WHIP-originated 'starting' rows
+  // (goLive()) and any hook payload that omits them must still work with
+  // no identity captured — killPublisherConfirmed falls back to the
+  // existing cluster-wide search in that case.
+  srsIdentity?: { clientId?: string; serverId?: string }
+): Promise<void> {
   const profile = await pool.query<CreatorProfileRow>(
     `SELECT user_id, stream_key FROM creator_profiles WHERE user_id = $1`,
     [providerStreamId]
@@ -1158,8 +1178,9 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
 
   if (pending.rows[0]) {
     await pool.query(
-      `UPDATE streams SET status = 'starting', playback_url = $1, started_at = now() WHERE id = $2`,
-      [playbackUrl, pending.rows[0].id]
+      `UPDATE streams SET status = 'starting', playback_url = $1, started_at = now(),
+              srs_client_id = $2, srs_server_id = $3 WHERE id = $4`,
+      [playbackUrl, srsIdentity?.clientId ?? null, srsIdentity?.serverId ?? null, pending.rows[0].id]
     );
     await logStreamEvent(pending.rows[0].id, "started");
     return;
@@ -1184,10 +1205,11 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
     [providerStreamId]
   );
   if (recentlyEnded.rows[0]) {
-    await pool.query(`UPDATE streams SET status = 'starting', playback_url = $1, ended_at = NULL WHERE id = $2`, [
-      playbackUrl,
-      recentlyEnded.rows[0].id,
-    ]);
+    await pool.query(
+      `UPDATE streams SET status = 'starting', playback_url = $1, ended_at = NULL,
+              srs_client_id = $2, srs_server_id = $3 WHERE id = $4`,
+      [playbackUrl, srsIdentity?.clientId ?? null, srsIdentity?.serverId ?? null, recentlyEnded.rows[0].id]
+    );
     await logStreamEvent(recentlyEnded.rows[0].id, "started");
     return;
   }
@@ -1199,10 +1221,19 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
   const defaults = await getStreamDefaults(creatorId);
   const thumbnailUrl = defaults.category ? thumbnailPlaceholderUrl(defaults.category) : null;
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at)
-     VALUES ($1, 'Live Stream', $2, $3, $4, $5, $6, 'starting', now())
+    `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, srs_client_id, srs_server_id)
+     VALUES ($1, 'Live Stream', $2, $3, $4, $5, $6, 'starting', now(), $7, $8)
      RETURNING id`,
-    [creatorId, defaults.category, defaults.language, thumbnailUrl, playbackUrl, providerStreamId]
+    [
+      creatorId,
+      defaults.category,
+      defaults.language,
+      thumbnailUrl,
+      playbackUrl,
+      providerStreamId,
+      srsIdentity?.clientId ?? null,
+      srsIdentity?.serverId ?? null,
+    ]
   );
   await logStreamEvent(rows[0]!.id, "started");
 }

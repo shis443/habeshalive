@@ -3,6 +3,7 @@ import { logAdminAction } from "../admin/audit.js";
 import { disconnectUserRealtime } from "../chat/token.js";
 import { pool } from "../common/db.js";
 import { env } from "../common/env.js";
+import { resolveSrsNodeCount } from "../common/srs-topology.js";
 import { AppError } from "../common/errors.js";
 import { notify } from "../notifications/service.js";
 import { listWhepSessionsForUser, removeWhepSession } from "../streams/whep-session-registry.js";
@@ -160,13 +161,116 @@ export async function killActiveRtmpPublishers(providerStreamId: string): Promis
 // Zero targets is SUCCESS, not failure: it means no publisher is connected
 // under that name, which is the goal state. SRS 404s cleanly on an already-
 // gone client rather than reporting a phantom.
-export async function killPublisherConfirmed(providerStreamId: string): Promise<number> {
-  // Node-aware, because the admin API is load-balanced. SRS stamps every
-  // response with a unique `server` id; collecting distinct ids is how this
-  // knows whether it has actually looked everywhere. Attempts are bounded at
-  // 4x the node count so a persistently unlucky round-robin still terminates.
-  const nodeCount = env.SRS_NODE_COUNT;
+// SRS's DELETE /api/v1/clients/<id> returns HTTP 200 REGARDLESS of whether
+// anything was actually killed — confirmed live against a running SRS
+// instance: `curl -X DELETE .../clients/bogus-id` returns
+// `HTTP/1.1 200 OK` with body `{"code":2049}` (ERROR_RTMP_CLIENT_NOT_FOUND,
+// srs_error_t.h). Checking only `res.ok` (any 2xx) is not a bug that was
+// merely theoretical — it is what this codebase's first cut of this exact
+// function did, and it would have reported every kill as confirmed
+// regardless of whether SRS did anything at all. `code === 0` is SRS's own
+// success/failure signal for this endpoint and the only one that means
+// anything.
+async function parseSrsDeleteResult(res: Response): Promise<{ ok: boolean; code?: number }> {
+  if (!res.ok) return { ok: false };
+  try {
+    const body = (await res.json()) as { code?: number };
+    return { ok: body.code === 0, code: body.code };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export interface KillPublisherOptions {
+  // Captured from SRS's on_publish payload at the moment this exact
+  // session started publishing (migration 0051, streams.srs_client_id).
+  // When present this is the ENTIRE mechanism: a direct, targeted DELETE,
+  // retried only to route past the load-balanced admin API — never a
+  // cluster-wide search. Absent for WHIP-originated 'starting' rows or any
+  // legacy row from before this was captured, in which case this falls
+  // back to the original search-by-name approach.
+  knownClientId?: string;
+}
+
+// Node-aware because the admin API is load-balanced.
+// infra/haproxy/haproxy.cfg fronts N SRS nodes, balancing RTMP publishers
+// by `leastconn` (one node, for the life of the connection) and the admin
+// API by `roundrobin` (mode tcp — a fresh connection per request, since
+// SRS itself sends `Connection: Close` on every admin-API response,
+// confirmed live: 12 sequential requests against a real 2-node cluster
+// alternated nodes perfectly, never repeating). A single admin-API
+// request therefore has roughly 1-in-N odds of reaching the node hosting
+// any given publisher. SRS stamps every response with a unique `server`
+// id (the same value on_publish sends as `server_id` — both read
+// stat_->server_id(), confirmed against srs_app_http_api.cpp and
+// srs_app_http_hooks.cpp), which is how this knows whether it has looked
+// everywhere before concluding "not broadcasting anywhere".
+export async function killPublisherConfirmed(
+  providerStreamId: string,
+  options: KillPublisherOptions = {}
+): Promise<number> {
+  const nodeCount = await resolveSrsNodeCount();
   const maxAttempts = Math.max(4, nodeCount * 4);
+
+  // FAST PATH: a known client_id from this exact publish session. Skips
+  // the cluster-wide search entirely, and closes a real race the search
+  // path cannot: SRS assigns a fresh client_id per TCP connection, so if
+  // the creator's encoder drops and reconnects between two listing polls,
+  // a name-based search can miss the new session or, worse, could in
+  // principle observe a *different* session under the same stream name.
+  // Targeting the specific id captured at publish time cannot be confused
+  // by a later reconnect — that reconnect gets its own, different id.
+  if (options.knownClientId) {
+    const serversSeen = new Set<string>();
+    let lastFailure: string | null = null;
+    let notFoundCount = 0;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let res: Response;
+      try {
+        res = await fetchWithTimeout(
+          new URL(`/api/v1/clients/${options.knownClientId}`, env.SRS_ADMIN_API_BASE),
+          { method: "DELETE" },
+          3000
+        );
+      } catch (err) {
+        lastFailure = `media server unreachable: ${(err as Error).message}`;
+        continue;
+      }
+
+      // The listing endpoint tags responses with `server`; the DELETE
+      // endpoint's success/not-found body does not carry that same field
+      // (confirmed live: `{"code":2049}` on not-found, no server key) — so
+      // node coverage for this fast path is inferred from attempt count,
+      // not from an id we don't get here. Bounding at nodeCount attempts
+      // dedicated to "not found" responses (separate from transient
+      // failures, which retry within the same budget) is what stands in
+      // for that coverage guarantee.
+      const parsed = await parseSrsDeleteResult(res);
+      if (parsed.ok) return 1;
+      if (parsed.code === 2049) {
+        notFoundCount++;
+        if (notFoundCount >= nodeCount) {
+          // Not found on at least `nodeCount` distinct attempts against a
+          // round-robined, connection-per-request backend is the closest
+          // this endpoint's response shape allows to "checked every node".
+          return 0;
+        }
+        continue;
+      }
+      lastFailure = `media server returned unexpected code ${parsed.code ?? "(none)"}`;
+    }
+
+    throw new AppError(
+      502,
+      `Kill not confirmed via known client id — ${lastFailure ?? "the publisher could not be dropped"}`
+    );
+  }
+
+  // FALLBACK PATH: no captured identity (WHIP session, or a row from
+  // before migration 0051). Searches the whole cluster by stream name,
+  // exactly as before, but now checking the DELETE's actual `code` rather
+  // than its HTTP status.
   const serversSeen = new Set<string>();
   let killed = 0;
   let lastFailure: string | null = null;
@@ -198,9 +302,6 @@ export async function killPublisherConfirmed(providerStreamId: string): Promise<
     );
 
     for (const entry of targets) {
-      // The DELETE round-robins too, so it can land on a node that has never
-      // heard of this client id. SRS 404s cleanly in that case, so retry
-      // until one lands rather than treating the first miss as fatal.
       let dropped = false;
       for (let d = 0; d < maxAttempts && !dropped; d++) {
         try {
@@ -209,8 +310,9 @@ export async function killPublisherConfirmed(providerStreamId: string): Promise<
             { method: "DELETE" },
             3000
           );
-          if (killRes.ok) dropped = true;
-          else lastFailure = `media server refused to drop client ${entry.id} (HTTP ${killRes.status})`;
+          const parsed = await parseSrsDeleteResult(killRes);
+          if (parsed.ok) dropped = true;
+          else lastFailure = `media server refused to drop client ${entry.id} (code ${parsed.code ?? "unknown"})`;
         } catch (err) {
           lastFailure = `failed to drop client ${entry.id}: ${(err as Error).message}`;
         }
@@ -221,16 +323,8 @@ export async function killPublisherConfirmed(providerStreamId: string): Promise<
       killed++;
     }
 
-    // Every node has answered and none is hosting this publisher: it really
-    // is not broadcasting, which is the goal state. Only safe to conclude
-    // once serversSeen covers the whole cluster — concluding it from a
-    // single node's empty list is the bug this function exists to prevent.
-    if (serversSeen.size >= nodeCount && killed === 0) {
-      return 0;
-    }
-    if (killed > 0 && serversSeen.size >= nodeCount) {
-      return killed;
-    }
+    if (serversSeen.size >= nodeCount && killed === 0) return 0;
+    if (killed > 0 && serversSeen.size >= nodeCount) return killed;
   }
 
   if (killed > 0) return killed;

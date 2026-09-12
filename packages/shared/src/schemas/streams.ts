@@ -218,6 +218,13 @@ export type PublishVodInput = z.infer<typeof publishVodSchema>;
 export const srsCallbackSchema = z.object({
   stream: z.string().uuid(),
   param: z.string().optional(),
+  // SRS's on_publish/on_unpublish hooks always send these (confirmed
+  // against infra/srs/vendor/trunk/src/app/srs_app_http_hooks.cpp's
+  // on_publish) — optional here only so an unrelated hook shape, or a
+  // future SRS version that renames them, degrades to "no captured
+  // identity" rather than a 400 on the whole webhook.
+  client_id: z.string().optional(),
+  server_id: z.string().optional(),
 });
 export type SrsCallback = z.infer<typeof srsCallbackSchema>;
 

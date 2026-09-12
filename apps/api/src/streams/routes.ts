@@ -225,7 +225,10 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
   app.post("/webhooks/live-started", async (req, reply) => {
     assertWebhookSecret(req);
     const input = srsCallbackSchema.parse(req.body);
-    await markLiveByProviderStreamId(input.stream, extractKeyFromParam(input.param));
+    await markLiveByProviderStreamId(input.stream, extractKeyFromParam(input.param), {
+      clientId: input.client_id,
+      serverId: input.server_id,
+    });
     reply.send({ code: 0 });
   });
 
