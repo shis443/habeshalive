@@ -100,8 +100,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: app.requirePermission("stream:kick") },
     async (req) => {
       const input = forceEndStreamSchema.parse(req.body);
-      await forceEndStream(req.params.id, req.user.sub, input.reason);
-      return { ok: true };
+      // Returns the enforcement result rather than a bare { ok: true }: the
+      // client has to be able to tell "the publisher was dropped" from "we
+      // recorded the request". forceEndStream throws 502 when the media
+      // server could not confirm, so reaching here means enforced === true.
+      const result = await forceEndStream(req.params.id, req.user.sub, input.reason);
+      return { ok: true, enforced: result.enforced, killed: result.killed };
     }
   );
 

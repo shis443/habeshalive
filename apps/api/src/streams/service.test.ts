@@ -8,6 +8,7 @@ import {
   getStreamKey,
   markEndedByProviderStreamId,
   markLiveByProviderStreamId,
+  promoteStartingStreams,
   reapStaleStreams,
   rotateStreamKey,
 } from "./service.js";
@@ -195,6 +196,24 @@ describe("stream key encryption at rest + rotation", () => {
       statusCode: 401,
     });
     await expect(markLiveByProviderStreamId(creator.id, secret)).resolves.toBeUndefined();
+    // 'starting', not 'live': SRS's on_publish firing means the RTMP
+    // handshake completed, not that HLS has packaged anything playable yet
+    // — see markLiveByProviderStreamId's own comment and
+    // promoteStartingStreams below, which is what actually confirms real
+    // output before anything reads 'live'. This assertion used to say
+    // "live" and was never updated when that behavior changed; it was
+    // failing against a real database, not against this fix.
+    expect(await getStreamStatus(creator.streamId)).toBe("starting");
+
+    // promoteStartingStreams is the only path that flips 'starting' to
+    // 'live', and only once isManifestReady confirms a real segment exists
+    // — stub fetch to return exactly that shape (an #EXTINF-bearing media
+    // playlist), matching isManifestReady's own documented contract.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("#EXTM3U\n#EXTINF:4.0,\nseg-0.ts\n", { status: 200 }))
+    );
+    await promoteStartingStreams();
     expect(await getStreamStatus(creator.streamId)).toBe("live");
 
     await expect(markEndedByProviderStreamId(creator.id, "definitely-wrong")).rejects.toMatchObject({

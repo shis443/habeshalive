@@ -47,6 +47,20 @@ const envSchema = z.object({
   // http_api on the host's 1985 directly, same as every other SRS_*_HOST
   // default in this file).
   SRS_ADMIN_API_BASE: z.string().min(1).default("http://localhost:1985"),
+  // How many SRS nodes sit behind SRS_ADMIN_API_BASE.
+  //
+  // This is not cosmetic. infra/haproxy/haproxy.cfg fronts N SRS nodes and
+  // balances the admin API `roundrobin`, while RTMP publishers are placed by
+  // `leastconn` — so a publisher lives on exactly one node, and any single
+  // admin-API request has a 1-in-N chance of reaching it. A kill that
+  // queried the wrong node would see an empty client list and, taking that
+  // at face value, report the stream stopped while it kept broadcasting.
+  //
+  // killPublisherConfirmed uses this to know how many distinct nodes it must
+  // observe (SRS tags every response with a unique `server` id) before it is
+  // entitled to conclude "no publisher anywhere". Default 1 is the
+  // single-node case and preserves the old behaviour exactly.
+  SRS_NODE_COUNT: z.coerce.number().int().min(1).default(1),
   // Default-off kill switch for the WHEP (WebRTC playback) broker — see
   // streams/whep-routes.ts. Same empty-by-default stub switch as
   // everywhere else in this file: real end-to-end WebRTC/ICE/media

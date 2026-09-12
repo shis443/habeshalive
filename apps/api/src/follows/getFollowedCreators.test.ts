@@ -44,11 +44,17 @@ describe("getFollowedCreators feed", () => {
     await pool.query(`UPDATE users SET following_last_seen_at = now() - interval '1 day' WHERE id = $1`, [viewer.id]);
 
     // insert one VOD and one clip for the offline creator (should count)
-    const { rows: vodRows } = await pool.query(`INSERT INTO stream_vods (stream_id, title, is_published, created_at) VALUES ($1, $2, true, now()) RETURNING id`, [
+    const { rows: vodRows } = await pool.query(`INSERT INTO stream_vods (stream_id, title, is_published, created_at, playback_url, expires_at)
+       VALUES ($1, $2, true, now(), $3, now() + interval '30 days') RETURNING id`, [
       (await pool.query(`SELECT id FROM streams WHERE creator_id = $1 ORDER BY created_at DESC LIMIT 1`, [offline.id])).rows[0].id,
       'New VOD',
+      'https://vods.example.com/test-vod.m3u8',
     ]);
-    await pool.query(`INSERT INTO clips (creator_id, title, created_at) VALUES ($1, $2, now())`, [offline.id, 'New Clip']);
+    await pool.query(
+      `INSERT INTO clips (vod_id, creator_id, title, object_key, start_seconds, duration_seconds, created_at)
+       VALUES ($1, $2, $3, $4, 0, 30, now())`,
+      [vodRows[0].id, offline.id, 'New Clip', 'clips/test-clip.mp4']
+    );
 
     const creators = await getFollowedCreators(viewer.id);
 

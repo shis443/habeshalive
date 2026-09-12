@@ -141,6 +141,106 @@ export async function killActiveRtmpPublishers(providerStreamId: string): Promis
   );
 }
 
+// The confirmed-kill counterpart to killActiveRtmpPublishers above.
+//
+// WHY A SECOND FUNCTION RATHER THAN A FLAG ON THE FIRST: the two callers
+// want opposite failure behaviour, and conflating them would break one of
+// them. killActiveRtmpPublishers is best-effort by design (see its own
+// point 3): it runs after a ban or a key rotation, where the real security
+// boundary is is_banned / the rotated key blocking every *future* publish,
+// and an SRS outage must never fail the ban itself. This one runs behind an
+// admin pressing "force end", where the entire point is that the broadcast
+// stops now — so an unconfirmed kill has to be reported as unconfirmed, not
+// swallowed.
+//
+// Throws on: SRS unreachable, non-2xx client listing, unparseable listing,
+// or any individual DELETE failing. Returns the number of publisher
+// connections actually killed.
+//
+// Zero targets is SUCCESS, not failure: it means no publisher is connected
+// under that name, which is the goal state. SRS 404s cleanly on an already-
+// gone client rather than reporting a phantom.
+export async function killPublisherConfirmed(providerStreamId: string): Promise<number> {
+  // Node-aware, because the admin API is load-balanced. SRS stamps every
+  // response with a unique `server` id; collecting distinct ids is how this
+  // knows whether it has actually looked everywhere. Attempts are bounded at
+  // 4x the node count so a persistently unlucky round-robin still terminates.
+  const nodeCount = env.SRS_NODE_COUNT;
+  const maxAttempts = Math.max(4, nodeCount * 4);
+  const serversSeen = new Set<string>();
+  let killed = 0;
+  let lastFailure: string | null = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(new URL("/api/v1/clients/?count=100", env.SRS_ADMIN_API_BASE), {}, 3000);
+    } catch (err) {
+      lastFailure = `media server unreachable: ${(err as Error).message}`;
+      continue;
+    }
+    if (!res.ok) {
+      lastFailure = `media server returned HTTP ${res.status}`;
+      continue;
+    }
+
+    let data: { server?: string; clients?: SrsClientEntry[] };
+    try {
+      data = (await res.json()) as { server?: string; clients?: SrsClientEntry[] };
+    } catch (err) {
+      lastFailure = `media server sent an unreadable client list: ${(err as Error).message}`;
+      continue;
+    }
+    if (data.server) serversSeen.add(data.server);
+
+    const targets = (data.clients ?? []).filter(
+      (entry) => entry.name === providerStreamId && entry.publish === true
+    );
+
+    for (const entry of targets) {
+      // The DELETE round-robins too, so it can land on a node that has never
+      // heard of this client id. SRS 404s cleanly in that case, so retry
+      // until one lands rather than treating the first miss as fatal.
+      let dropped = false;
+      for (let d = 0; d < maxAttempts && !dropped; d++) {
+        try {
+          const killRes = await fetchWithTimeout(
+            new URL(`/api/v1/clients/${entry.id}`, env.SRS_ADMIN_API_BASE),
+            { method: "DELETE" },
+            3000
+          );
+          if (killRes.ok) dropped = true;
+          else lastFailure = `media server refused to drop client ${entry.id} (HTTP ${killRes.status})`;
+        } catch (err) {
+          lastFailure = `failed to drop client ${entry.id}: ${(err as Error).message}`;
+        }
+      }
+      if (!dropped) {
+        throw new AppError(502, `Kill not confirmed — ${lastFailure ?? "the publisher could not be dropped"}`);
+      }
+      killed++;
+    }
+
+    // Every node has answered and none is hosting this publisher: it really
+    // is not broadcasting, which is the goal state. Only safe to conclude
+    // once serversSeen covers the whole cluster — concluding it from a
+    // single node's empty list is the bug this function exists to prevent.
+    if (serversSeen.size >= nodeCount && killed === 0) {
+      return 0;
+    }
+    if (killed > 0 && serversSeen.size >= nodeCount) {
+      return killed;
+    }
+  }
+
+  if (killed > 0) return killed;
+  throw new AppError(
+    502,
+    `Kill not confirmed — only reached ${serversSeen.size} of ${nodeCount} media server node(s)` +
+      (lastFailure ? `: ${lastFailure}` : "")
+  );
+}
+
 export async function banUser(actorId: string, targetUserId: string, reason?: string): Promise<void> {
   const client = await pool.connect();
   try {

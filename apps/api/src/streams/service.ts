@@ -20,7 +20,7 @@ import { AppError } from "../common/errors.js";
 import { env } from "../common/env.js";
 import { encryptSecret, resolveStreamKey, timingSafeEqualStreamKey } from "../common/crypto.js";
 import { flagIfImageMatched, flagIfMatched } from "../moderation/service.js";
-import { killActiveRtmpPublishers } from "../moderation/actions-service.js";
+import { killActiveRtmpPublishers, killPublisherConfirmed } from "../moderation/actions-service.js";
 import { isApprovedCreator } from "../creator-applications/service.js";
 import { notifyFollowersCategoryLive, notifyFollowersCreatorLive } from "../notifications/service.js";
 import { appendHlsToken } from "./hls-token.js";
@@ -386,6 +386,24 @@ export async function getLiveStreamByCreatorId(creatorId: string, viewerId?: str
   return toStreamDetail(row, await resolvePpvAccess(row, viewerId));
 }
 
+// Backs a short client poll (LiveViewerCount.tsx) so the number on a
+// watch page can visibly tick instead of only updating on a full page
+// load. Note this is the same peak_viewers column toStreamDetail already
+// reads for the initial render — a stored high-water mark, not a true
+// live concurrent-viewer count (that exists only at the WHEP session
+// registry layer, and only as a platform-wide total, not per-stream) — so
+// this endpoint animates transitions of the existing metric rather than
+// introducing a different one.
+export async function getStreamViewerCount(streamId: string): Promise<{ viewerCount: number }> {
+  const { rows } = await pool.query<{ peak_viewers: number }>(
+    `SELECT peak_viewers FROM streams WHERE id = $1`,
+    [streamId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "Stream not found");
+  return { viewerCount: row.peak_viewers };
+}
+
 export async function getStreamActivity(streamId: string): Promise<StreamActivity> {
   const streamResult = await pool.query<{ creator_id: string; started_at: string | null }>(
     `SELECT creator_id, started_at FROM streams WHERE id = $1`,
@@ -554,7 +572,7 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
 
   await pool.query(
     `UPDATE streams SET status = 'ended', ended_at = now()
-     WHERE creator_id = $1 AND status IN ('offline', 'live')`,
+     WHERE creator_id = $1 AND status IN ('offline', 'starting', 'live')`,
     [userId]
   );
 
@@ -586,9 +604,15 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
         : "16:9"
       : undefined;
 
+  // 'starting', not 'live' — the WHIP publish/ICE negotiation hasn't even
+  // begun yet at this point (see handleBrowserGoLive() in
+  // apps/web/components/GoLivePanel.tsx, which calls this endpoint before
+  // creating its RTCPeerConnection), let alone produced any real HLS
+  // output. promoteStartingStreams() (below) flips this to 'live' once a
+  // real segment is confirmed to exist, same as the RTMP path.
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at, is_sensitive, is_ppv, ppv_price_santim, copyright_certified_at, aspect_ratio)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'live', now(), $8, $9, $10, now(), $11)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'starting', now(), $8, $9, $10, now(), $11)
      RETURNING id`,
     [
       userId,
@@ -619,6 +643,15 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
   await logStreamEvent(streamId, "started");
 
   const stream = await getStreamById(streamId, userId);
+  // Deliberately still fired here, not delayed to promoteStartingStreams()
+  // alongside the 'starting' -> 'live' status change above: this path
+  // (goLive/WHIP) is the ONLY one that ever called these — RTMP's
+  // markLiveByProviderStreamId never has. Moving them into the shared
+  // sweep (which can't tell which path created a given 'starting' row)
+  // would silently extend follower/category-live notifications to
+  // pure-RTMP creators who never had them, which is a real, separate
+  // feature change, not part of fixing the premature-live timing.
+  //
   // Detached (no await) — see notifyFollowersCreatorLive's own comment on
   // why a slow/large follower fan-out shouldn't delay this response.
   notifyFollowersCreatorLive(userId, stream.creator.username, stream.creator.displayName).catch((err) => {
@@ -642,9 +675,13 @@ export async function goLive(userId: string, input: CreateStreamInput): Promise<
 }
 
 export async function endStream(userId: string): Promise<void> {
+  // Matches 'starting' too — a creator should be able to cancel/end their
+  // own stream even while it hasn't been confirmed watchable yet (e.g.
+  // they realize their encoder is misconfigured during the startup
+  // window), not only once promoteStartingStreams() has flipped it live.
   const { rows } = await pool.query<{ id: string }>(
     `UPDATE streams SET status = 'ended', ended_at = now()
-     WHERE creator_id = $1 AND status = 'live'
+     WHERE creator_id = $1 AND status IN ('starting', 'live')
      RETURNING id`,
     [userId]
   );
@@ -674,10 +711,41 @@ export async function endStream(userId: string): Promise<void> {
 // broadcasting, for something that can't wait for the moderation queue.
 // Logged to admin_actions with a required reason, same as every other
 // admin mutation.
-export async function forceEndStream(streamId: string, adminId: string, reason: string): Promise<void> {
+export interface ForceEndResult {
+  /** True only when the media server confirmed the publisher was dropped. */
+  enforced: boolean;
+  /** Publisher connections actually killed. Zero is valid — see killPublisherConfirmed. */
+  killed: number;
+}
+
+// Ending a stream is two separate things, and conflating them is what made
+// this control dishonest: marking the row 'ended' (which removes it from
+// discovery) and actually dropping the publisher at the media server.
+//
+// Previously this did only the first and returned success. The encoder
+// stayed connected, SRS kept ingesting and HLS kept cutting segments, so a
+// viewer holding the playback URL could keep watching a stream the admin had
+// been told was ended.
+//
+// Order matters here. The DB change lands first because it is the part that
+// cannot fail and it immediately removes the stream from every listing. The
+// stream_controls row records the *intent* before any network call, so an
+// SRS outage leaves durable evidence for the reconciler instead of losing
+// the request. enforced_at is set only on confirmation.
+//
+// Throws 502 when the kill cannot be confirmed. That is deliberate: the
+// caller must not report "ended" for a broadcast that may still be running.
+// The row stays marked ended and the control stays pending, so the admin
+// sees "requested" and the reconciler keeps trying.
+export async function forceEndStream(
+  streamId: string,
+  adminId: string,
+  reason: string
+): Promise<ForceEndResult> {
+  // Matches 'starting' too — same reasoning as endStream() above.
   const { rows } = await pool.query<{ id: string; creator_id: string; title: string }>(
     `UPDATE streams SET status = 'ended', ended_at = now()
-     WHERE id = $1 AND status = 'live'
+     WHERE id = $1 AND status IN ('starting', 'live')
      RETURNING id, creator_id, title`,
     [streamId]
   );
@@ -688,6 +756,44 @@ export async function forceEndStream(streamId: string, adminId: string, reason: 
     reason,
     metadata: { creatorId: stream.creator_id, title: stream.title },
   });
+
+  // Durable intent, written before the network call. ON CONFLICT because a
+  // second force-end on the same stream is a retry, not an error — it must
+  // re-arm the control and clear any stale enforced_at rather than fail.
+  await pool.query(
+    `INSERT INTO stream_controls (stream_id, killed, reason, applied_by, attempts)
+     VALUES ($1, TRUE, $2, $3, 0)
+     ON CONFLICT (stream_id) DO UPDATE
+       SET killed = TRUE, reason = $2, applied_by = $3,
+           enforced_at = NULL, last_error = NULL, updated_at = now()`,
+    [stream.id, reason, adminId]
+  );
+
+  // The SRS stream name is the creator's own userId — see
+  // composeStreamKeyField in this file and markLiveByProviderStreamId.
+  const providerStreamId = stream.creator_id;
+
+  let killed: number;
+  try {
+    killed = await killPublisherConfirmed(providerStreamId);
+  } catch (err) {
+    await pool.query(
+      `UPDATE stream_controls
+         SET last_error = $2, attempts = attempts + 1, updated_at = now()
+       WHERE stream_id = $1`,
+      [stream.id, (err as Error).message]
+    );
+    throw err;
+  }
+
+  await pool.query(
+    `UPDATE stream_controls
+       SET enforced_at = now(), last_error = NULL, attempts = attempts + 1, updated_at = now()
+     WHERE stream_id = $1`,
+    [stream.id]
+  );
+
+  return { enforced: true, killed };
 }
 
 interface StreamArchiveRow {
@@ -867,6 +973,132 @@ export async function reapStaleStreams(): Promise<void> {
   }
 }
 
+// Was 90s, sized against VideoPlayer.tsx's anecdotal "30-50s" comment —
+// that margin turned out not to be enough. Real production evidence
+// (2026-09-09, three separate live tests, all on this exact stream key):
+// every one was killed by this timeout at ~90-92s, "never confirmed live
+// within timeout" — but SRS's own logs show the manifest actually started
+// serving real segments (http match + a successful on_dvr webhook, proof
+// of a real recorded segment) at ~109s after the RTMP publish began, for
+// a stream started at 12:13:01 and killed at 12:14:33 — 17 seconds before
+// it would have succeeded. All three failures that night matched this
+// same ~90-92s pattern almost exactly, which is what pointed at the
+// timeout itself rather than connection instability (the original
+// suspect) as the actual cause. 180s leaves real margin past the ~109s
+// observed instead of cutting it close again.
+const STARTING_STREAM_TIMEOUT_MS = 180_000;
+const MANIFEST_CHECK_TIMEOUT_MS = 5_000;
+
+// Deliberately stricter than isPlaybackUrlReachable() above (a bare HEAD +
+// res.ok — sufficient for "is this totally dead", the reaper's own
+// question, but not proof of real content: SRS may well serve a 200 on an
+// empty/placeholder playlist before the first segment is actually cut).
+// promoteStartingStreams() must not tell viewers a stream is watchable on
+// the strength of a manifest that merely *exists*, so this does a real GET
+// and confirms the body actually lists a segment.
+async function isManifestReady(playbackUrl: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MANIFEST_CHECK_TIMEOUT_MS);
+  try {
+    const res = await fetch(playbackUrl, { signal: controller.signal });
+    if (!res.ok) {
+      console.log(`[promote] manifest check not-ok: ${playbackUrl} -> HTTP ${res.status}`);
+      return false;
+    }
+    let body = await res.text();
+    // Real diagnostic evidence (2026-09-09) found the actual bug here: SRS
+    // serves an HLS *master/variant* playlist at this base URL, not the
+    // media playlist directly — every real check got back exactly this
+    // 123-byte wrapper, with a fresh ?hls_ctx=<id> each time:
+    //   #EXTM3U
+    //   #EXT-X-STREAM-INF:BANDWIDTH=1,AVERAGE-BANDWIDTH=1
+    //   /live/<key>.m3u8?hls_ctx=<id>
+    // The real #EXTINF segment list only ever lived at that referenced
+    // hls_ctx URL — this was never a timing problem, the check was
+    // structurally incapable of ever seeing real segments regardless of
+    // how long a stream ran (confirmed: a stream with 25+ real segments
+    // cutting continuously for 106s never once passed this check). Any
+    // real player (hls.js, AVPlayer) already follows this same reference
+    // automatically; this now does the same, once.
+    if (!body.includes("#EXTINF") && body.includes("#EXT-X-STREAM-INF")) {
+      const variantLine = body.split("\n").find((line) => line.trim() && !line.startsWith("#"));
+      if (variantLine) {
+        const variantUrl = new URL(variantLine.trim(), playbackUrl).toString();
+        const variantRes = await fetch(variantUrl, { signal: controller.signal });
+        if (!variantRes.ok) {
+          console.log(`[promote] variant manifest check not-ok: ${variantUrl} -> HTTP ${variantRes.status}`);
+          return false;
+        }
+        body = await variantRes.text();
+      }
+    }
+    const ready = body.includes("#EXTINF");
+    if (!ready) {
+      console.log(
+        `[promote] manifest check 200-but-not-ready: ${playbackUrl} -> body length ${body.length}, ` +
+          `first 200 chars: ${JSON.stringify(body.slice(0, 200))}`
+      );
+    }
+    return ready;
+  } catch (err) {
+    console.log(
+      `[promote] manifest check threw: ${playbackUrl} -> ${err instanceof Error ? err.message : String(err)}`
+    );
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+interface StartingStreamRow {
+  id: string;
+  playback_url: string | null;
+  started_at: string | null;
+}
+
+// markLiveByProviderStreamId (RTMP's on_publish) and goLive() (browser/
+// WHIP) both write 'starting', not 'live', the instant their respective
+// connections begin — see each function's own comment. Neither SRS's
+// on_publish nor a WHIP ICE-connected event proves any HLS segment has
+// actually been packaged yet. This sweep (registered in server.ts next to
+// the existing reapStaleStreams() job, on a much shorter interval since it
+// directly gates viewer-facing latency) is what actually confirms real
+// output exists before telling anyone — viewers, discovery, search,
+// points, boost, squad eligibility, all of which already read `status =
+// 'live'` and therefore need no changes of their own — that a stream is
+// watchable. A 'starting' row that never produces real output within
+// STARTING_STREAM_TIMEOUT_MS is reverted to 'ended' instead, so a failed
+// connection attempt doesn't zombie forever. Same "each row checked
+// independently, one failure doesn't stop the sweep" posture as
+// reapStaleStreams() above, and the same reason: one stream's check
+// failing (e.g. a network blip) must not stop the sweep from reaching the
+// rest.
+export async function promoteStartingStreams(): Promise<void> {
+  const { rows } = await pool.query<StartingStreamRow>(
+    `SELECT id, playback_url, started_at FROM streams WHERE status = 'starting'`
+  );
+
+  for (const row of rows) {
+    try {
+      const ready = row.playback_url ? await isManifestReady(row.playback_url) : false;
+      if (ready) {
+        await pool.query(`UPDATE streams SET status = 'live' WHERE id = $1`, [row.id]);
+        console.log(`[promote] stream ${row.id} confirmed live`);
+        continue;
+      }
+
+      const startedAtMs = row.started_at ? new Date(row.started_at).getTime() : null;
+      const isPastTimeout = startedAtMs !== null && Date.now() - startedAtMs > STARTING_STREAM_TIMEOUT_MS;
+      if (isPastTimeout) {
+        await endStreamById(row.id);
+        console.log(`[promote] ended stream ${row.id}: never confirmed live within timeout`);
+      }
+    } catch (err) {
+      console.error(`[promote] failed checking stream ${row.id}:`, err);
+    }
+  }
+}
+
 // providerStreamId is the creator's own userId (the public RTMP "stream
 // name" — see composeStreamKeyField); providedKey is whatever SRS forwarded
 // in `param`'s "key" query param, which must match the creator's real
@@ -908,19 +1140,25 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
 
   // Reuse whichever row is already tracking this creator's current session:
   // either a pending 'offline' row, or — the browser/WHIP go-live flow's
-  // only path — a row goLive() already flipped to 'live' moments earlier,
-  // before the WHIP publish actually landed. Without matching 'live' here
-  // too, that flow always falls through to the INSERT below and produces a
-  // second live row for the same stream.
+  // only path — a row goLive() already flipped to 'starting' moments
+  // earlier, before the WHIP publish actually landed. Without matching
+  // 'starting' (and 'live', for a row some other path already promoted)
+  // here too, that flow always falls through to the INSERT below and
+  // produces a second live row for the same stream.
+  //
+  // This writes 'starting', not 'live' — SRS's on_publish firing means the
+  // RTMP handshake completed, not that HLS has packaged anything playable
+  // yet. promoteStartingStreams() (below) is what actually flips this to
+  // 'live', once a real segment is confirmed to exist.
   const pending = await pool.query<{ id: string }>(
-    `SELECT id FROM streams WHERE creator_id = $1 AND status IN ('offline', 'live')
+    `SELECT id FROM streams WHERE creator_id = $1 AND status IN ('offline', 'starting', 'live')
      ORDER BY created_at DESC LIMIT 1`,
     [creatorId]
   );
 
   if (pending.rows[0]) {
     await pool.query(
-      `UPDATE streams SET status = 'live', playback_url = $1, started_at = now() WHERE id = $2`,
+      `UPDATE streams SET status = 'starting', playback_url = $1, started_at = now() WHERE id = $2`,
       [playbackUrl, pending.rows[0].id]
     );
     await logStreamEvent(pending.rows[0].id, "started");
@@ -946,7 +1184,7 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
     [providerStreamId]
   );
   if (recentlyEnded.rows[0]) {
-    await pool.query(`UPDATE streams SET status = 'live', playback_url = $1, ended_at = NULL WHERE id = $2`, [
+    await pool.query(`UPDATE streams SET status = 'starting', playback_url = $1, ended_at = NULL WHERE id = $2`, [
       playbackUrl,
       recentlyEnded.rows[0].id,
     ]);
@@ -962,7 +1200,7 @@ export async function markLiveByProviderStreamId(providerStreamId: string, provi
   const thumbnailUrl = defaults.category ? thumbnailPlaceholderUrl(defaults.category) : null;
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO streams (creator_id, title, category, language, thumbnail_url, playback_url, provider_stream_id, status, started_at)
-     VALUES ($1, 'Live Stream', $2, $3, $4, $5, $6, 'live', now())
+     VALUES ($1, 'Live Stream', $2, $3, $4, $5, $6, 'starting', now())
      RETURNING id`,
     [creatorId, defaults.category, defaults.language, thumbnailUrl, playbackUrl, providerStreamId]
   );
@@ -998,9 +1236,13 @@ export async function markEndedByProviderStreamId(providerStreamId: string, prov
     throw new AppError(401, "Invalid stream key");
   }
 
+  // Matches 'starting' too — an RTMP disconnect that happens before
+  // promoteStartingStreams() ever confirms real output (a creator who
+  // publishes then immediately drops) must still end the row, not leave
+  // it stuck in 'starting' until the sweep's own timeout catches it.
   const { rows } = await pool.query<{ id: string }>(
     `UPDATE streams SET status = 'ended', ended_at = now()
-     WHERE creator_id = $1 AND status = 'live'
+     WHERE creator_id = $1 AND status IN ('starting', 'live')
      RETURNING id`,
     [creatorId]
   );

@@ -15,6 +15,7 @@ import {
   getStreamById,
   getStreamDefaults,
   getStreamKey,
+  getStreamViewerCount,
   getViewerList,
   goLive,
   listLiveStreams,
@@ -139,6 +140,8 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get<{ Params: { id: string } }>("/:id/activity", async (req) => getStreamActivity(req.params.id));
+
+  app.get<{ Params: { id: string } }>("/:id/viewer-count", async (req) => getStreamViewerCount(req.params.id));
 
   app.get<{ Params: { id: string } }>("/:id/viewers", async (req) => getViewerList(req.params.id));
 

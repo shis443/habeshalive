@@ -5,7 +5,7 @@ import { purgeOldChatMessages } from "./chat/service.js";
 import { env } from "./common/env.js";
 import { captureUnexpectedError, initSentry } from "./common/sentry.js";
 import { sendScheduledGiftCards } from "./gift-cards/service.js";
-import { reapStaleStreams } from "./streams/service.js";
+import { promoteStartingStreams, reapStaleStreams } from "./streams/service.js";
 import { renewPlatformSubscriptions } from "./subscriptions/platform-service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
@@ -19,6 +19,13 @@ initSentry();
 const app = buildApp();
 
 const REAP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+// Much shorter than REAP_INTERVAL_MS on purpose — this directly gates how
+// long a viewer's player sits in "waiting" after a creator goes live (see
+// streams/service.ts's promoteStartingStreams()), unlike the reaper, which
+// only cleans up already-dead 'live' rows on its own schedule. Each run is
+// cheap: realistically a handful of concurrent 'starting' rows at most,
+// one manifest GET each.
+const PROMOTE_STARTING_INTERVAL_MS = 3 * 1000; // 3 seconds
 // "Daily" in spirit, not literally once per 24h from an arbitrary process
 // boot time (which would drift/stall across redeploys) — renewSubscriptions
 // is idempotent (only picks up rows whose expires_at has actually passed),
@@ -53,6 +60,15 @@ const ACCOUNT_DELETION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 function runReaper(): void {
   reapStaleStreams().catch((err) => {
     app.log.error(err, "reapStaleStreams failed");
+    captureUnexpectedError(err);
+  });
+}
+
+// Wrapped the same way as runReaper() above, same reasoning — this also
+// runs unattended on a timer.
+function runPromoteStarting(): void {
+  promoteStartingStreams().catch((err) => {
+    app.log.error(err, "promoteStartingStreams failed");
     captureUnexpectedError(err);
   });
 }
@@ -111,6 +127,8 @@ app
   .then(() => {
     runReaper();
     setInterval(runReaper, REAP_INTERVAL_MS);
+    runPromoteStarting();
+    setInterval(runPromoteStarting, PROMOTE_STARTING_INTERVAL_MS);
     runSubscriptionRenewal();
     setInterval(runSubscriptionRenewal, SUBSCRIPTION_RENEWAL_INTERVAL_MS);
     runPlatformSubscriptionRenewal();
