@@ -14,6 +14,11 @@ export function LiveStreamsList({ initialStreams }: { initialStreams: LiveStream
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Streams whose kill was recorded but NOT confirmed by the media server.
+  // Kept distinct from a plain error: the request is durable and a
+  // reconciler will retry it, so the honest label is "requested", not
+  // "failed" and certainly not "ended".
+  const [requested, setRequested] = useState<Set<string>>(new Set());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -37,7 +42,28 @@ export function LiveStreamsList({ initialStreams }: { initialStreams: LiveStream
         body: JSON.stringify({ reason: reason.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to end stream");
+      if (!res.ok) {
+        // 502 specifically means: recorded, publisher not confirmed dropped.
+        // The row deliberately stays in the list — the broadcast may still
+        // be running, and removing it would repeat the exact lie this fix
+        // exists to remove.
+        if (res.status === 502) {
+          setRequested((prev) => new Set(prev).add(id));
+          setConfirmId(null);
+          setReason("");
+          setError(
+            data.error ??
+              "Kill requested but not confirmed by the media server. The stream may still be broadcasting; it will be retried."
+          );
+          return;
+        }
+        throw new Error(data.error ?? "Failed to end stream");
+      }
+      setRequested((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       setStreams((prev) => prev.filter((s) => s.id !== id));
       setConfirmId(null);
       setReason("");
@@ -64,6 +90,11 @@ export function LiveStreamsList({ initialStreams }: { initialStreams: LiveStream
                   {stream.category ?? "Uncategorized"} · {stream.viewerCount} viewers
                   {stream.isSensitive ? " · Sensitive" : ""}
                 </span>
+                {requested.has(stream.id) && (
+                  <span className={liveStyles.requestedBadge}>
+                    End requested — not confirmed
+                  </span>
+                )}
               </div>
               <div className={styles.actions}>
                 <button

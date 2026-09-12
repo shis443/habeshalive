@@ -35,3 +35,20 @@
 .confirmButton:disabled {
   opacity: 0.5;
 }
+
+/* A kill that was recorded but not confirmed by the media server. Warning
+   colour, not error: the request is durable and will be retried — what is
+   unknown is whether the broadcast has actually stopped. */
+.requestedBadge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(180, 83, 9, 0.16);
+  color: var(--warning, #b45309);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
