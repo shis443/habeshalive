@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AdCampaignAdminItem,
   AdCreativeAdminItem,
@@ -9,14 +10,33 @@ import type {
   CreateAdCreativeInput,
   CreateAdvertiserInput,
   CreatorAdsSettings,
+  PrerollBreak,
+  PrerollSlot,
+  RecordAdCompletionInput,
   ServedAd,
+  ServedAdSlot,
   SubmitAdLeadInput,
 } from "@birq/shared";
 import { logAdminAction } from "../admin/audit.js";
-import { getAdConfig } from "../admin/config-service.js";
+import { getAdConfig, getPrerollConfig } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
+import { getSignedAdCreativeUrl, uploadObject } from "../common/object-storage.js";
+
+// A creative's assetUrl is either a literal external URL (the original,
+// still-supported "paste a URL" flow) or a bucket key produced by the new
+// upload endpoint below — never both, distinguished the same simple way
+// this codebase already tells apart a stored key from a URL for VODs
+// (stream_vods.playback_url): a real URL always has a scheme, a bucket
+// key never does. Only sign when it's actually a key — an admin who
+// pasted an already-hosted CDN URL should see that URL served back
+// unchanged, not routed through R2 signing for an object that was never
+// uploaded there.
+async function resolveAssetUrl(assetUrl: string): Promise<string> {
+  if (assetUrl.startsWith("http://") || assetUrl.startsWith("https://")) return assetUrl;
+  return getSignedAdCreativeUrl(assetUrl);
+}
 
 // --- Ad serving ---
 
@@ -108,7 +128,7 @@ export async function getAdForStream(
   return {
     impressionId: impressionRows[0]!.id,
     format: ad.format,
-    assetUrl: ad.asset_url,
+    assetUrl: await resolveAssetUrl(ad.asset_url),
     clickUrl: ad.click_url,
     durationSeconds: ad.duration_seconds,
     advertiserName: ad.advertiser_name,
@@ -190,17 +210,149 @@ export async function getSponsoredCard(
   return {
     impressionId: impressionRows[0]!.id,
     format: ad.format,
-    assetUrl: ad.asset_url,
+    assetUrl: await resolveAssetUrl(ad.asset_url),
     clickUrl: ad.click_url,
     durationSeconds: ad.duration_seconds,
     advertiserName: ad.advertiser_name,
   };
 }
 
+// The two-slot video pre-roll. Skip behavior lives entirely here, keyed
+// off which slot a creative is served for — never on the creative or
+// campaign itself (see 0063_preroll_ad_slots.sql's own comment). slot1 is
+// mandatory (skippableAfterSeconds: null); if no eligible slot1 creative
+// exists, the whole break is skipped (no point showing a lone skippable
+// ad with no mandatory one) — {slot1: null, slot2: null} tells the
+// client to go straight to the real stream. slot2 may independently be
+// null (a one-ad break) if no distinct second creative is eligible.
+export async function getPrerollBreak(streamId: string, viewerId: string | null): Promise<PrerollBreak> {
+  const streamResult = await pool.query<{
+    category: string | null;
+    language: string | null;
+    peak_viewers: number;
+    creator_id: string;
+    ads_enabled: boolean;
+  }>(
+    `SELECT s.category, s.language, s.peak_viewers, s.creator_id, cp.ads_enabled
+     FROM streams s JOIN creator_profiles cp ON cp.user_id = s.creator_id
+     WHERE s.id = $1`,
+    [streamId]
+  );
+  const streamRow = streamResult.rows[0];
+  const none: PrerollBreak = { slot1: null, slot2: null };
+  if (!streamRow || !streamRow.ads_enabled) return none;
+  // Reassigned to a variable TS can prove is always defined inside the
+  // nested closures below — narrowing on `streamRow` above doesn't
+  // persist into a function declaration's body.
+  const stream = streamRow;
+
+  if (viewerId) {
+    const subResult = await pool.query(
+      `SELECT 1 FROM subscriptions WHERE subscriber_id = $1 AND creator_id = $2 AND status = 'active'`,
+      [viewerId, stream.creator_id]
+    );
+    if (subResult.rows[0]) return none;
+
+    const platformSubResult = await pool.query(
+      `SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1 AND status = 'active'`,
+      [viewerId]
+    );
+    if (platformSubResult.rows[0]) return none;
+  }
+
+  const { frequencyCapPerHour } = await getAdConfig();
+  const { slot1DurationSeconds, slot2SkipAfterSeconds } = await getPrerollConfig();
+
+  interface EligibleCreative {
+    id: string;
+    asset_url: string;
+    click_url: string | null;
+    duration_seconds: number | null;
+    advertiser_name: string;
+  }
+
+  // Same eligibility shape as getAdForStream's own query, scoped to
+  // format='preroll' and a specific slot, with excludeIds keeping slot2
+  // from picking the exact same creative slot1 already got.
+  async function pickEligible(slot: PrerollSlot, excludeIds: string[]): Promise<EligibleCreative | null> {
+    const { rows } = await pool.query<EligibleCreative>(
+      `SELECT ac.id, ac.asset_url, ac.click_url, ac.duration_seconds, adv.name AS advertiser_name
+       FROM ad_creatives ac
+       JOIN ad_campaigns camp ON camp.id = ac.campaign_id
+       JOIN advertisers adv ON adv.id = camp.advertiser_id
+       LEFT JOIN ad_targeting t ON t.campaign_id = camp.id
+       WHERE ac.approved = TRUE
+         AND ac.format = 'preroll'
+         AND ac.preroll_slot = $1
+         AND ac.id != ALL($2::uuid[])
+         AND camp.status = 'active'
+         AND camp.starts_at <= now() AND camp.ends_at >= now()
+         AND camp.spent_santim < camp.budget_santim
+         AND adv.status = 'active'
+         AND (t.category IS NULL OR t.category = $3)
+         AND (t.language IS NULL OR t.language = $4)
+         AND (t.min_viewers IS NULL OR t.min_viewers <= $5)
+         AND (
+           $6::uuid IS NULL OR ac.id NOT IN (
+             SELECT creative_id FROM ad_impressions
+             WHERE viewer_id = $6 AND served_at > now() - interval '1 hour'
+             GROUP BY creative_id HAVING count(*) >= $7
+           )
+         )
+       ORDER BY random()
+       LIMIT 1`,
+      [slot, excludeIds, stream.category, stream.language, stream.peak_viewers, viewerId, frequencyCapPerHour]
+    );
+    return rows[0] ?? null;
+  }
+
+  const slot1Creative = await pickEligible("slot1", []);
+  if (!slot1Creative) return none;
+
+  const slot2Creative = await pickEligible("slot2", [slot1Creative.id]);
+
+  async function serve(creative: EligibleCreative, skippableAfterSeconds: number | null): Promise<ServedAdSlot> {
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO ad_impressions (creative_id, stream_id, creator_id, viewer_id) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [creative.id, streamId, stream.creator_id, viewerId]
+    );
+    return {
+      impressionId: rows[0]!.id,
+      format: "preroll",
+      assetUrl: await resolveAssetUrl(creative.asset_url),
+      clickUrl: creative.click_url,
+      durationSeconds: creative.duration_seconds,
+      advertiserName: creative.advertiser_name,
+      skippableAfterSeconds,
+    };
+  }
+
+  const slot1 = await serve(slot1Creative, null);
+  const slot2 = slot2Creative ? await serve(slot2Creative, slot2SkipAfterSeconds) : null;
+  // slot1DurationSeconds isn't threaded into the response — slot1's
+  // creative was already validated at creation time (createAdCreative
+  // below) to have duration_seconds exactly equal to this config value,
+  // so the served slot's own durationSeconds field is already correct.
+
+  return { slot1, slot2 };
+}
+
 export async function recordAdClick(impressionId: string): Promise<void> {
   const { rows } = await pool.query(`SELECT 1 FROM ad_impressions WHERE id = $1`, [impressionId]);
   if (!rows[0]) throw new AppError(404, "Impression not found");
   await pool.query(`INSERT INTO ad_clicks (impression_id) VALUES ($1)`, [impressionId]);
+}
+
+// Called by the pre-roll player on a slot's natural end OR a skip — real
+// completion/skip tracking for advertiser reporting (getAdCreatives'
+// completionRate/skipRate below), from data the player already knows
+// without any new client-side instrumentation.
+export async function recordAdCompletion(impressionId: string, input: RecordAdCompletionInput): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE ad_impressions SET completed_seconds = $1, skipped = $2 WHERE id = $3`,
+    [input.completedSeconds, input.skipped, impressionId]
+  );
+  if (!rowCount) throw new AppError(404, "Impression not found");
 }
 
 // Periodic batch settlement (same "reaper" pattern as server.ts's
@@ -461,6 +613,7 @@ export async function listAdCampaigns(): Promise<AdCampaignAdminItem[]> {
     creativeCount: Number(row.creative_count),
     impressionCount: Number(row.impression_count),
     clickCount: Number(row.click_count),
+    clickThroughRate: Number(row.impression_count) > 0 ? Number(row.click_count) / Number(row.impression_count) : null,
     createdAt: row.created_at,
   }));
 }
@@ -486,6 +639,21 @@ export async function updateAdCampaignStatus(
 }
 
 export async function createAdCreative(adminId: string, input: CreateAdCreativeInput): Promise<AdCreativeAdminItem> {
+  if (input.format === "preroll" && input.prerollSlot) {
+    const { slot1DurationSeconds, slot2SkipAfterSeconds } = await getPrerollConfig();
+    if (input.prerollSlot === "slot1" && input.durationSeconds !== slot1DurationSeconds) {
+      throw new AppError(
+        400,
+        `Slot 1 creatives must be exactly ${slot1DurationSeconds}s long (this platform's configured mandatory pre-roll length)`
+      );
+    }
+    if (input.prerollSlot === "slot2" && input.durationSeconds! < slot2SkipAfterSeconds) {
+      throw new AppError(
+        400,
+        `Slot 2 creatives must be at least ${slot2SkipAfterSeconds}s long so the skip button has time to appear`
+      );
+    }
+  }
   const { rows } = await pool.query<{
     id: string;
     campaign_id: string;
@@ -493,13 +661,21 @@ export async function createAdCreative(adminId: string, input: CreateAdCreativeI
     asset_url: string;
     click_url: string | null;
     duration_seconds: number | null;
+    preroll_slot: PrerollSlot | null;
     approved: boolean;
     created_at: string;
   }>(
-    `INSERT INTO ad_creatives (campaign_id, format, asset_url, click_url, duration_seconds)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, campaign_id, format, asset_url, click_url, duration_seconds, approved, created_at`,
-    [input.campaignId, input.format, input.assetUrl, input.clickUrl ?? null, input.durationSeconds ?? null]
+    `INSERT INTO ad_creatives (campaign_id, format, asset_url, click_url, duration_seconds, preroll_slot)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, campaign_id, format, asset_url, click_url, duration_seconds, preroll_slot, approved, created_at`,
+    [
+      input.campaignId,
+      input.format,
+      input.assetUrl,
+      input.clickUrl ?? null,
+      input.durationSeconds ?? null,
+      input.prerollSlot ?? null,
+    ]
   );
   const row = rows[0]!;
   await logAdminAction(adminId, "ad_creative.create", "ad_creative", row.id);
@@ -510,7 +686,12 @@ export async function createAdCreative(adminId: string, input: CreateAdCreativeI
     assetUrl: row.asset_url,
     clickUrl: row.click_url,
     durationSeconds: row.duration_seconds,
+    prerollSlot: row.preroll_slot,
     approved: row.approved,
+    impressionCount: 0,
+    clickCount: 0,
+    completionRate: null,
+    skipRate: null,
     createdAt: row.created_at,
   };
 }
@@ -523,23 +704,45 @@ export async function listAdCreatives(campaignId: string): Promise<AdCreativeAdm
     asset_url: string;
     click_url: string | null;
     duration_seconds: number | null;
+    preroll_slot: PrerollSlot | null;
     approved: boolean;
     created_at: string;
+    impression_count: string;
+    click_count: string;
+    completed_count: string;
+    skipped_count: string;
   }>(
-    `SELECT id, campaign_id, format, asset_url, click_url, duration_seconds, approved, created_at
-     FROM ad_creatives WHERE campaign_id = $1 ORDER BY created_at DESC`,
+    `SELECT ac.id, ac.campaign_id, ac.format, ac.asset_url, ac.click_url, ac.duration_seconds, ac.preroll_slot,
+            ac.approved, ac.created_at,
+            (SELECT count(*) FROM ad_impressions ai WHERE ai.creative_id = ac.id) AS impression_count,
+            (SELECT count(*) FROM ad_clicks cl JOIN ad_impressions ai ON ai.id = cl.impression_id WHERE ai.creative_id = ac.id) AS click_count,
+            (SELECT count(*) FROM ad_impressions ai WHERE ai.creative_id = ac.id AND ai.completed_seconds IS NOT NULL AND ai.skipped = FALSE) AS completed_count,
+            (SELECT count(*) FROM ad_impressions ai WHERE ai.creative_id = ac.id AND ai.skipped = TRUE) AS skipped_count
+     FROM ad_creatives ac WHERE ac.campaign_id = $1 ORDER BY ac.created_at DESC`,
     [campaignId]
   );
-  return rows.map((row) => ({
-    id: row.id,
-    campaignId: row.campaign_id,
-    format: row.format,
-    assetUrl: row.asset_url,
-    clickUrl: row.click_url,
-    durationSeconds: row.duration_seconds,
-    approved: row.approved,
-    createdAt: row.created_at,
-  }));
+  return Promise.all(
+    rows.map(async (row) => {
+      const impressionCount = Number(row.impression_count);
+      return {
+        id: row.id,
+        campaignId: row.campaign_id,
+        format: row.format,
+        // Signed here (not the raw stored key) so the admin's "ad skin"
+        // preview can actually play the uploaded video, same as a viewer's.
+        assetUrl: await resolveAssetUrl(row.asset_url),
+        clickUrl: row.click_url,
+        durationSeconds: row.duration_seconds,
+        prerollSlot: row.preroll_slot,
+        approved: row.approved,
+        impressionCount,
+        clickCount: Number(row.click_count),
+        completionRate: impressionCount > 0 ? Number(row.completed_count) / impressionCount : null,
+        skipRate: impressionCount > 0 ? Number(row.skipped_count) / impressionCount : null,
+        createdAt: row.created_at,
+      };
+    })
+  );
 }
 
 // No creative serves before approval — enforced by getAdForStream()'s own
@@ -548,6 +751,23 @@ export async function approveAdCreative(adminId: string, creativeId: string): Pr
   const { rowCount } = await pool.query(`UPDATE ad_creatives SET approved = TRUE WHERE id = $1`, [creativeId]);
   if (!rowCount) throw new AppError(404, "Creative not found");
   await logAdminAction(adminId, "ad_creative.approve", "ad_creative", creativeId);
+}
+
+// Matches kyc/service.ts's MAX_DOCUMENT_BYTES pattern: the multipart
+// plugin's app.ts-level fileSize is a generic outer safety net, this is
+// the route-specific limit with a clear, specific error message. Higher
+// than KYC's 10MB since a real 30-60s video ad creative needs the room
+// (app.ts's global cap was raised to 50MB for exactly this).
+const MAX_AD_CREATIVE_ASSET_BYTES = 40 * 1024 * 1024;
+
+export async function uploadAdCreativeAsset(fileBuffer: Buffer, contentType: string): Promise<{ storageKey: string }> {
+  if (fileBuffer.byteLength > MAX_AD_CREATIVE_ASSET_BYTES) {
+    throw new AppError(400, "File is too large (max 40MB).");
+  }
+  const extension = contentType.split("/")[1] ?? "bin";
+  const key = `ads/${randomUUID()}.${extension}`;
+  await uploadObject(key, fileBuffer, contentType);
+  return { storageKey: key };
 }
 
 export async function listAdLeads(): Promise<AdLeadAdminItem[]> {

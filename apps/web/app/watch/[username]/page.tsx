@@ -15,6 +15,7 @@ import { SquadGrid } from "@/components/SquadGrid";
 import { StreamMeta } from "@/components/StreamMeta";
 import { TopNav } from "@/components/TopNav";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { WatchPlayerGate } from "@/components/WatchPlayerGate";
 import {
   getClipsForUsername,
   getCreatorProfile,
@@ -23,6 +24,7 @@ import {
   getGiftTiers,
   getLiveStreamByUsername,
   getLiveStreams,
+  getPrerollBreak,
   getServedAd,
   getSquadForUsername,
   getStreamActivity,
@@ -101,13 +103,14 @@ export default async function WatchPage({
     );
   }
 
-  const [giftTiers, tiers, activity, followStatus, displayAd, squad] = await Promise.all([
+  const [giftTiers, tiers, activity, followStatus, displayAd, squad, prerollBreak] = await Promise.all([
     getGiftTiers(),
     getSubscriptionTiers(),
     getStreamActivity(stream.id),
     getFollowStatus(stream.creator.id),
     getServedAd(stream.id, "display_banner"),
     getSquadForUsername(username),
+    getPrerollBreak(stream.id),
   ]);
   // Only worth a grid at 2+ currently-live members — a "squad" of one
   // (everyone else ended their stream) is just the normal single player.
@@ -124,7 +127,9 @@ export default async function WatchPage({
           ) : showSquadGrid ? (
             <SquadGrid squad={squad} />
           ) : (
-            <VideoPlayer src={stream.playbackUrl} streamId={stream.id} aspectRatio={stream.aspectRatio} />
+            <WatchPlayerGate prerollBreak={prerollBreak}>
+              <VideoPlayer src={stream.playbackUrl} streamId={stream.id} aspectRatio={stream.aspectRatio} />
+            </WatchPlayerGate>
           )}
           <div className={styles.body}>
             <AdDisplayBanner ad={displayAd} />

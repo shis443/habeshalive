@@ -35,6 +35,7 @@ import {
   listAdvertisers,
   updateAdCampaignStatus,
   updateAdLeadStatus,
+  uploadAdCreativeAsset,
 } from "../ads/service.js";
 import {
   cancelGiftCard,
@@ -43,6 +44,7 @@ import {
 } from "../gift-cards/service.js";
 import { createAnnouncement, deactivateAnnouncement, listAnnouncementsAdmin } from "../announcements/service.js";
 import { createCategory, listCategoriesAdmin, updateCategory } from "../categories/service.js";
+import { AppError } from "../common/errors.js";
 import { listTagsAdmin, mergeTags, setTagBanned } from "../streams/tags-service.js";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
@@ -523,6 +525,19 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/ad-creatives", { preHandler: app.requireAdmin }, async (req) => {
     const input = createAdCreativeSchema.parse(req.body);
     return createAdCreative(req.user.sub, input);
+  });
+
+  // Two-step flow: upload the file first (this route, returns a bucket
+  // key as assetUrl), then submit the rest of the creative's metadata via
+  // POST /ad-creatives above using that key. Mirrors avatars/routes.ts's
+  // /photo and kyc/routes.ts's document upload — req.file() buffers the
+  // multipart body Fastify-side, nothing streamed direct-to-client.
+  app.post("/ad-creatives/upload", { preHandler: app.requireAdmin }, async (req) => {
+    const file = await req.file();
+    if (!file) throw new AppError(400, "No file uploaded");
+    const buffer = await file.toBuffer();
+    const { storageKey } = await uploadAdCreativeAsset(buffer, file.mimetype);
+    return { assetUrl: storageKey };
   });
 
   app.post<{ Params: { id: string } }>(

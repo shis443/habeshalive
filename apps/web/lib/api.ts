@@ -61,6 +61,7 @@ import {
   platformSubscriptionSchema,
   platformWalletSummarySchema,
   pointsBalanceSchema,
+  prerollBreakSchema,
   publicClipSchema,
   publicVodSchema,
   reportSchema,
@@ -143,6 +144,7 @@ import {
   type PlatformConfig,
   type PlatformSubscription,
   type PlatformWalletSummary,
+  type PrerollBreak,
   type PublicClip,
   type PublicVod,
   type Report,
@@ -985,6 +987,12 @@ export async function getSponsoredCard(category?: string, language?: string): Pr
   if (!res.ok) return null;
   const body = await unwrapData(res);
   return body ? servedAdSchema.parse(body) : null;
+}
+
+export async function getPrerollBreak(streamId: string): Promise<PrerollBreak> {
+  const res = await fetchAuthed(`/ads/preroll-break?streamId=${streamId}`);
+  if (!res.ok) return { slot1: null, slot2: null };
+  return prerollBreakSchema.parse(await unwrapData(res));
 }
 
 export async function getCreatorAdsSettings(): Promise<CreatorAdsSettings | null> {

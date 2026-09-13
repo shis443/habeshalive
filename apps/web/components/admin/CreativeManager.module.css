@@ -1,0 +1,49 @@
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.fileLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px dashed var(--outline-variant);
+  background: var(--surface-container-high);
+  color: var(--on-background);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.orLabel {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.previewWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  max-width: 360px;
+}
+
+.hiddenProbe {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}

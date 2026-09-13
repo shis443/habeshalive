@@ -1,10 +1,17 @@
-import { adFormatSchema, submitAdLeadSchema, updateCreatorAdsSettingsSchema } from "@birq/shared";
+import {
+  adFormatSchema,
+  recordAdCompletionSchema,
+  submitAdLeadSchema,
+  updateCreatorAdsSettingsSchema,
+} from "@birq/shared";
 import type { FastifyPluginAsync } from "fastify";
 import {
   getAdForStream,
   getCreatorAdsSettings,
+  getPrerollBreak,
   getSponsoredCard,
   recordAdClick,
+  recordAdCompletion,
   submitAdLead,
   updateCreatorAdsSettings,
 } from "./service.js";
@@ -53,6 +60,26 @@ export const adRoutes: FastifyPluginAsync = async (app) => {
     { config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler" } } },
     async (req) => {
       await recordAdClick(req.params.impressionId);
+      return { ok: true };
+    }
+  );
+
+  // One round trip for both slots — see getPrerollBreak's own comments
+  // for the eligibility/exemption rules, identical to /serve above.
+  app.get<{ Querystring: { streamId: string } }>(
+    "/preroll-break",
+    { preHandler: app.tryAuthenticate },
+    async (req) => getPrerollBreak(req.query.streamId, req.user?.sub ?? null)
+  );
+
+  // Fired once per served slot, on natural end or skip — same rate-limit
+  // shape as /click since it's the same one-event-per-impression case.
+  app.post<{ Params: { impressionId: string } }>(
+    "/:impressionId/complete",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler" } } },
+    async (req) => {
+      const input = recordAdCompletionSchema.parse(req.body);
+      await recordAdCompletion(req.params.impressionId, input);
       return { ok: true };
     }
   );

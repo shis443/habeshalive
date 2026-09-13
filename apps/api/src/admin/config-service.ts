@@ -12,6 +12,8 @@ interface ConfigRow {
   approved_creator_cap: number;
   ad_revenue_share_bps: number;
   ad_frequency_cap_per_hour: number;
+  preroll_slot1_duration_seconds: number;
+  preroll_slot2_skip_after_seconds: number;
   gift_card_expiry_months: number;
   kyc_required_for_payouts: boolean;
   updated_at: string;
@@ -22,7 +24,8 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
   const { rows } = await pool.query<ConfigRow>(
     `SELECT pc.boost_price_santim, pc.boost_duration_ms, pc.default_revenue_share_bps,
             pc.payout_manual_review_threshold_santim, pc.vod_retention_days_default, pc.vod_retention_days_anchor,
-            pc.approved_creator_cap, pc.ad_revenue_share_bps, pc.ad_frequency_cap_per_hour, pc.gift_card_expiry_months,
+            pc.approved_creator_cap, pc.ad_revenue_share_bps, pc.ad_frequency_cap_per_hour,
+            pc.preroll_slot1_duration_seconds, pc.preroll_slot2_skip_after_seconds, pc.gift_card_expiry_months,
             pc.kyc_required_for_payouts, pc.updated_at, u.username AS updated_by_username
      FROM platform_config pc
      LEFT JOIN users u ON u.id = pc.updated_by
@@ -39,6 +42,8 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
     approvedCreatorCap: row.approved_creator_cap,
     adRevenueShareBps: row.ad_revenue_share_bps,
     adFrequencyCapPerHour: row.ad_frequency_cap_per_hour,
+    prerollSlot1DurationSeconds: row.preroll_slot1_duration_seconds,
+    prerollSlot2SkipAfterSeconds: row.preroll_slot2_skip_after_seconds,
     giftCardExpiryMonths: row.gift_card_expiry_months,
     kycRequiredForPayouts: row.kyc_required_for_payouts,
     updatedAt: row.updated_at,
@@ -89,6 +94,18 @@ export async function getAdConfig(): Promise<{ revenueShareBps: number; frequenc
   return { revenueShareBps: rows[0]!.ad_revenue_share_bps, frequencyCapPerHour: rows[0]!.ad_frequency_cap_per_hour };
 }
 
+// Read fresh by ads/service.ts's getPrerollBreak on every watch-page load.
+export async function getPrerollConfig(): Promise<{ slot1DurationSeconds: number; slot2SkipAfterSeconds: number }> {
+  const { rows } = await pool.query<{
+    preroll_slot1_duration_seconds: number;
+    preroll_slot2_skip_after_seconds: number;
+  }>(`SELECT preroll_slot1_duration_seconds, preroll_slot2_skip_after_seconds FROM platform_config WHERE id = TRUE`);
+  return {
+    slot1DurationSeconds: rows[0]!.preroll_slot1_duration_seconds,
+    slot2SkipAfterSeconds: rows[0]!.preroll_slot2_skip_after_seconds,
+  };
+}
+
 // Read fresh by gift-cards/service.ts on every purchase.
 export async function getGiftCardExpiryMonths(): Promise<number> {
   const { rows } = await pool.query<{ gift_card_expiry_months: number }>(
@@ -118,9 +135,11 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
        approved_creator_cap = $7,
        ad_revenue_share_bps = $8,
        ad_frequency_cap_per_hour = $9,
-       gift_card_expiry_months = $10,
-       kyc_required_for_payouts = $11,
-       updated_at = now(), updated_by = $12
+       preroll_slot1_duration_seconds = $10,
+       preroll_slot2_skip_after_seconds = $11,
+       gift_card_expiry_months = $12,
+       kyc_required_for_payouts = $13,
+       updated_at = now(), updated_by = $14
      WHERE id = TRUE`,
     [
       input.boostPriceSantim,
@@ -132,6 +151,8 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
       input.approvedCreatorCap,
       input.adRevenueShareBps,
       input.adFrequencyCapPerHour,
+      input.prerollSlot1DurationSeconds,
+      input.prerollSlot2SkipAfterSeconds,
       input.giftCardExpiryMonths,
       input.kycRequiredForPayouts,
       adminId,

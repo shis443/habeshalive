@@ -276,6 +276,12 @@ export const platformConfigSchema = z.object({
   approvedCreatorCap: z.number().int(),
   adRevenueShareBps: z.number().int(),
   adFrequencyCapPerHour: z.number().int(),
+  // T7-follow-on: the two-slot video pre-roll's rules — slot1 is always
+  // mandatory/unskippable and must exactly match this duration; slot2 is
+  // always skippable after this many seconds of its own playback. See
+  // db/migrations/0063_preroll_ad_slots.sql.
+  prerollSlot1DurationSeconds: z.number().int(),
+  prerollSlot2SkipAfterSeconds: z.number().int(),
   giftCardExpiryMonths: z.number().int(),
   // Module 1.4 — see kyc/service.ts. Defaults false at the DB level
   // (0032_kyc.sql); an admin opts in from Admin Settings once the review
@@ -297,6 +303,8 @@ export const updatePlatformConfigSchema = z.object({
   approvedCreatorCap: z.number().int().positive(),
   adRevenueShareBps: z.number().int().min(0).max(10000),
   adFrequencyCapPerHour: z.number().int().positive(),
+  prerollSlot1DurationSeconds: z.number().int().positive(),
+  prerollSlot2SkipAfterSeconds: z.number().int().positive(),
   giftCardExpiryMonths: z.number().int().positive(),
   kycRequiredForPayouts: z.boolean(),
 });

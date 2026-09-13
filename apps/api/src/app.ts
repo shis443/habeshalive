@@ -66,13 +66,15 @@ export function buildApp() {
   // through the /api/backend/* same-origin proxy).
   app.register(cors, { origin: [env.WEB_PUBLIC_URL] });
   app.register(jwt, { secret: env.JWT_SECRET });
-  // KYC document uploads (kyc/routes.ts) are the one route in this API
-  // that takes a file — 10MB cap matches kyc/service.ts's own
-  // MAX_DOCUMENT_BYTES check (this is the hard stop that rejects an
-  // oversized upload before it's fully buffered in memory; the service
-  // layer's check is what makes the resulting AppError message clean and
-  // consistent instead of a raw multipart-plugin error).
-  app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  // The outer safety net for every route that takes a file — this is the
+  // hard stop that rejects an oversized upload before it's fully
+  // buffered in memory. Each route's own service layer still enforces
+  // its own, tighter limit on top of this (kyc/service.ts's
+  // MAX_DOCUMENT_BYTES, ads/service.ts's MAX_AD_CREATIVE_ASSET_BYTES) —
+  // that's what makes the resulting AppError message clean and specific
+  // instead of a raw multipart-plugin error. 50MB (raised from a 10MB
+  // KYC-only cap) to fit a real 30-60s video ad creative.
+  app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   // remote-control/relay.ts's WS bridge — must be registered before that
   // route is, same as every other Fastify plugin ordering constraint here.
   app.register(websocket);

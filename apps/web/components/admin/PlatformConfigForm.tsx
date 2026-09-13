@@ -20,6 +20,12 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   const [approvedCreatorCap, setApprovedCreatorCap] = useState(config ? String(config.approvedCreatorCap) : "");
   const [adRevenueSharePct, setAdRevenueSharePct] = useState(config ? String(config.adRevenueShareBps / 100) : "");
   const [adFrequencyCap, setAdFrequencyCap] = useState(config ? String(config.adFrequencyCapPerHour) : "");
+  const [prerollSlot1Seconds, setPrerollSlot1Seconds] = useState(
+    config ? String(config.prerollSlot1DurationSeconds) : ""
+  );
+  const [prerollSlot2SkipSeconds, setPrerollSlot2SkipSeconds] = useState(
+    config ? String(config.prerollSlot2SkipAfterSeconds) : ""
+  );
   const [giftCardExpiryMonths, setGiftCardExpiryMonths] = useState(config ? String(config.giftCardExpiryMonths) : "");
   const [kycRequiredForPayouts, setKycRequiredForPayouts] = useState(config?.kycRequiredForPayouts ?? false);
   const [submitting, setSubmitting] = useState(false);
@@ -42,6 +48,8 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           approvedCreatorCap: Math.round(parseFloat(approvedCreatorCap || "0")),
           adRevenueShareBps: Math.round(parseFloat(adRevenueSharePct || "0") * 100),
           adFrequencyCapPerHour: Math.round(parseFloat(adFrequencyCap || "0")),
+          prerollSlot1DurationSeconds: Math.round(parseFloat(prerollSlot1Seconds || "0")),
+          prerollSlot2SkipAfterSeconds: Math.round(parseFloat(prerollSlot2SkipSeconds || "0")),
           giftCardExpiryMonths: Math.round(parseFloat(giftCardExpiryMonths || "0")),
           kycRequiredForPayouts,
         }),
@@ -153,6 +161,24 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
         className={filterStyles.input}
         value={adFrequencyCap}
         onChange={(e) => setAdFrequencyCap(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>Pre-roll slot 1 — mandatory ad duration (seconds)</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={prerollSlot1Seconds}
+        onChange={(e) => setPrerollSlot1Seconds(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>Pre-roll slot 2 — skippable after (seconds)</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={prerollSlot2SkipSeconds}
+        onChange={(e) => setPrerollSlot2SkipSeconds(e.target.value)}
       />
 
       <label className={formStyles.fieldLabel}>Gift card expiry (months)</label>

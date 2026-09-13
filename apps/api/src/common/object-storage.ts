@@ -56,6 +56,24 @@ export async function getSignedVodUrl(key: string): Promise<string> {
   return getSignedUrl(getClient(), command, { expiresIn: VOD_URL_TTL_SECONDS });
 }
 
+// Ad creatives sit somewhere between VODs and avatars: served to MANY
+// viewers over a campaign's whole lifetime (like an avatar), but large
+// enough (a real 30s video, not a small image) that buffering the whole
+// file into process memory per request the way getObjectBuffer does for
+// avatars would be a real problem at any scale. A fresh short-lived
+// signed URL fits naturally here since getPrerollBreak/getAdForStream
+// already do a real DB round-trip on every single serve anyway — this
+// just piggybacks a signature onto that same per-serve cost. Much
+// shorter than a VOD's TTL: this only needs to outlive one ad's actual
+// playback (worst case a slow connection retrying), not a whole viewing
+// session.
+const AD_CREATIVE_URL_TTL_SECONDS = 10 * 60;
+
+export async function getSignedAdCreativeUrl(key: string): Promise<string> {
+  const command = new GetObjectCommand({ Bucket: env.VOD_S3_BUCKET, Key: key });
+  return getSignedUrl(getClient(), command, { expiresIn: AD_CREATIVE_URL_TTL_SECONDS });
+}
+
 // Module 5 — avatar photos (avatars/service.ts) are proxied through this
 // app's own stable /avatars/photo/:userId path rather than a signed URL:
 // unlike a VOD (fetched once per page load and held for the life of that
