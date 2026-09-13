@@ -2,13 +2,15 @@ import { LedgerLookup } from "@/components/admin/LedgerLookup";
 import { LedgerReconciliationCard } from "@/components/admin/LedgerReconciliation";
 import { ManualAdjustmentForm } from "@/components/admin/ManualAdjustmentForm";
 import { PlatformWalletSummaryCard } from "@/components/admin/PlatformWalletSummaryCard";
-import { getLedgerReconciliation, getPlatformWalletSummary } from "@/lib/api";
+import { TrialBalanceCard } from "@/components/admin/TrialBalanceCard";
+import { getLedgerReconciliation, getPlatformWalletSummary, getTrialBalance } from "@/lib/api";
 import styles from "../page.module.css";
 
 export default async function AdminLedgerPage() {
-  const [reconciliation, walletSummary] = await Promise.all([
+  const [reconciliation, walletSummary, trialBalance] = await Promise.all([
     getLedgerReconciliation(),
     getPlatformWalletSummary(),
+    getTrialBalance(),
   ]);
 
   return (
@@ -17,6 +19,9 @@ export default async function AdminLedgerPage() {
 
       <h2 className={styles.sectionTitle}>Reconciliation check</h2>
       <LedgerReconciliationCard data={reconciliation} />
+
+      <h2 className={`${styles.sectionTitle} ${styles.sectionTitleSpaced}`}>Trial balance (payouts)</h2>
+      <TrialBalanceCard data={trialBalance} />
 
       <h2 className={styles.sectionTitle}>Platform wallet balance</h2>
       <div className={styles.section}>

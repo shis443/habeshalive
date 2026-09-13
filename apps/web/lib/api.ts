@@ -28,6 +28,7 @@ import {
   creatorProfileSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
+  eligibleCreatorSchema,
   followedCreatorSchema,
   followerListItemSchema,
   followStatusSchema,
@@ -51,7 +52,10 @@ import {
   mySubscriptionSchema,
   notificationPreferencesSchema,
   notificationSchema,
+  payoutBatchSchema,
   payoutHistoryItemSchema,
+  payoutInstrumentAdminItemSchema,
+  payoutInstrumentSchema,
   payoutQueueItemSchema,
   platformConfigSchema,
   platformSubscriptionSchema,
@@ -71,8 +75,10 @@ import {
   streamTagAdminItemSchema,
   subscriptionAdminItemSchema,
   subscriptionTierSchema,
+  taxProfileSchema,
   totpStatusSchema,
   transactionSchema,
+  trialBalanceSchema,
   unreadCountSchema,
   userListItemSchema,
   userRankSchema,
@@ -107,6 +113,7 @@ import {
   type CreatorProfile,
   type CreatorStats,
   type EarningsThisMonth,
+  type EligibleCreatorForBatch,
   type FollowedCreator,
   type FollowerListItem,
   type FollowStatus,
@@ -128,7 +135,10 @@ import {
   type MySubscription,
   type Notification,
   type NotificationPreferences,
+  type PayoutBatch,
   type PayoutHistoryItem,
+  type PayoutInstrument,
+  type PayoutInstrumentAdminItem,
   type PayoutQueueItem,
   type PlatformConfig,
   type PlatformSubscription,
@@ -147,7 +157,9 @@ import {
   type StreamTagAdminItem,
   type SubscriptionAdminItem,
   type SubscriptionTier,
+  type TaxProfile,
   type Transaction,
+  type TrialBalance,
   type UserListItem,
   type UserRank,
   type Vod,
@@ -717,6 +729,72 @@ export async function getPlatformWalletSummary(): Promise<PlatformWalletSummary 
     return null;
   }
   return platformWalletSummarySchema.parse(await unwrapData(res));
+}
+
+// T7 — the cache-vs-ledger-derived drift check, not a sum-to-zero one (see
+// admin/ledger-service.ts's getTrialBalance comment for why).
+export async function getTrialBalance(): Promise<TrialBalance | null> {
+  const res = await fetchAuthed("/admin/ledger/trial-balance");
+  if (!res.ok) {
+    console.error(`Failed to load trial balance (${res.status})`);
+    return null;
+  }
+  return trialBalanceSchema.parse(await unwrapData(res));
+}
+
+export async function getMyPayoutInstruments(): Promise<PayoutInstrument[]> {
+  const res = await fetchAuthed("/wallet/payout-instruments");
+  if (!res.ok) {
+    console.error(`Failed to load payout instruments (${res.status})`);
+    return [];
+  }
+  return payoutInstrumentSchema.array().parse(await unwrapData(res));
+}
+
+export async function getPendingPayoutInstruments(): Promise<PayoutInstrumentAdminItem[]> {
+  const res = await fetchAuthed("/admin/payout-instruments/pending");
+  if (!res.ok) {
+    console.error(`Failed to load pending payout instruments (${res.status})`);
+    return [];
+  }
+  return payoutInstrumentAdminItemSchema.array().parse(await unwrapData(res));
+}
+
+export async function getMyTaxProfile(): Promise<TaxProfile | null> {
+  const res = await fetchAuthed("/wallet/tax-profile");
+  if (!res.ok) {
+    console.error(`Failed to load tax profile (${res.status})`);
+    return null;
+  }
+  const data = await unwrapData(res);
+  return data ? taxProfileSchema.parse(data) : null;
+}
+
+export async function getPendingTaxProfiles(): Promise<TaxProfile[]> {
+  const res = await fetchAuthed("/admin/tax-profiles/pending");
+  if (!res.ok) {
+    console.error(`Failed to load pending tax profiles (${res.status})`);
+    return [];
+  }
+  return taxProfileSchema.array().parse(await unwrapData(res));
+}
+
+export async function getEligibleCreatorsForBatch(method: "telebirr" | "bank"): Promise<EligibleCreatorForBatch[]> {
+  const res = await fetchAuthed(`/admin/payout-batches/eligible-creators?method=${method}`);
+  if (!res.ok) {
+    console.error(`Failed to load eligible creators (${res.status})`);
+    return [];
+  }
+  return eligibleCreatorSchema.array().parse(await unwrapData(res));
+}
+
+export async function getPayoutBatches(): Promise<PayoutBatch[]> {
+  const res = await fetchAuthed("/admin/payout-batches");
+  if (!res.ok) {
+    console.error(`Failed to load payout batches (${res.status})`);
+    return [];
+  }
+  return payoutBatchSchema.array().parse(await unwrapData(res));
 }
 
 export async function searchLedgerTransactions(query: string): Promise<LedgerTransactionLookup[]> {

@@ -1,4 +1,4 @@
-import type { PayoutMethod } from "@birq/shared";
+import type { PayoutInstrumentAdminItem, PayoutMethod } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { decryptSecret, encryptSecret } from "../common/crypto.js";
@@ -103,6 +103,22 @@ export async function listPayoutInstruments(creatorId: string): Promise<PayoutIn
 export async function getPayoutInstrument(instrumentId: string): Promise<PayoutInstrument | null> {
   const { rows } = await pool.query<InstrumentRow>(`${SELECT_INSTRUMENT} WHERE id = $1`, [instrumentId]);
   return rows[0] ? mapRow(rows[0]) : null;
+}
+
+// The admin review queue — mirrors kyc/service.ts's listKycSubmissions and
+// tax-profiles-service.ts's listPendingTaxProfiles, both of which already
+// had this; a plain PayoutInstrument row has no way to identify whose it
+// is, hence the joined username.
+export async function listPendingPayoutInstruments(): Promise<PayoutInstrumentAdminItem[]> {
+  const { rows } = await pool.query<InstrumentRow & { username: string }>(
+    `SELECT pi.id, pi.creator_id, pi.method, pi.display_tail, pi.account_holder, pi.bank_code, pi.status,
+            pi.usable_from, pi.created_at, pi.verified_at, u.username
+     FROM payout_instruments pi
+     JOIN users u ON u.id = pi.creator_id
+     WHERE pi.status = 'unverified'
+     ORDER BY pi.created_at ASC`
+  );
+  return rows.map((row) => ({ ...mapRow(row), username: row.username }));
 }
 
 // idx_payout_instrument_default (0060) guarantees at most one 'verified'

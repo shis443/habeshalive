@@ -1,0 +1,129 @@
+.methodTabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.methodTab {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.methodTabActive {
+  composes: methodTab;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.creatorRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: 8px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-lowest);
+  margin-bottom: var(--space-2);
+}
+
+.creatorRowDisabled {
+  composes: creatorRow;
+  opacity: 0.55;
+}
+
+.creatorInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.creatorName {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--on-background);
+}
+
+.creatorMeta {
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.blockingReasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.blockingReason {
+  background: color-mix(in srgb, var(--error) 15%, var(--surface-container-lowest));
+  color: var(--error);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.amountInput {
+  width: 120px;
+  padding: 6px var(--space-2);
+  border-radius: 6px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container);
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+  text-align: right;
+}
+
+.amountInput:disabled {
+  opacity: 0.5;
+}
+
+.summaryBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: 8px;
+  background: var(--surface-container);
+  margin-top: var(--space-3);
+}
+
+.summaryTotal {
+  font-family: var(--font-headline);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--on-background);
+}
+
+.submitButton {
+  padding: var(--space-2) var(--space-4);
+  border-radius: 6px;
+  border: none;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+}

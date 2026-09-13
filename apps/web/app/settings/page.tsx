@@ -6,10 +6,12 @@ import { ContactSection } from "@/components/ContactSection";
 import { KycSection } from "@/components/KycSection";
 import { NotificationPreferencesSection } from "@/components/NotificationPreferencesSection";
 import { PasswordSection } from "@/components/PasswordSection";
+import { PayoutInstrumentSection } from "@/components/PayoutInstrumentSection";
 import { PreferencesSection } from "@/components/PreferencesSection";
 import { ProfileSection } from "@/components/ProfileSection";
 import { SessionsSection } from "@/components/SessionsSection";
 import { SettingsTabs, type SettingsTabId } from "@/components/SettingsTabs";
+import { TaxProfileSection } from "@/components/TaxProfileSection";
 import { TopNav } from "@/components/TopNav";
 import { TotpSection } from "@/components/TotpSection";
 import { UsernameSection } from "@/components/UsernameSection";
@@ -19,6 +21,8 @@ import {
   getLinkedSocialAccounts,
   getMyAccount,
   getMyKycStatus,
+  getMyPayoutInstruments,
+  getMyTaxProfile,
   getNotificationPreferences,
   getTotpStatus,
 } from "@/lib/api";
@@ -53,6 +57,14 @@ export default async function SettingsPage({
   ]);
   if (!account) redirect("/login?redirect=/settings");
 
+  // Payout method + tax profile only matter for creators — fetched only
+  // when relevant rather than issuing two guaranteed-empty requests for
+  // every viewer who opens Settings.
+  const isCreator = account.role === "creator";
+  const [payoutInstruments, taxProfile] = isCreator
+    ? await Promise.all([getMyPayoutInstruments(), getMyTaxProfile()])
+    : [[], null];
+
   return (
     <>
       <TopNav isAuthed />
@@ -72,6 +84,8 @@ export default async function SettingsPage({
               <PasswordSection hasPassword={account.hasPassword} />
               <TotpSection initialEnabled={totpStatus?.enabled ?? false} />
               <KycSection initial={kycStatus} />
+              {isCreator && <PayoutInstrumentSection initial={payoutInstruments} />}
+              {isCreator && <TaxProfileSection initial={taxProfile} />}
               <SessionsSection />
               <AccountDeletionSection status={deletionStatus} hasPassword={account.hasPassword} />
             </>

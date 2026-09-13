@@ -81,7 +81,11 @@ import {
   listPayoutBatches,
   rejectPayoutBatch,
 } from "./payout-batches-service.js";
-import { rejectPayoutInstrument, verifyPayoutInstrument } from "../wallet/payout-instruments-service.js";
+import {
+  listPendingPayoutInstruments,
+  rejectPayoutInstrument,
+  verifyPayoutInstrument,
+} from "../wallet/payout-instruments-service.js";
 import { listPendingTaxProfiles, rejectTaxProfile, verifyTaxProfile } from "../wallet/tax-profiles-service.js";
 import { z } from "zod";
 
@@ -234,6 +238,10 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // --- Payout instruments (T7) — admin review ---
+
+  app.get("/payout-instruments/pending", { preHandler: app.requireAdmin }, async () =>
+    listPendingPayoutInstruments()
+  );
 
   app.post<{ Params: { id: string } }>(
     "/payout-instruments/:id/verify",

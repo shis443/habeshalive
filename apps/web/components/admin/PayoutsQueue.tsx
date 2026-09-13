@@ -89,7 +89,8 @@ export function PayoutsQueue({ items }: { items: PayoutQueueItem[] }) {
                     {formatSantimAsBirr(item.amountSantim)} to @{item.creatorUsername}
                   </span>
                   <span className={styles.rowMeta}>
-                    {item.method} — {item.destination}
+                    {item.method}
+                    {item.instrumentDisplayTail ? ` ····${item.instrumentDisplayTail}` : ""}
                   </span>
                 </div>
                 <div className={styles.actions} onClick={(e) => e.stopPropagation()}>

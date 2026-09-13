@@ -230,9 +230,20 @@ export const payoutInstrumentSchema = z.object({
 });
 export type PayoutInstrument = z.infer<typeof payoutInstrumentSchema>;
 
+// Same shape as payoutInstrumentSchema plus the creator's username — the
+// admin review queue's own view, mirroring kyc.ts's kycAdminItemSchema
+// (a plain PayoutInstrument has no way to identify whose it is).
+export const payoutInstrumentAdminItemSchema = payoutInstrumentSchema.extend({
+  username: z.string(),
+});
+export type PayoutInstrumentAdminItem = z.infer<typeof payoutInstrumentAdminItemSchema>;
+
 export const taxResidencySchema = z.enum(["et_resident", "diaspora", "other"]);
+export type TaxResidency = z.infer<typeof taxResidencySchema>;
 export const taxFormTypeSchema = z.enum(["none", "w8ben", "w9"]);
+export type TaxFormType = z.infer<typeof taxFormTypeSchema>;
 export const taxProfileStatusSchema = z.enum(["pending", "verified", "rejected", "expired"]);
+export type TaxProfileStatus = z.infer<typeof taxProfileStatusSchema>;
 
 export const submitTaxProfileSchema = z.object({
   residency: taxResidencySchema,

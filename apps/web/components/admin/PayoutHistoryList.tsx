@@ -3,9 +3,12 @@ import styles from "./AdminQueue.module.css";
 
 const STATUS_LABEL: Record<PayoutHistoryItem["status"], string> = {
   pending_review: "Pending review",
+  approved: "Approved",
   processing: "Processing",
   paid: "Paid",
-  failed: "Failed / rejected",
+  rejected: "Rejected",
+  failed: "Failed",
+  reversed: "Reversed",
 };
 
 function formatDate(iso: string): string {
@@ -24,7 +27,8 @@ export function PayoutHistoryList({ items }: { items: PayoutHistoryItem[] }) {
               {formatSantimAsBirr(item.amountSantim)} to @{item.creatorUsername}
             </span>
             <span className={styles.rowMeta}>
-              {item.method} — {item.destination} · {formatDate(item.createdAt)}
+              {item.method}
+              {item.instrumentDisplayTail ? ` ····${item.instrumentDisplayTail}` : ""} · {formatDate(item.createdAt)}
             </span>
             {item.failureReason && <span className={styles.rowMeta}>Reason: {item.failureReason}</span>}
             {item.approvedByUsername && <span className={styles.rowMeta}>Approved by @{item.approvedByUsername}</span>}
