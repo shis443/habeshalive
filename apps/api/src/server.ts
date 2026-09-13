@@ -7,6 +7,7 @@ import { captureUnexpectedError, initSentry } from "./common/sentry.js";
 import { sendScheduledGiftCards } from "./gift-cards/service.js";
 import { promoteStartingStreams, reapStaleStreams } from "./streams/service.js";
 import { reconcileStreamControls } from "./streams/emergency-controls-service.js";
+import { rollupStaleViewerSamples, sampleLiveViewerCounts } from "./streams/viewer-samples-service.js";
 import { renewPlatformSubscriptions } from "./subscriptions/platform-service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
@@ -68,6 +69,14 @@ const ACCOUNT_DELETION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // only runs "daily in spirit." Cheap to run this often — most ticks touch
 // zero rows.
 const EARNING_HOLDS_CLEARING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+// T4's fixed cadence, verbatim from the task: "sample every live room at
+// a fixed 60s cadence." The viewer-seconds math (SUM(viewer_count) * 60)
+// only holds if this actually runs every 60s, not roughly-every-60s.
+const VIEWER_SAMPLE_INTERVAL_MS = 60 * 1000; // 60 seconds
+// "Daily in spirit" — the 90-day retention window has no reason to be
+// checked more than a few times a day; most ticks touch zero rows since
+// a stream's samples only cross the 90-day line once.
+const VIEWER_SAMPLE_ROLLUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // Wrapped so a rejection inside reapStaleStreams (e.g. a DB blip) never
 // becomes an unhandled rejection that could crash the process — this runs
@@ -153,6 +162,20 @@ function runEarningHoldsClearing(): void {
   });
 }
 
+function runViewerSampling(): void {
+  sampleLiveViewerCounts().catch((err) => {
+    app.log.error(err, "sampleLiveViewerCounts failed");
+    captureUnexpectedError(err);
+  });
+}
+
+function runViewerSampleRollup(): void {
+  rollupStaleViewerSamples().catch((err) => {
+    app.log.error(err, "rollupStaleViewerSamples failed");
+    captureUnexpectedError(err);
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -178,6 +201,10 @@ app
     setInterval(runAccountDeletions, ACCOUNT_DELETION_INTERVAL_MS);
     runEarningHoldsClearing();
     setInterval(runEarningHoldsClearing, EARNING_HOLDS_CLEARING_INTERVAL_MS);
+    runViewerSampling();
+    setInterval(runViewerSampling, VIEWER_SAMPLE_INTERVAL_MS);
+    runViewerSampleRollup();
+    setInterval(runViewerSampleRollup, VIEWER_SAMPLE_ROLLUP_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);
