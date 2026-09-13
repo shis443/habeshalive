@@ -5,6 +5,7 @@ import {
   adCreativeAdminItemSchema,
   adLeadAdminItemSchema,
   adminAuditActionSchema,
+  adminGiftTypeSchema,
   adminSummarySchema,
   adRevenueByCreatorSchema,
   advertiserSchema,
@@ -81,6 +82,7 @@ import {
   type AdCreativeAdminItem,
   type AdLeadAdminItem,
   type AdminAuditAction,
+  type AdminGiftType,
   type AdminSummary,
   type AdRevenueByCreator,
   type Advertiser,
@@ -750,6 +752,15 @@ export async function getBoostRevenue(): Promise<BoostRevenueByCreator[]> {
     return [];
   }
   return boostRevenueByCreatorSchema.array().parse(await unwrapData(res));
+}
+
+export async function getAdminGiftTypes(): Promise<AdminGiftType[]> {
+  const res = await fetchAuthed("/admin/gift-types");
+  if (!res.ok) {
+    console.error(`Failed to load gift catalog (${res.status})`);
+    return [];
+  }
+  return adminGiftTypeSchema.array().parse(await unwrapData(res));
 }
 
 export async function getPlatformConfigData(): Promise<PlatformConfig | null> {

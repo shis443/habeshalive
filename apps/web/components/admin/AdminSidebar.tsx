@@ -84,6 +84,9 @@ export function AdminSidebar() {
       >
         Gift Cards
       </Link>
+      <Link href="/admin/gifts" className={pathname.startsWith("/admin/gifts") ? styles.linkActive : styles.link}>
+        Gift Catalog
+      </Link>
       <Link
         href="/admin/stream-tags"
         className={pathname.startsWith("/admin/stream-tags") ? styles.linkActive : styles.link}

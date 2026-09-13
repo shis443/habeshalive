@@ -16,6 +16,7 @@ import {
   updateAdLeadStatusSchema,
   updateCategorySchema,
   updateCreatorSchema,
+  updateGiftTypeSchema,
   updatePlatformConfigSchema,
   updateUserRoleSchema,
 } from "@birq/shared";
@@ -57,6 +58,7 @@ import {
 import { cancelBoost, listBoostRevenueByCreator } from "./boosts-service.js";
 import { approveKyc, getKycDocumentUrl, listKycSubmissions, rejectKyc } from "../kyc/service.js";
 import { getPlatformConfig, updatePlatformConfig } from "./config-service.js";
+import { listGiftTypesForAdmin, updateGiftType } from "./gift-catalog-service.js";
 import { listCreators, suspendCreator, unsuspendCreator, updateCreator } from "./creators-service.js";
 import {
   getLedgerReconciliation,
@@ -238,6 +240,20 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const input = updatePlatformConfigSchema.parse(req.body);
     return updatePlatformConfig(req.user.sub, input);
   });
+
+  // Gift catalog (T3) — same requireRole(["super_admin"]) as /config above,
+  // for the same reason: this changes what viewers see and what a
+  // catalog item's reference split/availability is, platform-wide.
+  app.get("/gift-types", { preHandler: app.requireAdmin }, async () => listGiftTypesForAdmin());
+
+  app.patch<{ Params: { id: string } }>(
+    "/gift-types/:id",
+    { preHandler: app.requireRole(["super_admin"]) },
+    async (req) => {
+      const input = updateGiftTypeSchema.parse(req.body);
+      return updateGiftType(req.user.sub, req.params.id, input);
+    }
+  );
 
   // --- Subscriptions ---
 

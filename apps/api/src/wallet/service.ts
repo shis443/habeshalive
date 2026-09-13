@@ -231,11 +231,19 @@ async function upsertUserRank(client: PoolClient, userId: string, addedSantim: n
   return { rank, totalGiftSpendSantim: total, nextRankThresholdSantim: nextRankThreshold(rank) };
 }
 
+// Region filtering (gift_types.regions) is NOT applied here — there is no
+// geo-IP or viewer-country signal anywhere in this codebase to filter
+// against, and adding one is a new dependency outside T3's scope. Only
+// the availability window is enforced, which needs nothing but the
+// current timestamp.
 export async function listGiftTypes(): Promise<GiftType[]> {
   const { rows } = await pool.query<GiftTypeRow>(
     `SELECT gt.id, gt.name, gt.price_santim, gt.animation_key, gtier.key AS tier_key
      FROM gift_types gt JOIN gift_tiers gtier ON gtier.id = gt.gift_tier_id
-     WHERE gt.is_active = TRUE ORDER BY gt.price_santim ASC`
+     WHERE gt.is_active = TRUE
+       AND (gt.available_from IS NULL OR gt.available_from <= now())
+       AND (gt.available_until IS NULL OR gt.available_until > now())
+     ORDER BY gt.price_santim ASC`
   );
   return rows.map((row) => ({
     id: row.id,
@@ -466,12 +474,26 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
   try {
     await client.query("BEGIN");
 
-    const giftTypeResult = await client.query<{ price_santim: number; is_active: boolean }>(
-      `SELECT price_santim, is_active FROM gift_types WHERE id = $1`,
-      [input.giftTypeId]
-    );
+    const giftTypeResult = await client.query<{
+      price_santim: number;
+      is_active: boolean;
+      available_from: string | null;
+      available_until: string | null;
+    }>(`SELECT price_santim, is_active, available_from, available_until FROM gift_types WHERE id = $1`, [
+      input.giftTypeId,
+    ]);
     const giftType = giftTypeResult.rows[0];
     if (!giftType || !giftType.is_active) throw new AppError(404, "Gift type not found");
+    // Same window listGiftTypes filters the catalog by — enforced again
+    // here so a stale client (or a direct API call) can't send a gift
+    // outside its availability window just because it isn't shown.
+    const now = Date.now();
+    if (
+      (giftType.available_from && new Date(giftType.available_from).getTime() > now) ||
+      (giftType.available_until && new Date(giftType.available_until).getTime() <= now)
+    ) {
+      throw new AppError(404, "Gift type not found");
+    }
 
     const streamResult = await client.query<{ creator_id: string }>(
       `SELECT creator_id FROM streams WHERE id = $1`,
@@ -531,8 +553,8 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
     });
 
     await client.query(
-      `INSERT INTO gifts_sent (ledger_transaction_id, sender_id, creator_id, stream_id, gift_type_id, quantity, message, recipient_id, is_anonymous)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      `INSERT INTO gifts_sent (ledger_transaction_id, sender_id, creator_id, stream_id, gift_type_id, quantity, message, recipient_id, is_anonymous, creator_share_bps)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         ledgerTransactionId,
         senderId,
@@ -543,6 +565,11 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
         input.message ?? null,
         input.recipientId ?? null,
         input.isAnonymous ?? false,
+        // The rate that ACTUALLY applied to this send (see 0055's
+        // migration comment) — creator_profiles.revenue_share_bps at this
+        // moment, pinned permanently so a later rate change never rewrites
+        // what this specific gift's payout was split at.
+        profile.revenue_share_bps,
       ]
     );
 

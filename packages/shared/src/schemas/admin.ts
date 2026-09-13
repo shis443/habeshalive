@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { giftTierKeySchema } from "./wallet.js";
 
 export const adminSummarySchema = z.object({
   pendingPayouts: z.number().int(),
@@ -351,3 +352,45 @@ export const mergeStreamTagsSchema = z.object({
   targetTagId: z.string().uuid(),
 });
 export type MergeStreamTagsInput = z.infer<typeof mergeStreamTagsSchema>;
+
+// --- Gift catalog (T3) ---
+
+// creatorShareBps here is a catalog-level REFERENCE value only — the
+// actual creator/platform split on every send still comes from
+// creator_profiles.revenue_share_bps (see db/migrations/0055's comment
+// for why: the blueprint this table was drafted from assumed the split
+// was a hardcoded constant, which this codebase's real split logic
+// already isn't). Finance can tune this for planning/reporting; it does
+// not change any real payout.
+export const adminGiftTypeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  priceSantim: z.number().int().positive(),
+  animationKey: z.string(),
+  // Nullable: a handful of retired gift_types rows (e.g. "Golden Mulmul")
+  // predate gift_tier_id being required and have it NULL — the admin
+  // catalog must still show and let finance edit these, unlike the
+  // viewer-facing catalog, which only ever lists is_active rows.
+  tierKey: giftTierKeySchema.nullable(),
+  isActive: z.boolean(),
+  category: z.string(),
+  creatorShareBps: z.number().int().min(0).max(10000),
+  availableFrom: z.string().nullable(),
+  availableUntil: z.string().nullable(),
+  regions: z.array(z.string()).nullable(),
+});
+export type AdminGiftType = z.infer<typeof adminGiftTypeSchema>;
+
+export const updateGiftTypeSchema = z.object({
+  priceSantim: z.number().int().positive().optional(),
+  isActive: z.boolean().optional(),
+  category: z.string().min(1).max(30).optional(),
+  creatorShareBps: z.number().int().min(0).max(10000).optional(),
+  // Explicit null clears the bound (always-available); omitted leaves it
+  // unchanged; a string sets it.
+  availableFrom: z.string().nullable().optional(),
+  availableUntil: z.string().nullable().optional(),
+  regions: z.array(z.string().length(2)).nullable().optional(),
+  reason: z.string().min(1).max(500),
+});
+export type UpdateGiftTypeInput = z.infer<typeof updateGiftTypeSchema>;
