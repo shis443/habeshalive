@@ -13,6 +13,7 @@ import {
 } from "../test/fixtures.js";
 import { requestPayout, sendGift } from "./service.js";
 import { clearDueEarningHolds } from "./earning-holds-service.js";
+import { bindPayoutInstrument, verifyPayoutInstrument } from "./payout-instruments-service.js";
 
 // T2's acceptance criteria, verbatim: "Send a gift → creator sees
 // pending, withdrawable is 0 ... Promotional coins can never reach a
@@ -24,6 +25,23 @@ import { clearDueEarningHolds } from "./earning-holds-service.js";
 // system.
 
 const createdUserIds: string[] = [];
+
+// Binds and verifies a real, immediately-usable instrument — used in
+// every test below so a requestPayout rejection under test is actually
+// about withdrawable balance (the thing each test is checking), not an
+// incidental 404/cooling-off failure from having no instrument at all.
+async function bindUsableInstrument(creatorId: string, adminId: string): Promise<string> {
+  const instrument = await bindPayoutInstrument(creatorId, {
+    method: "telebirr",
+    accountNumber: "0911234567",
+    accountHolder: "Test Creator",
+  });
+  await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
+    instrument.id,
+  ]);
+  await verifyPayoutInstrument(adminId, instrument.id);
+  return instrument.id;
+}
 
 async function trackUser<T extends TestUser>(user: T): Promise<T> {
   createdUserIds.push(user.id);
@@ -75,8 +93,11 @@ describe("earning holds — gift funded entirely from paid balance", () => {
     expect(holds[0]!.state).toBe("pending");
     expect(await getWithdrawable(creator.id)).toBe(0);
 
+    const adminId = (await createTestViewer()).id;
+    createdUserIds.push(adminId);
+    const instrumentId = await bindUsableInstrument(creator.id, adminId);
     await expect(
-      requestPayout(creator.id, { amountSantim: holds[0]!.amount_santim, method: "telebirr", destination: "0911234567" })
+      requestPayout(creator.id, { amountSantim: holds[0]!.amount_santim, instrumentId })
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
@@ -108,10 +129,12 @@ describe("earning holds — gift funded entirely from paid balance", () => {
     expect(withdrawable).toBeGreaterThan(0);
 
     // Now the real payout path succeeds against the same money.
+    const adminId = (await createTestViewer()).id;
+    createdUserIds.push(adminId);
+    const instrumentId = await bindUsableInstrument(creator.id, adminId);
     const payout = await requestPayout(creator.id, {
       amountSantim: withdrawable,
-      method: "telebirr",
-      destination: "0911234567",
+      instrumentId,
     });
     expect(payout.status).toBe("processing");
     expect(await getWithdrawable(creator.id)).toBe(0);
@@ -149,8 +172,11 @@ describe("earning holds — promotional money can never reach a payout", () => {
     await clearDueEarningHolds();
     expect(await getWithdrawable(creator.id)).toBe(0);
 
+    const adminId = (await createTestViewer()).id;
+    createdUserIds.push(adminId);
+    const instrumentId = await bindUsableInstrument(creator.id, adminId);
     await expect(
-      requestPayout(creator.id, { amountSantim: 1, method: "telebirr", destination: "0911234567" })
+      requestPayout(creator.id, { amountSantim: 1, instrumentId })
     ).rejects.toMatchObject({ statusCode: 400 });
   });
 
@@ -223,10 +249,12 @@ describe("payout consumption — FIFO over cleared holds, with a splitting row",
 
     // Consumes the whole 3,000 row and splits the 4,000 row into a
     // 2,000-consumed slice and a 2,000-still-cleared remainder.
+    const adminId = (await createTestViewer()).id;
+    createdUserIds.push(adminId);
+    const instrumentId = await bindUsableInstrument(creator.id, adminId);
     const payout = await requestPayout(creator.id, {
       amountSantim: 5_000,
-      method: "telebirr",
-      destination: "0911234567",
+      instrumentId,
     });
     expect(payout.status).toBe("processing");
     expect(await getWithdrawable(creator.id)).toBe(2_000);

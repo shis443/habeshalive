@@ -9,14 +9,8 @@ import {
   getWalletBalance,
   type TestCreator,
 } from "../../test/fixtures.js";
-import {
-  initiateChapaTransfer,
-  markApproved,
-  markPaid,
-  reserveFunds,
-  resolveBankCode,
-  reverseFunds,
-} from "./activities.js";
+import { bindPayoutInstrument, verifyPayoutInstrument } from "../payout-instruments-service.js";
+import { initiateChapaTransfer, markApproved, markPaid, reserveFunds, reverseFunds } from "./activities.js";
 import type { PayoutWorkflowInput } from "./types.js";
 
 // No test file exercised these before this pass (flagged in 2026-09-05's
@@ -34,13 +28,32 @@ async function trackCreator(creator: TestCreator): Promise<TestCreator> {
   return creator;
 }
 
-function buildInput(overrides: Partial<PayoutWorkflowInput> & { creatorId: string }): PayoutWorkflowInput {
+// Binds a real instrument and backdates its usable_from past the 72h
+// cooling-off (the same real clock-advance pattern T2's earning-holds
+// tests use for clears_at, rather than mocking the hold away). Does NOT
+// verify it — reserveFunds requires status='verified', so every call
+// site also calls verifyPayoutInstrument with a real, tracked admin id
+// afterward (verified_by has its own FK to users(id), so a bare
+// randomUUID() here would fail the same way an untracked creator id
+// would).
+async function bindUsableInstrument(creatorId: string): Promise<string> {
+  const instrument = await bindPayoutInstrument(creatorId, {
+    method: "telebirr",
+    accountNumber: "0911234567",
+    accountHolder: "Test Creator",
+  });
+  await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
+    instrument.id,
+  ]);
+  return instrument.id;
+}
+
+function buildInput(
+  overrides: Partial<PayoutWorkflowInput> & { creatorId: string; instrumentId: string }
+): PayoutWorkflowInput {
   return {
     payoutId: randomUUID(),
     amountSantim: 10_000,
-    method: "telebirr",
-    destination: "+251911234567",
-    bankCode: "",
     displayName: "Test Creator",
     requiresManualApproval: false,
     ...overrides,
@@ -66,7 +79,10 @@ describe("reserveFunds", () => {
   it("debits the creator, credits the platform, and creates a processing payout", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
 
     const result = await reserveFunds(input);
 
@@ -80,7 +96,15 @@ describe("reserveFunds", () => {
   it("creates a pending_review payout instead of processing when manual approval is required", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, requiresManualApproval: true });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({
+      creatorId: creator.id,
+      amountSantim: 20_000,
+      requiresManualApproval: true,
+      instrumentId,
+    });
 
     await reserveFunds(input);
 
@@ -90,7 +114,10 @@ describe("reserveFunds", () => {
   it("rejects with insufficient balance and reserves nothing", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 5_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
 
     await expect(reserveFunds(input)).rejects.toThrow(/Insufficient withdrawable balance/);
     expect(await getWalletBalance(creator.walletId)).toBe(5_000);
@@ -100,7 +127,10 @@ describe("reserveFunds", () => {
   it("is idempotent — a retried call with the same payoutId does not reserve funds twice", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
 
     await reserveFunds(input);
     const balanceAfterFirstCall = await getWalletBalance(creator.walletId);
@@ -115,7 +145,10 @@ describe("reverseFunds", () => {
   it("refunds the creator and marks the payout failed", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
     const balanceAfterReserve = await getWalletBalance(creator.walletId);
 
@@ -131,7 +164,10 @@ describe("reverseFunds", () => {
   it("is idempotent — reversing an already-failed payout does not double-refund", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
 
     await reverseFunds(input.payoutId, "Bank rejected transfer");
@@ -144,7 +180,10 @@ describe("reverseFunds", () => {
   it("is a no-op on an already-paid payout — never reverses a completed transfer", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
     await markPaid(input.payoutId, input.amountSantim, creator.id);
     const balanceAfterPaid = await getWalletBalance(creator.walletId);
@@ -160,9 +199,16 @@ describe("markApproved / markPaid", () => {
   it("markApproved records the approving admin and moves to processing", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, requiresManualApproval: true });
-    await reserveFunds(input);
     const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({
+      creatorId: creator.id,
+      amountSantim: 20_000,
+      requiresManualApproval: true,
+      instrumentId,
+    });
+    await reserveFunds(input);
 
     await markApproved(input.payoutId, admin.id);
 
@@ -177,7 +223,10 @@ describe("markApproved / markPaid", () => {
   it("markPaid is idempotent — marking an already-paid payout twice does not error", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
 
     await markPaid(input.payoutId, input.amountSantim, creator.id);
@@ -187,18 +236,20 @@ describe("markApproved / markPaid", () => {
 });
 
 describe("initiateChapaTransfer", () => {
-  it("persists the stub client's reference and is idempotent on retry", async () => {
+  it("decrypts the instrument's account number, persists the stub client's reference, and is idempotent on retry", async () => {
     const creator = await trackCreator(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
-    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000 });
+    const admin = await trackCreator(await createTestCreator());
+    const instrumentId = await bindUsableInstrument(creator.id);
+    await verifyPayoutInstrument(admin.id, instrumentId);
+    const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
 
     const first = await initiateChapaTransfer({
       payoutId: input.payoutId,
-      destination: input.destination,
+      instrumentId: input.instrumentId,
       accountName: input.displayName,
       amountSantim: input.amountSantim,
-      bankCode: "stub-bank-code",
     });
     expect(first.chapaReference).toBe(`stub_transfer_${input.payoutId}`);
 
@@ -213,21 +264,10 @@ describe("initiateChapaTransfer", () => {
     // a second transfer) again.
     const second = await initiateChapaTransfer({
       payoutId: input.payoutId,
-      destination: input.destination,
+      instrumentId: input.instrumentId,
       accountName: input.displayName,
       amountSantim: input.amountSantim,
-      bankCode: "stub-bank-code",
     });
     expect(second.chapaReference).toBe(first.chapaReference);
-  });
-});
-
-describe("resolveBankCode", () => {
-  it("resolves telebirr's bank code via the client, ignoring whatever was passed in", async () => {
-    expect(await resolveBankCode("telebirr", "")).toBe("stub-bank-code");
-  });
-
-  it("passes a real bank's code through unchanged, without calling the client", async () => {
-    expect(await resolveBankCode("bank", "some-real-bank-code")).toBe("some-real-bank-code");
   });
 });

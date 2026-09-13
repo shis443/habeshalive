@@ -24,6 +24,7 @@ import {
   sendDonation,
   sendGift,
 } from "./service.js";
+import { bindPayoutInstrument, verifyPayoutInstrument } from "./payout-instruments-service.js";
 
 const createdUserIds: string[] = [];
 
@@ -35,6 +36,29 @@ async function fundWallet(userId: string, amountSantim: number): Promise<void> {
     amount: amountSantim,
     currency: "ETB",
   });
+}
+
+// Binds and verifies a real, immediately-usable instrument for the given
+// method — same pattern as temporal/activities.test.ts's
+// bindUsableInstrument, needed here since requestPayout now takes an
+// instrumentId instead of a raw method/destination/bankCode.
+async function bindUsableInstrument(
+  creatorId: string,
+  method: "telebirr" | "bank" = "telebirr"
+): Promise<string> {
+  const admin = await createTestViewer();
+  createdUserIds.push(admin.id);
+  const instrument = await bindPayoutInstrument(creatorId, {
+    method,
+    accountNumber: method === "telebirr" ? "0911234567" : "1000123456789",
+    accountHolder: "Test Creator",
+    ...(method === "bank" ? { bankCode: "TEST_BANK" } : {}),
+  });
+  await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
+    instrument.id,
+  ]);
+  await verifyPayoutInstrument(admin.id, instrument.id);
+  return instrument.id;
 }
 
 async function getPlatformWalletId(): Promise<string> {
@@ -261,10 +285,10 @@ describe("payout hold", () => {
     const creator = await trackUser(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 100_000));
 
+    const instrumentId = await bindUsableInstrument(creator.id);
     const payout = await requestPayout(creator.id, {
       amountSantim: 50_000,
-      method: "telebirr",
-      destination: "0911234567",
+      instrumentId,
     });
 
     expect(payout.requiresManualApproval).toBe(false);
@@ -276,10 +300,10 @@ describe("payout hold", () => {
     const creator = await trackUser(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 600_000));
 
+    const instrumentId = await bindUsableInstrument(creator.id, "bank");
     const payout = await requestPayout(creator.id, {
       amountSantim: 500_000,
-      method: "bank",
-      destination: "1000123456789",
+      instrumentId,
     });
 
     expect(payout.requiresManualApproval).toBe(true);
@@ -291,8 +315,9 @@ describe("payout hold", () => {
     const creator = await trackUser(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 1_000));
 
+    const instrumentId = await bindUsableInstrument(creator.id);
     await expect(
-      requestPayout(creator.id, { amountSantim: 5_000, method: "telebirr", destination: "0911234567" })
+      requestPayout(creator.id, { amountSantim: 5_000, instrumentId })
     ).rejects.toMatchObject({ statusCode: 400 } satisfies Partial<AppError>);
 
     expect(await getWalletBalance(creator.walletId)).toBe(1_000);
@@ -302,10 +327,10 @@ describe("payout hold", () => {
     const creator = await trackUser(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 20_000));
 
+    const instrumentId = await bindUsableInstrument(creator.id);
     const payout = await requestPayout(creator.id, {
       amountSantim: 10_000,
-      method: "telebirr",
-      destination: "0911234567",
+      instrumentId,
     });
 
     const { rows } = await pool.query<{ ledger_transaction_id: string }>(
@@ -322,8 +347,9 @@ describe("security hold + KYC gate on requestPayout", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 10_000));
     await recordSecurityEvent(creator.id, "password_change");
 
+    const instrumentId = await bindUsableInstrument(creator.id);
     await expect(
-      requestPayout(creator.id, { amountSantim: 5_000, method: "telebirr", destination: "0911234567" })
+      requestPayout(creator.id, { amountSantim: 5_000, instrumentId })
     ).rejects.toMatchObject({ statusCode: 403 } satisfies Partial<AppError>);
 
     expect(await getWalletBalance(creator.walletId)).toBe(10_000);
@@ -333,10 +359,10 @@ describe("security hold + KYC gate on requestPayout", () => {
     const creator = await trackUser(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 10_000));
 
+    const instrumentId = await bindUsableInstrument(creator.id);
     const payout = await requestPayout(creator.id, {
       amountSantim: 5_000,
-      method: "telebirr",
-      destination: "0911234567",
+      instrumentId,
     });
     expect(payout.status).toBe("processing");
   });
@@ -345,10 +371,11 @@ describe("security hold + KYC gate on requestPayout", () => {
     const creator = await trackUser(await createTestCreator());
     createdUserIds.push(await fundCreatorEarnings(creator.id, 10_000));
 
+    const instrumentId = await bindUsableInstrument(creator.id);
     await pool.query(`UPDATE platform_config SET kyc_required_for_payouts = true WHERE id = TRUE`);
     try {
       await expect(
-        requestPayout(creator.id, { amountSantim: 5_000, method: "telebirr", destination: "0911234567" })
+        requestPayout(creator.id, { amountSantim: 5_000, instrumentId })
       ).rejects.toMatchObject({ statusCode: 403 } satisfies Partial<AppError>);
       expect(await getWalletBalance(creator.walletId)).toBe(10_000);
 
@@ -360,8 +387,7 @@ describe("security hold + KYC gate on requestPayout", () => {
 
       const payout = await requestPayout(creator.id, {
         amountSantim: 5_000,
-        method: "telebirr",
-        destination: "0911234567",
+        instrumentId,
       });
       expect(payout.status).toBe("processing");
     } finally {

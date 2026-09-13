@@ -299,6 +299,29 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   // first time a test actually exercises a viewer-funded credit path.
   await pool.query(`DELETE FROM earning_holds WHERE creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM payouts WHERE creator_id = ANY($1)`, [userIds]);
+  // payout_batches.prepared_by/approved_by have no CASCADE from users
+  // (0061_payout_batches.sql) — deleted after payouts above, since
+  // payouts.batch_id -> payout_batches has no CASCADE either and would
+  // otherwise block this. Surfaced by admin/payout-batches-service.test.ts
+  // (T7).
+  await pool.query(`DELETE FROM payout_batches WHERE prepared_by = ANY($1) OR approved_by = ANY($1)`, [userIds]);
+  // payout_instruments.verified_by and creator_tax_profiles.reviewed_by
+  // (0060_tax_profiles_and_payout_instruments.sql) also have no CASCADE
+  // from users — creator_id on both DOES cascade, but relying on that
+  // alone races with the final DELETE FROM users below: a single
+  // multi-row DELETE doesn't guarantee a creator's cascade fires before
+  // an admin's own "still referenced" check runs for the SAME statement
+  // (confirmed by direct reproduction — Postgres processes per-row FK
+  // triggers in scan order, not creator-before-admin order), so a test's
+  // own verifying admin can trip this even though their creator is in the
+  // very same cleanup batch. Explicit delete here sidesteps the race
+  // entirely, same fix shape as kyc_submissions.reviewed_by below.
+  await pool.query(`DELETE FROM payout_instruments WHERE creator_id = ANY($1) OR verified_by = ANY($1)`, [
+    userIds,
+  ]);
+  await pool.query(`DELETE FROM creator_tax_profiles WHERE creator_id = ANY($1) OR reviewed_by = ANY($1)`, [
+    userIds,
+  ]);
   // Also no CASCADE from users on chat_messages.user_id (0001_init.sql —
   // only stream_id cascades) — surfaced by chat/service.test.ts's first
   // coverage of sendChatMessage/deleteChatMessage.

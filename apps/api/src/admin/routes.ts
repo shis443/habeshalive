@@ -1,9 +1,11 @@
 import {
+  batchActionReasonSchema,
   createAdCampaignSchema,
   createAdCreativeSchema,
   createAdvertiserSchema,
   createAnnouncementSchema,
   createCategorySchema,
+  createPayoutBatchSchema,
   extendGracePeriodSchema,
   forceEndStreamSchema,
   streamControlReasonSchema,
@@ -65,11 +67,23 @@ import { listCreators, suspendCreator, unsuspendCreator, updateCreator } from ".
 import {
   getLedgerReconciliation,
   getPlatformWalletSummary,
+  getTrialBalance,
   performManualAdjustment,
   searchLedgerTransaction,
 } from "./ledger-service.js";
 import { getAdminSummary, listActiveBoosts, listAdminActions } from "./service.js";
 import { listUsers, updateUserRole } from "./users-service.js";
+import {
+  approvePayoutBatch,
+  createPayoutBatch,
+  disbursePayoutBatch,
+  getEligibleCreatorsForBatch,
+  listPayoutBatches,
+  rejectPayoutBatch,
+} from "./payout-batches-service.js";
+import { rejectPayoutInstrument, verifyPayoutInstrument } from "../wallet/payout-instruments-service.js";
+import { listPendingTaxProfiles, rejectTaxProfile, verifyTaxProfile } from "../wallet/tax-profiles-service.js";
+import { z } from "zod";
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get("/summary", { preHandler: app.requireAdmin }, async () => getAdminSummary());
@@ -162,6 +176,10 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/ledger/platform-wallet", { preHandler: app.requirePermission("finance:audit") }, async () => getPlatformWalletSummary());
 
+  // T7 — cached-vs-ledger-derived drift check, see ledger-service.ts's
+  // getTrialBalance comment for why this isn't a "sums to zero" check.
+  app.get("/ledger/trial-balance", { preHandler: app.requirePermission("finance:audit") }, async () => getTrialBalance());
+
   app.get<{ Querystring: { q?: string } }>(
     "/ledger/lookup",
     { preHandler: app.requirePermission("finance:audit") },
@@ -214,6 +232,101 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const input = manualAdjustmentSchema.parse(req.body);
     return performManualAdjustment(req.user.sub, input);
   });
+
+  // --- Payout instruments (T7) — admin review ---
+
+  app.post<{ Params: { id: string } }>(
+    "/payout-instruments/:id/verify",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      await verifyPayoutInstrument(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/payout-instruments/:id/reject",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      const input = batchActionReasonSchema.parse(req.body);
+      await rejectPayoutInstrument(req.user.sub, req.params.id, input.reason);
+      return { ok: true };
+    }
+  );
+
+  // --- Tax profiles (T7) — admin review ---
+
+  app.get("/tax-profiles/pending", { preHandler: app.requireAdmin }, async () => listPendingTaxProfiles());
+
+  app.post<{ Params: { id: string } }>(
+    "/tax-profiles/:id/verify",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      const { withholdingBps } = z.object({ withholdingBps: z.number().int().min(0).max(10_000) }).parse(req.body);
+      await verifyTaxProfile(req.user.sub, req.params.id, withholdingBps);
+      return { ok: true };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/tax-profiles/:id/reject",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      const input = batchActionReasonSchema.parse(req.body);
+      await rejectTaxProfile(req.user.sub, req.params.id, input.reason);
+      return { ok: true };
+    }
+  );
+
+  // --- Payout batches (T7) ---
+  //
+  // Building and approving a batch always requireAdmin (super_admin), same
+  // reasoning as /ledger/adjustment above — these move real money, not
+  // just read it. approvePayoutBatch itself independently rejects a
+  // preparer approving their own batch (see that function's comment) —
+  // this route doesn't re-check it, since the service is the one place
+  // that has to be right regardless of which route calls it.
+
+  app.get<{ Querystring: { method?: "telebirr" | "bank" } }>(
+    "/payout-batches/eligible-creators",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      const method = req.query.method === "bank" ? "bank" : "telebirr";
+      return getEligibleCreatorsForBatch(method);
+    }
+  );
+
+  app.get("/payout-batches", { preHandler: app.requireAdmin }, async () => listPayoutBatches());
+
+  app.post("/payout-batches", { preHandler: app.requireAdmin }, async (req) => {
+    const input = createPayoutBatchSchema.parse(req.body);
+    return createPayoutBatch(req.user.sub, input);
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/payout-batches/:id/approve",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      await approvePayoutBatch(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/payout-batches/:id/reject",
+    { preHandler: app.requireAdmin },
+    async (req) => {
+      const input = batchActionReasonSchema.parse(req.body);
+      await rejectPayoutBatch(req.user.sub, req.params.id, input.reason);
+      return { ok: true };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/payout-batches/:id/disburse",
+    { preHandler: app.requireAdmin },
+    async (req) => disbursePayoutBatch(req.user.sub, req.params.id)
+  );
 
   // --- Creators ---
 

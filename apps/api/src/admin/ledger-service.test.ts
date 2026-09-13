@@ -14,8 +14,9 @@ import {
   type TestUser,
 } from "../test/fixtures.js";
 import { getBoostPricing } from "./config-service.js";
-import { getLedgerReconciliation } from "./ledger-service.js";
+import { getLedgerReconciliation, getTrialBalance } from "./ledger-service.js";
 import { cancelBoost } from "./boosts-service.js";
+import { bindPayoutInstrument, verifyPayoutInstrument } from "../wallet/payout-instruments-service.js";
 
 const createdUserIds: string[] = [];
 const createdGiftCardIds: string[] = [];
@@ -106,7 +107,16 @@ describe("ledger invariant", () => {
     // instead, exactly as any real creator's own already-cleared earnings
     // would.
     createdUserIds.push(await fundCreatorEarnings(creator.id, 1_000));
-    await requestPayout(creator.id, { amountSantim: 1_000, method: "telebirr", destination: "0911234567" });
+    const instrument = await bindPayoutInstrument(creator.id, {
+      method: "telebirr",
+      accountNumber: "0911234567",
+      accountHolder: "Test Creator",
+    });
+    await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
+      instrument.id,
+    ]);
+    await verifyPayoutInstrument(admin.id, instrument.id);
+    await requestPayout(creator.id, { amountSantim: 1_000, instrumentId: instrument.id });
 
     const after = await getLedgerReconciliation();
 
@@ -119,5 +129,49 @@ describe("ledger invariant", () => {
     expect(after.totalCreditsSantim - before.totalCreditsSantim).toBe(
       after.totalDebitsSantim - before.totalDebitsSantim
     );
+  });
+});
+
+// T7 acceptance criterion: the trial balance strip must sum to zero drift
+// under normal operation, and must actually surface a real disagreement if
+// one exists — not just always report "balanced" regardless of input. See
+// ledger-service.ts's getTrialBalance for why this checks cache-vs-ledger
+// drift rather than a sum-to-zero invariant.
+describe("trial balance", () => {
+  it("shows zero drift after a normal, correctly-applied earning", async () => {
+    const creator = await trackUser(await createTestCreator());
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 12_345));
+
+    const trialBalance = await getTrialBalance();
+
+    expect(trialBalance.driftSantim).toBe(0);
+    expect(trialBalance.balanced).toBe(true);
+    expect(trialBalance.cachedSumSantim).toBe(trialBalance.ledgerDerivedSumSantim);
+  });
+
+  it("surfaces nonzero drift when a creator wallet's cache disagrees with its ledger entries", async () => {
+    const creator = await trackUser(await createTestCreator());
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 12_345));
+
+    const clean = await getTrialBalance();
+    expect(clean.balanced).toBe(true);
+
+    // Simulate the exact class of bug this check exists to catch: a cache
+    // write that silently diverged from the ledger (a missed
+    // applyBalanceDelta call, a stray direct UPDATE) — never possible via
+    // any real application code path, only reproducible here by writing
+    // straight to wallet_balances_cache. This test creator's wallet is
+    // deleted whole (cache row cascades with it) at cleanupTestUsers, so
+    // there's nothing to restore afterward.
+    await pool.query(
+      `UPDATE wallet_balances_cache SET balance_santim = balance_santim + 777 WHERE wallet_id = $1`,
+      [creator.walletId]
+    );
+
+    const corrupted = await getTrialBalance();
+
+    expect(corrupted.driftSantim).toBe(clean.driftSantim + 777);
+    expect(corrupted.balanced).toBe(false);
+    expect(corrupted.cachedSumSantim).not.toBe(corrupted.ledgerDerivedSumSantim);
   });
 });

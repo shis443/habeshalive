@@ -29,8 +29,10 @@ export const payoutHistoryItemSchema = z.object({
   creatorUsername: z.string(),
   amountSantim: z.number().int(),
   method: z.enum(["telebirr", "bank"]),
-  destination: z.string(),
-  status: z.enum(["pending_review", "processing", "paid", "failed"]),
+  // Masked display value only ("•••• 6789") — see wallet.ts's
+  // requestPayoutSchema comment on why this replaced a raw destination.
+  instrumentDisplayTail: z.string().nullable(),
+  status: z.enum(["pending_review", "approved", "processing", "paid", "rejected", "failed", "reversed"]),
   failureReason: z.string().nullable(),
   approvedByUsername: z.string().nullable(),
   rejectedByUsername: z.string().nullable(),
@@ -470,3 +472,81 @@ export const windowOptionSchema = z.object({
   label: z.string(),
 });
 export type WindowOption = z.infer<typeof windowOptionSchema>;
+
+// --- Payout batches (T7) ---
+
+export const payoutBatchStatusSchema = z.enum([
+  "draft",
+  "pending_approval",
+  "approved",
+  "processing",
+  "settled",
+  "rejected",
+]);
+
+export const payoutBatchSchema = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  method: z.enum(["telebirr", "bank"]),
+  status: payoutBatchStatusSchema,
+  totalSantim: z.number().int(),
+  itemCount: z.number().int(),
+  preparedByUsername: z.string(),
+  approvedByUsername: z.string().nullable(),
+  approvedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type PayoutBatch = z.infer<typeof payoutBatchSchema>;
+
+// Every creator with a verified instrument for this method is listed —
+// eligible or not — with the specific blocking reasons an ineligible one
+// has, never silently hidden.
+export const eligibleCreatorSchema = z.object({
+  creatorId: z.string().uuid(),
+  username: z.string(),
+  withdrawableSantim: z.number().int(),
+  eligible: z.boolean(),
+  blockingReasons: z.array(z.string()),
+});
+export type EligibleCreatorForBatch = z.infer<typeof eligibleCreatorSchema>;
+
+export const createPayoutBatchSchema = z.object({
+  method: z.enum(["telebirr", "bank"]),
+  selections: z
+    .array(
+      z.object({
+        creatorId: z.string().uuid(),
+        amountSantim: z.number().int().positive(),
+      })
+    )
+    .min(1),
+});
+export type CreatePayoutBatchInput = z.infer<typeof createPayoutBatchSchema>;
+
+export const batchActionReasonSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type BatchActionReasonInput = z.infer<typeof batchActionReasonSchema>;
+
+// --- Trial balance (T7) ---
+
+export const trialBalanceSchema = z.object({
+  platformWalletBalanceSantim: z.number().int(),
+  creatorLiabilitySantim: z.number().int(),
+  unsettledBatchSantim: z.number().int(),
+  // platformWalletBalanceSantim + creatorLiabilitySantim, both read from
+  // wallet_balances_cache — must always be exactly 0 by construction
+  // (every ledger_transaction's own entries already balance to zero, so
+  // the grand total across every wallet does too). Shown as a live canary
+  // rather than assumed: if this and ledgerDerivedSumSantim below ever
+  // disagree, or either is nonzero, that is real cache drift, not
+  // expected variance.
+  cachedSumSantim: z.number().int(),
+  // The same platform+creator sum, recomputed directly from
+  // ledger_entries, bypassing wallet_balances_cache entirely — the actual
+  // "is the cache still telling the truth" check.
+  ledgerDerivedSumSantim: z.number().int(),
+  driftSantim: z.number().int(),
+  balanced: z.boolean(),
+});
+export type TrialBalance = z.infer<typeof trialBalanceSchema>;

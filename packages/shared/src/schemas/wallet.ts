@@ -97,6 +97,12 @@ export const giftAlertSchema = z.object({
   giftTypeId: z.string().uuid(),
   giftName: z.string(),
   animationKey: z.string(),
+  // The sent gift's own tier (mulmul/buna/tej/kurt) — distinct from
+  // badgeTier below, which is the *sender's* cumulative gifter-badge tier
+  // for this creator. Previously missing here, so the alert overlay could
+  // only scale intensity off totalSantim, not the actual tier bought (see
+  // birq_stream_alert_banner.dart in the Flutter consumer app).
+  giftTierKey: giftTierKeySchema,
   quantity: z.number().int().positive(),
   totalSantim: z.number().int().positive(),
   message: z.string().max(200).nullable(),
@@ -165,24 +171,26 @@ export type PurchasePpvAccessResponse = z.infer<typeof purchasePpvAccessResponse
 export const payoutMethodSchema = z.enum(["telebirr", "bank"]);
 export type PayoutMethod = z.infer<typeof payoutMethodSchema>;
 
-export const requestPayoutSchema = z
-  .object({
-    amountSantim: z.coerce.number().int().positive(),
-    method: payoutMethodSchema,
-    destination: z.string().min(3).max(120),
-    // Chapa's transfer API needs a bank_code to know which bank the
-    // account number belongs to (GET /v1/banks) — required for "bank"
-    // payouts since a raw account number alone doesn't identify it;
-    // "telebirr" resolves its own bank_code by name lookup server-side.
-    bankCode: z.string().min(1).optional(),
-  })
-  .refine((input) => input.method !== "bank" || !!input.bankCode, {
-    message: "bankCode is required for bank payouts",
-    path: ["bankCode"],
-  });
+// T7: a raw destination/bankCode typed on every request stored the
+// creator's full account number as plaintext (payouts.destination) —
+// closed by requiring a pre-bound, admin-verified payout_instrument
+// instead. See db/migrations/0060's comment for why this replaced the
+// original destination/bankCode fields rather than sitting alongside them.
+export const requestPayoutSchema = z.object({
+  amountSantim: z.coerce.number().int().positive(),
+  instrumentId: z.string().uuid(),
+});
 export type RequestPayoutInput = z.infer<typeof requestPayoutSchema>;
 
-export const payoutStatusSchema = z.enum(["pending_review", "processing", "paid", "failed"]);
+export const payoutStatusSchema = z.enum([
+  "pending_review",
+  "approved",
+  "processing",
+  "paid",
+  "rejected",
+  "failed",
+  "reversed",
+]);
 
 export const payoutQueueItemSchema = z.object({
   id: z.string().uuid(),
@@ -190,11 +198,63 @@ export const payoutQueueItemSchema = z.object({
   creatorUsername: z.string(),
   amountSantim: z.number().int(),
   method: payoutMethodSchema,
-  destination: z.string(),
+  // The masked display value ("•••• 6789"), joined from the instrument —
+  // never the raw account number, which no API response ever carries.
+  instrumentDisplayTail: z.string().nullable(),
   status: payoutStatusSchema,
   createdAt: z.string(),
 });
 export type PayoutQueueItem = z.infer<typeof payoutQueueItemSchema>;
+
+export const payoutInstrumentStatusSchema = z.enum(["unverified", "verified", "failed", "retired"]);
+
+export const bindPayoutInstrumentSchema = z.object({
+  method: payoutMethodSchema,
+  accountNumber: z.string().min(4).max(60),
+  accountHolder: z.string().min(1).max(120),
+  bankCode: z.string().min(1).optional(),
+});
+export type BindPayoutInstrumentInput = z.infer<typeof bindPayoutInstrumentSchema>;
+
+export const payoutInstrumentSchema = z.object({
+  id: z.string().uuid(),
+  creatorId: z.string().uuid(),
+  method: payoutMethodSchema,
+  displayTail: z.string(),
+  accountHolder: z.string(),
+  bankCode: z.string().nullable(),
+  status: payoutInstrumentStatusSchema,
+  usableFrom: z.string(),
+  createdAt: z.string(),
+  verifiedAt: z.string().nullable(),
+});
+export type PayoutInstrument = z.infer<typeof payoutInstrumentSchema>;
+
+export const taxResidencySchema = z.enum(["et_resident", "diaspora", "other"]);
+export const taxFormTypeSchema = z.enum(["none", "w8ben", "w9"]);
+export const taxProfileStatusSchema = z.enum(["pending", "verified", "rejected", "expired"]);
+
+export const submitTaxProfileSchema = z.object({
+  residency: taxResidencySchema,
+  tin: z.string().min(1).max(20).optional(),
+  formType: taxFormTypeSchema.optional(),
+  formDocumentKey: z.string().optional(),
+});
+export type SubmitTaxProfileInput = z.infer<typeof submitTaxProfileSchema>;
+
+export const taxProfileSchema = z.object({
+  id: z.string().uuid(),
+  creatorId: z.string().uuid(),
+  residency: taxResidencySchema,
+  tin: z.string().nullable(),
+  formType: taxFormTypeSchema.nullable(),
+  withholdingBps: z.number().int(),
+  status: taxProfileStatusSchema,
+  effectiveFrom: z.string(),
+  effectiveTo: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type TaxProfile = z.infer<typeof taxProfileSchema>;
 
 export const payoutResponseSchema = z.object({
   id: z.string().uuid(),

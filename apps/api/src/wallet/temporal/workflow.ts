@@ -13,7 +13,7 @@ import type {
 // the crash-mid-flight gap docs/temporal-migration-plan.md identified: a
 // transient failure (DB blip, Chapa timeout) is retried automatically
 // instead of the whole payout silently stalling.
-const { reserveFunds, reverseFunds, initiateChapaTransfer, markPaid, resolveBankCode, markApproved } =
+const { reserveFunds, reverseFunds, initiateChapaTransfer, markPaid, markApproved } =
   proxyActivities<typeof activities>({
     startToCloseTimeout: "1 minute",
     retry: { maximumAttempts: 5 },
@@ -55,8 +55,10 @@ export async function PayoutWorkflow(input: PayoutWorkflowInput): Promise<Payout
     chapaOutcome = signal;
   });
 
-  const resolvedBankCode = await resolveBankCode(input.method, input.bankCode);
-  const { payoutId } = await reserveFunds({ ...input, bankCode: resolvedBankCode });
+  // No separate bank-code resolution step needed — the instrument already
+  // carries a resolved bank_code from bindPayoutInstrument (T7), pinned
+  // at bind time the same way T3 pins a gift's split rate at send time.
+  const { payoutId } = await reserveFunds(input);
 
   if (input.requiresManualApproval) {
     // No timeout on this wait by design — an admin review queue item
@@ -77,10 +79,9 @@ export async function PayoutWorkflow(input: PayoutWorkflowInput): Promise<Payout
   try {
     await initiateChapaTransfer({
       payoutId,
-      destination: input.destination,
+      instrumentId: input.instrumentId,
       accountName: input.displayName,
       amountSantim: input.amountSantim,
-      bankCode: resolvedBankCode,
     });
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Transfer initiation failed";

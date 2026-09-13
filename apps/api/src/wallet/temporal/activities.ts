@@ -3,6 +3,7 @@ import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } 
 import { notify } from "../../notifications/service.js";
 import { chapaPayoutClient } from "../chapa-client.js";
 import { consumeClearedEarningHoldsForPayout, restoreEarningHoldsForPayout } from "../earning-holds-service.js";
+import { decryptPayoutInstrumentAccountNumber } from "../payout-instruments-service.js";
 import type { PayoutWorkflowInput } from "./types.js";
 
 // Every activity here wraps the exact same DB/Chapa logic
@@ -31,6 +32,17 @@ export async function reserveFunds(input: PayoutWorkflowInput): Promise<{ payout
     const creatorWalletId = await getUserWalletId(client, input.creatorId);
     const platformWalletId = await getPlatformWalletId(client);
 
+    // method/bank_code are denormalized from the instrument at reservation
+    // time (same "pin it at time of send" reasoning as T3's gifts_sent.
+    // creator_share_bps) — a later change to the instrument (or its
+    // retirement) must never rewrite what a past payout actually used.
+    const { rows: instrumentRows } = await client.query<{ method: string; bank_code: string | null }>(
+      `SELECT method, bank_code FROM payout_instruments WHERE id = $1 AND creator_id = $2`,
+      [input.instrumentId, input.creatorId]
+    );
+    const instrument = instrumentRows[0];
+    if (!instrument) throw new Error(`Unknown or mismatched payout instrument ${input.instrumentId}`);
+
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO ledger_transactions (type, status, completed_at) VALUES ('payout', 'completed', now()) RETURNING id`
     );
@@ -38,16 +50,16 @@ export async function reserveFunds(input: PayoutWorkflowInput): Promise<{ payout
 
     const status = input.requiresManualApproval ? "pending_review" : "processing";
     await client.query(
-      `INSERT INTO payouts (id, ledger_transaction_id, creator_id, amount_santim, method, destination, bank_code, status, requires_manual_approval)
+      `INSERT INTO payouts (id, ledger_transaction_id, creator_id, amount_santim, method, bank_code, instrument_id, status, requires_manual_approval)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         input.payoutId,
         ledgerTransactionId,
         input.creatorId,
         input.amountSantim,
-        input.method,
-        input.destination,
-        input.bankCode,
+        instrument.method,
+        instrument.bank_code,
+        input.instrumentId,
         status,
         input.requiresManualApproval,
       ]
@@ -137,12 +149,15 @@ export async function reverseFunds(payoutId: string, failureReason: string): Pro
 // the same reference, inherited from the pre-Temporal implementation's own
 // assumption (see wallet/service.ts's original requestPayout), not
 // independently re-verified against Chapa's docs in this pass.
+//
+// The only place in this entire workflow that ever sees the decrypted
+// account number — fetched fresh from payout_instruments right here,
+// never carried in the workflow's own input (see types.ts's comment).
 export async function initiateChapaTransfer(input: {
   payoutId: string;
-  destination: string;
+  instrumentId: string;
   accountName: string;
   amountSantim: number;
-  bankCode: string;
 }): Promise<{ chapaReference: string }> {
   const existing = await pool.query<{ chapa_reference: string | null }>(
     `SELECT chapa_reference FROM payouts WHERE id = $1`,
@@ -152,11 +167,19 @@ export async function initiateChapaTransfer(input: {
     return { chapaReference: existing.rows[0].chapa_reference };
   }
 
+  const { rows } = await pool.query<{ bank_code: string | null }>(
+    `SELECT bank_code FROM payout_instruments WHERE id = $1`,
+    [input.instrumentId]
+  );
+  const bankCode = rows[0]?.bank_code;
+  if (!bankCode) throw new Error(`Payout instrument ${input.instrumentId} has no bank_code`);
+  const accountNumber = await decryptPayoutInstrumentAccountNumber(input.instrumentId);
+
   const { chapaReference } = await chapaPayoutClient.initiateTransfer({
-    accountNumber: input.destination,
+    accountNumber,
     accountName: input.accountName,
     amountSantim: input.amountSantim,
-    bankCode: input.bankCode,
+    bankCode,
     reference: input.payoutId,
   });
   await pool.query(`UPDATE payouts SET chapa_reference = $1 WHERE id = $2`, [chapaReference, input.payoutId]);
@@ -173,7 +196,3 @@ export async function markPaid(payoutId: string, amountSantim: number, creatorId
   });
 }
 
-export async function resolveBankCode(method: "telebirr" | "bank", bankCode: string): Promise<string> {
-  if (method !== "telebirr") return bankCode;
-  return chapaPayoutClient.resolveBankCodeByName("telebirr");
-}

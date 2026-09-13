@@ -1,4 +1,5 @@
 import {
+  bindPayoutInstrumentSchema,
   chapaTransferWebhookSchema,
   chapaWebhookSchema,
   donateSchema,
@@ -7,6 +8,7 @@ import {
   rejectPayoutSchema,
   requestPayoutSchema,
   sendGiftSchema,
+  submitTaxProfileSchema,
 } from "@birq/shared";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
@@ -36,6 +38,12 @@ import {
   sendGift,
 } from "./service.js";
 import { verifyStripeSignature } from "./stripe-client.js";
+import {
+  bindPayoutInstrument,
+  listPayoutInstruments,
+  retirePayoutInstrument,
+} from "./payout-instruments-service.js";
+import { getCurrentTaxProfile, submitTaxProfile } from "./tax-profiles-service.js";
 
 // User-keyed, not IP-keyed: apps/web's Server Components and its
 // /api/backend proxy both call this API server-to-server from the web
@@ -256,6 +264,41 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
       return requestPayout(req.user.sub, input);
     }
   );
+
+  // --- Payout instruments (T7) — creator-facing bind/list/retire ---
+
+  app.get("/payout-instruments", { preHandler: app.authenticate }, async (req) =>
+    listPayoutInstruments(req.user.sub)
+  );
+
+  app.post(
+    "/payout-instruments",
+    { preHandler: [app.authenticate, app.rejectIfBanned] },
+    async (req, reply) => {
+      const input = bindPayoutInstrumentSchema.parse(req.body);
+      const instrument = await bindPayoutInstrument(req.user.sub, input);
+      reply.code(201);
+      return instrument;
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/payout-instruments/:id/retire",
+    { preHandler: app.authenticate },
+    async (req) => {
+      await retirePayoutInstrument(req.user.sub, req.params.id);
+      return { ok: true };
+    }
+  );
+
+  // --- Tax profile (T7) — creator-facing submit/view ---
+
+  app.get("/tax-profile", { preHandler: app.authenticate }, async (req) => getCurrentTaxProfile(req.user.sub));
+
+  app.post("/tax-profile", { preHandler: app.authenticate }, async (req) => {
+    const input = submitTaxProfileSchema.parse(req.body);
+    return submitTaxProfile(req.user.sub, input);
+  });
 
   app.get("/payouts/pending", { preHandler: app.requireAdmin }, async () => listPendingPayouts());
 

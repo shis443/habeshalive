@@ -39,6 +39,7 @@ import {
   insertEntry,
 } from "../common/ledger.js";
 import { consumeClearedEarningHoldsForPayout, restoreEarningHoldsForPayout } from "./earning-holds-service.js";
+import { decryptPayoutInstrumentAccountNumber, getUsableVerifiedInstrument } from "./payout-instruments-service.js";
 import { getActiveSecurityHold } from "../common/security-hold.js";
 import { flagIfMatched } from "../moderation/service.js";
 import { notify } from "../notifications/service.js";
@@ -763,18 +764,14 @@ export async function sendDonation(donorId: string, input: DonateInput): Promise
   }
 }
 
-// Chapa's own bank directory doesn't have a stable, documented code for
-// Telebirr — resolved by name lookup against GET /v1/banks instead of
-// hardcoding a guessed value (see chapa-client.ts's resolveBankCodeByName
-// doc comment for why guessing here would be dangerous).
-const TELEBIRR_BANK_NAME_FRAGMENT = "telebirr";
-
 // Reverses a completed payout's ledger effect (credits the creator back,
 // debits the platform back) as a new 'refund'-type transaction — the
 // original 'payout' transaction is left as-is (immutable history), this
 // just adds the offsetting entries. Used when disbursement fails after the
-// funds were already reserved.
-async function reversePayoutLedger(
+// funds were already reserved. Exported for admin/payout-batches-service.ts
+// (T7) to reuse the exact same reversal logic on a rejected/failed batch
+// item rather than re-deriving it.
+export async function reversePayoutLedger(
   client: import("pg").PoolClient,
   creatorId: string,
   amountSantim: number,
@@ -836,6 +833,11 @@ export async function requestPayout(creatorId: string, input: RequestPayoutInput
   if (userRows[0]?.is_suspended) throw new AppError(403, "Your payout privileges are currently suspended");
   const displayName = userRows[0]?.display_name ?? "Birq Creator";
 
+  // T7: ownership, verified status, and the 72h cooling-off, all checked
+  // here before a durable workflow is even started — the workflow itself
+  // never re-derives eligibility, it trusts this gate.
+  await getUsableVerifiedInstrument(creatorId, input.instrumentId);
+
   const reviewThreshold = await getPayoutManualReviewThreshold();
   const requiresManualApproval = input.amountSantim >= reviewThreshold;
   const payoutId = randomUUID();
@@ -853,9 +855,7 @@ export async function requestPayout(creatorId: string, input: RequestPayoutInput
     payoutId,
     creatorId,
     amountSantim: input.amountSantim,
-    method: input.method,
-    destination: input.destination,
-    bankCode: input.method === "bank" ? input.bankCode! : "",
+    instrumentId: input.instrumentId,
     displayName,
     requiresManualApproval,
   });
@@ -879,10 +879,9 @@ async function requestPayoutLegacy(
   if (userRows[0]?.is_suspended) throw new AppError(403, "Your payout privileges are currently suspended");
   const displayName = userRows[0]?.display_name ?? "Birq Creator";
 
-  const bankCode =
-    input.method === "telebirr"
-      ? await chapaPayoutClient.resolveBankCodeByName(TELEBIRR_BANK_NAME_FRAGMENT)
-      : input.bankCode!; // schema's .refine() guarantees this for "bank"
+  // T7: bank_code comes from the instrument, resolved once at bind time
+  // (bindPayoutInstrument) — no per-payout Chapa lookup needed.
+  const instrument = await getUsableVerifiedInstrument(creatorId, input.instrumentId);
 
   let payoutId!: string;
   let status!: "pending_review" | "processing";
@@ -904,15 +903,15 @@ async function requestPayoutLegacy(
     status = requiresManualApproval ? "pending_review" : "processing";
 
     const payoutResult = await client.query<{ id: string }>(
-      `INSERT INTO payouts (ledger_transaction_id, creator_id, amount_santim, method, destination, bank_code, status, requires_manual_approval)
+      `INSERT INTO payouts (ledger_transaction_id, creator_id, amount_santim, method, bank_code, instrument_id, status, requires_manual_approval)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
         ledgerTransactionId,
         creatorId,
         input.amountSantim,
-        input.method,
-        input.destination,
-        bankCode,
+        instrument.method,
+        instrument.bankCode,
+        instrument.id,
         status,
         requiresManualApproval,
       ]
@@ -945,11 +944,15 @@ async function requestPayoutLegacy(
   // must reverse that, not leave the creator's balance silently short.
   if (status === "processing") {
     try {
+      // Decrypted here and nowhere else in this function — the only
+      // moment the plaintext account number exists, right before the
+      // one real call that needs it.
+      const accountNumber = await decryptPayoutInstrumentAccountNumber(instrument.id);
       const { chapaReference } = await chapaPayoutClient.initiateTransfer({
-        accountNumber: input.destination,
+        accountNumber,
         accountName: displayName,
         amountSantim: input.amountSantim,
-        bankCode,
+        bankCode: instrument.bankCode!,
         reference: payoutId,
       });
       await pool.query(`UPDATE payouts SET chapa_reference = $1 WHERE id = $2`, [chapaReference, payoutId]);
@@ -982,7 +985,7 @@ interface PayoutQueueRow {
   creator_username: string;
   amount_santim: number;
   method: PayoutQueueItem["method"];
-  destination: string;
+  display_tail: string | null;
   status: PayoutQueueItem["status"];
   created_at: string;
 }
@@ -990,9 +993,10 @@ interface PayoutQueueRow {
 export async function listPendingPayouts(limit = 50): Promise<PayoutQueueItem[]> {
   const { rows } = await pool.query<PayoutQueueRow>(
     `SELECT p.id, p.creator_id, u.username AS creator_username, p.amount_santim, p.method,
-            p.destination, p.status, p.created_at
+            pi.display_tail, p.status, p.created_at
      FROM payouts p
      JOIN users u ON u.id = p.creator_id
+     LEFT JOIN payout_instruments pi ON pi.id = p.instrument_id
      WHERE p.status = 'pending_review'
      ORDER BY p.created_at ASC
      LIMIT $1`,
@@ -1004,7 +1008,7 @@ export async function listPendingPayouts(limit = 50): Promise<PayoutQueueItem[]>
     creatorUsername: row.creator_username,
     amountSantim: row.amount_santim,
     method: row.method,
-    destination: row.destination,
+    instrumentDisplayTail: row.display_tail,
     status: row.status,
     createdAt: row.created_at,
   }));
@@ -1016,7 +1020,7 @@ interface PayoutHistoryRow {
   creator_username: string;
   amount_santim: number;
   method: PayoutQueueItem["method"];
-  destination: string;
+  display_tail: string | null;
   status: PayoutHistoryItem["status"];
   failure_reason: string | null;
   approved_by_username: string | null;
@@ -1033,11 +1037,12 @@ export async function listAllPayouts(filters: {
   limit?: number;
 }): Promise<PayoutHistoryItem[]> {
   const { rows } = await pool.query<PayoutHistoryRow>(
-    `SELECT p.id, p.creator_id, u.username AS creator_username, p.amount_santim, p.method, p.destination,
+    `SELECT p.id, p.creator_id, u.username AS creator_username, p.amount_santim, p.method, pi.display_tail,
             p.status, p.failure_reason, au.username AS approved_by_username, ru.username AS rejected_by_username,
             p.created_at, p.paid_at
      FROM payouts p
      JOIN users u ON u.id = p.creator_id
+     LEFT JOIN payout_instruments pi ON pi.id = p.instrument_id
      LEFT JOIN users au ON au.id = p.approved_by
      LEFT JOIN users ru ON ru.id = p.rejected_by
      WHERE ($1::text IS NULL OR p.status = $1)
@@ -1052,7 +1057,7 @@ export async function listAllPayouts(filters: {
     creatorUsername: row.creator_username,
     amountSantim: row.amount_santim,
     method: row.method,
-    destination: row.destination,
+    instrumentDisplayTail: row.display_tail,
     status: row.status,
     failureReason: row.failure_reason,
     approvedByUsername: row.approved_by_username,
@@ -1106,7 +1111,7 @@ async function approvePayoutLegacy(payoutId: string, adminUserId: string): Promi
   const client = await pool.connect();
   let creatorId!: string;
   let amountSantim!: number;
-  let destination!: string;
+  let instrumentId!: string;
   let bankCode!: string | null;
 
   try {
@@ -1114,19 +1119,20 @@ async function approvePayoutLegacy(payoutId: string, adminUserId: string): Promi
     const { rows } = await client.query<{
       creator_id: string;
       amount_santim: number;
-      destination: string;
+      instrument_id: string | null;
       bank_code: string | null;
       status: string;
-    }>(`SELECT creator_id, amount_santim, destination, bank_code, status FROM payouts WHERE id = $1 FOR UPDATE`, [
+    }>(`SELECT creator_id, amount_santim, instrument_id, bank_code, status FROM payouts WHERE id = $1 FOR UPDATE`, [
       payoutId,
     ]);
     const payout = rows[0];
     if (!payout) throw new AppError(404, "Payout not found");
     if (payout.status !== "pending_review") throw new AppError(400, "Payout is not awaiting review");
+    if (!payout.instrument_id) throw new AppError(500, "Payout has no bound instrument to disburse to");
 
     creatorId = payout.creator_id;
     amountSantim = payout.amount_santim;
-    destination = payout.destination;
+    instrumentId = payout.instrument_id;
     bankCode = payout.bank_code;
 
     await client.query(`UPDATE payouts SET approved_by = $1 WHERE id = $2`, [adminUserId, payoutId]);
@@ -1145,8 +1151,10 @@ async function approvePayoutLegacy(payoutId: string, adminUserId: string): Promi
   const displayName = userRows[0]?.display_name ?? "Birq Creator";
 
   try {
+    // Decrypted only here, at the moment of the real Chapa call.
+    const accountNumber = await decryptPayoutInstrumentAccountNumber(instrumentId);
     const { chapaReference } = await chapaPayoutClient.initiateTransfer({
-      accountNumber: destination,
+      accountNumber,
       accountName: displayName,
       amountSantim,
       bankCode: bankCode!,

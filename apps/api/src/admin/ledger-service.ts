@@ -3,6 +3,7 @@ import type {
   LedgerTransactionLookup,
   ManualAdjustmentInput,
   PlatformWalletSummary,
+  TrialBalance,
 } from "@birq/shared";
 import { logAdminAction } from "./audit.js";
 import { pool } from "../common/db.js";
@@ -117,6 +118,73 @@ export async function searchLedgerTransaction(query: string): Promise<LedgerTran
         amountSantim: e.amount_santim,
       })),
   }));
+}
+
+// T7's trial balance. NOT a check that platform + creator wallets sum to
+// zero — that's not actually true here, since owner_type='user' also
+// covers viewers with unspent topped-up balance, which this deliberately
+// excludes (that broader invariant is what getLedgerReconciliation above
+// already covers, over every wallet). The useful comparison is narrower
+// and different in kind: the SAME quantity (platform wallet balance plus
+// every creator wallet balance) computed two independent ways — once by
+// trusting wallet_balances_cache, once by summing ledger_entries directly
+// — and diffing them. A missed applyBalanceDelta call, a cache write that
+// silently failed, or a stray direct UPDATE to the cache would all show
+// up as nonzero driftSantim here even though each individual ledger
+// transaction still looks internally balanced.
+export async function getTrialBalance(): Promise<TrialBalance> {
+  const platformWalletId = await getPlatformWalletId(pool);
+
+  const [platformCache, creatorCacheSum, unsettled, ledgerDerived] = await Promise.all([
+    pool.query<{ balance_santim: number }>(
+      `SELECT balance_santim FROM wallet_balances_cache WHERE wallet_id = $1`,
+      [platformWalletId]
+    ),
+    // creator_profiles' existence is the canonical "is a creator" check
+    // (users.role='creator' is a denormalized flag set alongside it — see
+    // streams/service.ts's ensureCreatorProfile — but the profile row is
+    // the source of truth this joins against directly).
+    pool.query<{ sum: string | null }>(
+      `SELECT sum(wbc.balance_santim)::text AS sum
+       FROM wallet_balances_cache wbc
+       JOIN wallets w ON w.id = wbc.wallet_id
+       JOIN creator_profiles cp ON cp.user_id = w.owner_id AND w.owner_type = 'user'`
+    ),
+    // In-flight batch reservations — informational only, not part of the
+    // balanced/drift check: funds a batch has reserved already live inside
+    // the creator's (reduced) wallet balance and the platform's (increased)
+    // one, same as any other in-flight payout, so they're already counted
+    // above. This just answers "how much is currently tied up in a batch."
+    pool.query<{ sum: string | null }>(
+      `SELECT sum(amount_santim)::text AS sum
+       FROM payouts
+       WHERE batch_id IS NOT NULL AND status IN ('pending_review', 'approved', 'processing')`
+    ),
+    pool.query<{ sum: string | null }>(
+      `SELECT sum(CASE WHEN le.direction = 'credit' THEN le.amount_santim ELSE -le.amount_santim END)::text AS sum
+       FROM ledger_entries le
+       JOIN wallets w ON w.id = le.wallet_id
+       LEFT JOIN creator_profiles cp ON cp.user_id = w.owner_id AND w.owner_type = 'user'
+       WHERE w.owner_type = 'platform' OR cp.user_id IS NOT NULL`
+    ),
+  ]);
+
+  const platformWalletBalanceSantim = platformCache.rows[0]?.balance_santim ?? 0;
+  const creatorLiabilitySantim = Number(creatorCacheSum.rows[0]?.sum ?? 0);
+  const unsettledBatchSantim = Number(unsettled.rows[0]?.sum ?? 0);
+  const cachedSumSantim = platformWalletBalanceSantim + creatorLiabilitySantim;
+  const ledgerDerivedSumSantim = Number(ledgerDerived.rows[0]?.sum ?? 0);
+  const driftSantim = cachedSumSantim - ledgerDerivedSumSantim;
+
+  return {
+    platformWalletBalanceSantim,
+    creatorLiabilitySantim,
+    unsettledBatchSantim,
+    cachedSumSantim,
+    ledgerDerivedSumSantim,
+    driftSantim,
+    balanced: driftSantim === 0,
+  };
 }
 
 // A rare, heavily-logged capability — never a direct balance edit, always
