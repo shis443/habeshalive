@@ -1,5 +1,6 @@
 import { buildApp } from "./app.js";
 import { settleAdRevenue } from "./ads/service.js";
+import { rebuildOpenLeaderboardWindows } from "./admin/leaderboard-service.js";
 import { processAccountDeletions } from "./auth/account-deletion-service.js";
 import { purgeOldChatMessages } from "./chat/service.js";
 import { env } from "./common/env.js";
@@ -77,6 +78,11 @@ const VIEWER_SAMPLE_INTERVAL_MS = 60 * 1000; // 60 seconds
 // checked more than a few times a day; most ticks touch zero rows since
 // a stream's samples only cross the 90-day line once.
 const VIEWER_SAMPLE_ROLLUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// T5's tightest stated cadence ("daily rebuilds every 5 min") — see
+// leaderboard-service.ts's rebuildOpenLeaderboardWindows for why one job
+// on this single interval also satisfies the looser weekly/monthly
+// (hourly) and alltime (nightly) requirements at Birq's current scale.
+const LEADERBOARD_REBUILD_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 // Wrapped so a rejection inside reapStaleStreams (e.g. a DB blip) never
 // becomes an unhandled rejection that could crash the process — this runs
@@ -176,6 +182,13 @@ function runViewerSampleRollup(): void {
   });
 }
 
+function runLeaderboardRebuild(): void {
+  rebuildOpenLeaderboardWindows().catch((err) => {
+    app.log.error(err, "rebuildOpenLeaderboardWindows failed");
+    captureUnexpectedError(err);
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -205,6 +218,8 @@ app
     setInterval(runViewerSampling, VIEWER_SAMPLE_INTERVAL_MS);
     runViewerSampleRollup();
     setInterval(runViewerSampleRollup, VIEWER_SAMPLE_ROLLUP_INTERVAL_MS);
+    runLeaderboardRebuild();
+    setInterval(runLeaderboardRebuild, LEADERBOARD_REBUILD_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);
