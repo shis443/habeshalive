@@ -1,5 +1,6 @@
 import type { ActiveBoost, AdminAuditAction, AdminSummary } from "@birq/shared";
 import { pool } from "../common/db.js";
+import { ALLTIME_WINDOW_START } from "./leaderboard-service.js";
 
 // Eleven real counts, one query each — no caching layer, this endpoint is
 // for a human glancing at an admin dashboard, not a hot path.
@@ -25,9 +26,16 @@ export async function getAdminSummary(): Promise<AdminSummary> {
     pool.query<{ count: string }>(`SELECT count(*)::text AS count FROM streams WHERE status = 'live'`),
     pool.query<{ count: string }>(`SELECT count(*)::text AS count FROM users`),
     pool.query<{ count: string }>(`SELECT count(*)::text AS count FROM users WHERE role = 'creator'`),
+    // T6: sourced from T5's leaderboard rollup (SUM across every gifter's
+    // own alltime total), not a live SUM over every gifts_sent row ever
+    // written — that scan only gets slower as the platform grows, this
+    // read stays a small, indexed lookup on idx_leaderboard_read
+    // regardless of ledger size. Falls back to 0, not a scan, before the
+    // rebuild job has ever run (e.g. right after a fresh migration).
     pool.query<{ total: string | null }>(
-      `SELECT sum(gt.price_santim * gs.quantity)::text AS total FROM gifts_sent gs
-       JOIN gift_types gt ON gt.id = gs.gift_type_id`
+      `SELECT sum(value)::text AS total FROM leaderboard_snapshots
+       WHERE board = 'top_gifters' AND window_kind = 'alltime' AND window_start = $1::date`,
+      [ALLTIME_WINDOW_START]
     ),
     pool.query<{ count: string; mrr: string | null }>(
       `SELECT count(*)::text AS count, sum(t.price_santim)::text AS mrr
@@ -36,10 +44,11 @@ export async function getAdminSummary(): Promise<AdminSummary> {
     ),
     pool.query<{ total: string | null }>(`SELECT sum(price_santim)::text AS total FROM stream_boosts`),
     pool.query<{ count: string }>(`SELECT count(*)::text AS count FROM users WHERE created_at >= current_date`),
+    // Same rollup source, today's daily slot instead of alltime.
     pool.query<{ total: string | null }>(
-      `SELECT sum(gt.price_santim * gs.quantity)::text AS total FROM gifts_sent gs
-       JOIN gift_types gt ON gt.id = gs.gift_type_id
-       WHERE gs.created_at >= current_date`
+      `SELECT sum(value)::text AS total FROM leaderboard_snapshots
+       WHERE board = 'top_gifters' AND window_kind = 'daily'
+         AND window_start = (now() AT TIME ZONE 'Africa/Addis_Ababa')::date`
     ),
   ]);
 

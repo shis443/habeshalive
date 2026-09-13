@@ -22,6 +22,16 @@ export default defineConfig({
       "**/.git/**",
       "**/.{idea,cache,output,temp}/**",
     ],
+    // *.bench.test.ts files (T6's 1M-row acceptance benchmark, and any
+    // future one) are deliberately NOT excluded here — a config-level
+    // exclude can't be overridden per npm script (a CLI --exclude only
+    // adds to this list, never removes from it). Instead, package.json's
+    // "test" script excludes them at the CLI level for the everyday run;
+    // "test:bench" runs with no exclude, picking them up on demand. Seeds
+    // real bulk data and takes minutes, not seconds, dominated by
+    // Postgres FK-restrict checks on cleanup rather than the actual thing
+    // being benchmarked — not a correctness regression test, so it
+    // doesn't belong in the suite every `npm test` run watches.
     // These are real integration tests against a shared Postgres instance
     // (see test/setup.ts's comment — mocking SQL would test nothing
     // meaningful). Several suites touch the same singleton platform wallet

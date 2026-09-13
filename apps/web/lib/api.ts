@@ -7,6 +7,8 @@ import {
   adminAuditActionSchema,
   adminGiftTypeSchema,
   adminSummarySchema,
+  analyticsOverviewSchema,
+  windowOptionSchema,
   adRevenueByCreatorSchema,
   advertiserSchema,
   anchorCandidateSchema,
@@ -84,6 +86,8 @@ import {
   type AdminAuditAction,
   type AdminGiftType,
   type AdminSummary,
+  type AnalyticsOverview,
+  type WindowOption,
   type AdRevenueByCreator,
   type Advertiser,
   type AnchorCandidate,
@@ -761,6 +765,25 @@ export async function getAdminGiftTypes(): Promise<AdminGiftType[]> {
     return [];
   }
   return adminGiftTypeSchema.array().parse(await unwrapData(res));
+}
+
+export async function getAnalyticsOverview(periodDays?: number): Promise<AnalyticsOverview | null> {
+  const qs = periodDays ? `?periodDays=${periodDays}` : "";
+  const res = await fetchAuthed(`/admin/analytics${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load analytics overview (${res.status})`);
+    return null;
+  }
+  return analyticsOverviewSchema.parse(await unwrapData(res));
+}
+
+export async function getAnalyticsWindowOptions(): Promise<WindowOption[]> {
+  const res = await fetchAuthed("/admin/analytics/leaderboard-windows");
+  if (!res.ok) {
+    console.error(`Failed to load analytics window options (${res.status})`);
+    return [];
+  }
+  return windowOptionSchema.array().parse(await unwrapData(res));
 }
 
 export async function getPlatformConfigData(): Promise<PlatformConfig | null> {

@@ -269,23 +269,28 @@ async function rebuildAllBoards(
 // large enough that this becomes measurably expensive should split this
 // back into per-cadence jobs with real "has this window closed" state,
 // which this does not track.
-export async function rebuildOpenLeaderboardWindows(): Promise<void> {
-  // Every boundary computed and returned as text in one round trip — see
-  // this file's top comment for why none of this is done with JS Date
-  // arithmetic. `date + integer`/`date - integer` in Postgres is exact
-  // day arithmetic; month arithmetic uses INTERVAL so it lands on the
-  // 1st regardless of the current month's length.
-  const { rows } = await pool.query<{
-    today: string;
-    tomorrow: string;
-    yesterday: string;
-    this_week_start: string;
-    next_week_start: string;
-    last_week_start: string;
-    this_month_start: string;
-    next_month_start: string;
-    last_month_start: string;
-  }>(
+export interface OpenWindowBoundaries {
+  today: string;
+  tomorrow: string;
+  yesterday: string;
+  this_week_start: string;
+  next_week_start: string;
+  last_week_start: string;
+  this_month_start: string;
+  next_month_start: string;
+  last_month_start: string;
+}
+
+// Every boundary computed and returned as text in one round trip — see
+// this file's top comment for why none of this is done with JS Date
+// arithmetic. `date + integer`/`date - integer` in Postgres is exact day
+// arithmetic; month arithmetic uses INTERVAL so it lands on the 1st
+// regardless of the current month's length. Exported so the UI's window
+// switcher (analytics-service.ts's getAvailableWindowOptions) can offer
+// exactly the slots this job actually keeps populated, instead of a free-
+// form date picker that would mostly return empty results.
+export async function getOpenWindowBoundaries(): Promise<OpenWindowBoundaries> {
+  const { rows } = await pool.query<OpenWindowBoundaries>(
     `SELECT
        (now() AT TIME ZONE 'Africa/Addis_Ababa')::date::text AS today,
        ((now() AT TIME ZONE 'Africa/Addis_Ababa')::date + 1)::text AS tomorrow,
@@ -297,7 +302,11 @@ export async function rebuildOpenLeaderboardWindows(): Promise<void> {
        (date_trunc('month', now() AT TIME ZONE 'Africa/Addis_Ababa') + INTERVAL '1 month')::date::text AS next_month_start,
        (date_trunc('month', now() AT TIME ZONE 'Africa/Addis_Ababa') - INTERVAL '1 month')::date::text AS last_month_start`
   );
-  const b = rows[0]!;
+  return rows[0]!;
+}
+
+export async function rebuildOpenLeaderboardWindows(): Promise<void> {
+  const b = await getOpenWindowBoundaries();
 
   await rebuildAllBoards("daily", b.yesterday, b.today);
   await rebuildAllBoards("daily", b.today, b.tomorrow);

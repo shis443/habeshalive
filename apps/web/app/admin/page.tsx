@@ -39,6 +39,9 @@ export default async function AdminOverviewPage() {
         </>
       )}
 
+      <Link href="/admin/analytics" className={styles.grafanaLink}>
+        Open Analytics for gross/net, ARPU, conversion and leaderboards →
+      </Link>
       <a href={GRAFANA_URL} target="_blank" rel="noreferrer" className={styles.grafanaLink}>
         Open Grafana for detailed metrics →
       </a>

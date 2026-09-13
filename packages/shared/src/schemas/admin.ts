@@ -394,3 +394,79 @@ export const updateGiftTypeSchema = z.object({
   reason: z.string().min(1).max(500),
 });
 export type UpdateGiftTypeInput = z.infer<typeof updateGiftTypeSchema>;
+
+// --- Analytics (T6) ---
+
+export const leaderboardBoardSchema = z.enum([
+  "top_gifters",
+  "top_streamers_revenue",
+  "top_streamers_watchtime",
+  "top_streamers_ccu",
+]);
+export type LeaderboardBoardValue = z.infer<typeof leaderboardBoardSchema>;
+
+export const leaderboardWindowKindSchema = z.enum(["daily", "weekly", "monthly", "alltime"]);
+export type LeaderboardWindowKindValue = z.infer<typeof leaderboardWindowKindSchema>;
+
+export const leaderboardRowSchema = z.object({
+  subjectId: z.string().uuid(),
+  username: z.string(),
+  displayName: z.string(),
+  rank: z.number().int().positive(),
+  value: z.number().int(),
+});
+export type LeaderboardRow = z.infer<typeof leaderboardRowSchema>;
+
+export const periodSummarySchema = z.object({
+  grossSantim: z.number().int(),
+  netSantim: z.number().int(),
+  creatorShareSantim: z.number().int(),
+  activeUsers: z.number().int(),
+  payingUsers: z.number().int(),
+  activeStreamers: z.number().int(),
+  arpuSantim: z.number(),
+  arppuSantim: z.number(),
+  conversionPct: z.number(),
+});
+export type PeriodSummary = z.infer<typeof periodSummarySchema>;
+
+export const revenueDailyPointSchema = z.object({
+  day: z.string(),
+  grossSantim: z.number().int(),
+  netSantim: z.number().int(),
+  activeUsers: z.number().int(),
+  payingUsers: z.number().int(),
+  activeStreamers: z.number().int(),
+  arpuSantim: z.number(),
+  arppuSantim: z.number(),
+  conversionPct: z.number(),
+});
+export type RevenueDailyPoint = z.infer<typeof revenueDailyPointSchema>;
+
+export const ccuCurvePointSchema = z.object({
+  day: z.string(),
+  peakViewers: z.number().int(),
+});
+export type CcuCurvePoint = z.infer<typeof ccuCurvePointSchema>;
+
+export const analyticsOverviewSchema = z.object({
+  current: periodSummarySchema,
+  previous: periodSummarySchema,
+  dailySeries: z.array(revenueDailyPointSchema),
+  ccuCurve: z.array(ccuCurvePointSchema),
+});
+export type AnalyticsOverview = z.infer<typeof analyticsOverviewSchema>;
+
+export const leaderboardQuerySchema = z.object({
+  board: leaderboardBoardSchema,
+  windowKind: leaderboardWindowKindSchema,
+  windowStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "windowStart must be YYYY-MM-DD"),
+});
+export type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
+
+export const windowOptionSchema = z.object({
+  windowKind: leaderboardWindowKindSchema,
+  windowStart: z.string(),
+  label: z.string(),
+});
+export type WindowOption = z.infer<typeof windowOptionSchema>;

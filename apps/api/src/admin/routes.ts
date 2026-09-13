@@ -7,6 +7,7 @@ import {
   extendGracePeriodSchema,
   forceEndStreamSchema,
   streamControlReasonSchema,
+  leaderboardQuerySchema,
   manualAdjustmentSchema,
   mergeStreamTagsSchema,
   rejectCreatorApplicationSchema,
@@ -59,6 +60,7 @@ import { cancelBoost, listBoostRevenueByCreator } from "./boosts-service.js";
 import { approveKyc, getKycDocumentUrl, listKycSubmissions, rejectKyc } from "../kyc/service.js";
 import { getPlatformConfig, updatePlatformConfig } from "./config-service.js";
 import { listGiftTypesForAdmin, updateGiftType } from "./gift-catalog-service.js";
+import { getAnalyticsOverview, getAvailableWindowOptions, getLeaderboardForDisplay } from "./analytics-service.js";
 import { listCreators, suspendCreator, unsuspendCreator, updateCreator } from "./creators-service.js";
 import {
   getLedgerReconciliation,
@@ -164,6 +166,41 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     "/ledger/lookup",
     { preHandler: app.requirePermission("finance:audit") },
     async (req) => searchLedgerTransaction(req.query.q ?? "")
+  );
+
+  // T6 — /admin/analytics. Same finance:audit visibility as the ledger
+  // reads above: gross/net/ARPU/ARPPU/conversion/active-streamers with
+  // period-over-period deltas, the daily chart series, and the CCU
+  // curve, all read from T6's revenue_daily/v_revenue_kpis rollup and
+  // T4's viewer-sample tables — never a live ledger scan.
+  app.get<{ Querystring: { periodDays?: string } }>(
+    "/analytics",
+    { preHandler: app.requirePermission("finance:audit") },
+    async (req) => {
+      const periodDays = req.query.periodDays ? Number(req.query.periodDays) : undefined;
+      return getAnalyticsOverview(periodDays);
+    }
+  );
+
+  // The leaderboard "window switcher" — board/windowKind/windowStart
+  // chosen by the caller, read straight from T5's rollup via
+  // getLeaderboardForDisplay (which just adds username/displayName for
+  // the UI; leaderboard-service.ts itself stays display-agnostic).
+  app.get<{ Querystring: { board: string; windowKind: string; windowStart: string } }>(
+    "/analytics/leaderboard",
+    { preHandler: app.requirePermission("finance:audit") },
+    async (req) => {
+      const { board, windowKind, windowStart } = leaderboardQuerySchema.parse(req.query);
+      return getLeaderboardForDisplay(board, windowKind, windowStart);
+    }
+  );
+
+  // The window switcher's own option list — exactly the slots T5's
+  // rebuild job actually keeps populated, not a free-form date picker.
+  app.get(
+    "/analytics/leaderboard-windows",
+    { preHandler: app.requirePermission("finance:audit") },
+    async () => getAvailableWindowOptions()
   );
 
   // Deliberately still requireAdmin (super_admin only), NOT

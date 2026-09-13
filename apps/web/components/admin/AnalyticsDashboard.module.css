@@ -1,0 +1,78 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.chartCard {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 8px;
+  padding: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.chartTitle {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  margin: 0 0 var(--space-2);
+}
+
+.switcherRow {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.switcherRow select {
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--on-background);
+  font-size: 13px;
+  font-family: var(--font-label);
+}
+
+.leaderboardList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.leaderboardRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px var(--space-3);
+  border-radius: 6px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+}
+
+.rank {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--on-background);
+}
+
+.value {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--primary);
+  white-space: nowrap;
+}

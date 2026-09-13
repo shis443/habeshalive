@@ -66,6 +66,9 @@ export function AdminSidebar() {
       <Link href="/admin/ledger" className={pathname.startsWith("/admin/ledger") ? styles.linkActive : styles.link}>
         Ledger &amp; Finance
       </Link>
+      <Link href="/admin/analytics" className={pathname.startsWith("/admin/analytics") ? styles.linkActive : styles.link}>
+        Analytics
+      </Link>
       <Link href="/admin/creators" className={pathname.startsWith("/admin/creators") ? styles.linkActive : styles.link}>
         Creators
       </Link>

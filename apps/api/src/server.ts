@@ -1,6 +1,7 @@
 import { buildApp } from "./app.js";
 import { settleAdRevenue } from "./ads/service.js";
 import { rebuildOpenLeaderboardWindows } from "./admin/leaderboard-service.js";
+import { recomputeTrailingRevenueDays } from "./admin/revenue-daily-service.js";
 import { processAccountDeletions } from "./auth/account-deletion-service.js";
 import { purgeOldChatMessages } from "./chat/service.js";
 import { env } from "./common/env.js";
@@ -83,6 +84,11 @@ const VIEWER_SAMPLE_ROLLUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // on this single interval also satisfies the looser weekly/monthly
 // (hourly) and alltime (nightly) requirements at Birq's current scale.
 const LEADERBOARD_REBUILD_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+// T6's revenue_daily — "recompute the trailing 35 days nightly." Same
+// "daily in spirit" reasoning as every other nightly-cadence job in this
+// file: checked every 6 hours so a redeploy around midnight never delays
+// the whole trailing window by up to a full day.
+const REVENUE_DAILY_RECOMPUTE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 // Wrapped so a rejection inside reapStaleStreams (e.g. a DB blip) never
 // becomes an unhandled rejection that could crash the process — this runs
@@ -189,6 +195,13 @@ function runLeaderboardRebuild(): void {
   });
 }
 
+function runRevenueDailyRecompute(): void {
+  recomputeTrailingRevenueDays().catch((err) => {
+    app.log.error(err, "recomputeTrailingRevenueDays failed");
+    captureUnexpectedError(err);
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -220,6 +233,8 @@ app
     setInterval(runViewerSampleRollup, VIEWER_SAMPLE_ROLLUP_INTERVAL_MS);
     runLeaderboardRebuild();
     setInterval(runLeaderboardRebuild, LEADERBOARD_REBUILD_INTERVAL_MS);
+    runRevenueDailyRecompute();
+    setInterval(runRevenueDailyRecompute, REVENUE_DAILY_RECOMPUTE_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);
