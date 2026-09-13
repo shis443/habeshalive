@@ -1,6 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { encryptSecret } from "../common/crypto.js";
 import { pool } from "../common/db.js";
+import { creditCreatorFromViewerSpend, getPlatformWalletId } from "../common/ledger.js";
+import { clearDueEarningHolds } from "../wallet/earning-holds-service.js";
 
 export interface TestUser {
   id: string;
@@ -140,6 +142,75 @@ export function uniqueTxRef(): string {
   return `topup_${randomUUID()}`;
 }
 
+// Gives a creator real, withdrawable ("cleared") earnings for tests that
+// need a payout precondition (reserveFunds/requestPayout et al.) — routed
+// through the actual production credit path (creditCreatorFromViewerSpend)
+// and the actual clearing job (clearDueEarningHolds), not a hand-rolled
+// SQL model of them, per this project's standing rule that an enforcement
+// control's test must observe the real system. clearsInMs: 0 is the one
+// deliberate shortcut — it lets the test collapse the real 14-day hold
+// into an immediate clear without faking the clock, since
+// creditCreatorFromViewerSpend already accepts this as a real parameter
+// (not a test-only branch) for exactly this purpose.
+//
+// Funds a synthetic viewer wallet directly via wallet_balances_cache
+// (bypassing topup/Chapa, which isn't what's under test here) and credits
+// 100% of amountSantim to the creator as "paid" bucket, 0% to the
+// platform, so the full amount clears and is fully withdrawable.
+//
+// Returns the synthetic viewer's user id — the caller must feed it into
+// the same cleanupTestUsers(createdUserIds) call the test already makes
+// for the creator. Deliberately does no cleanup of its own: the ledger
+// balance trigger (migration 0048) is deferred per-statement, so deleting
+// only the viewer's half of this transaction's entries in an isolated
+// statement would delete an unbalanced remainder and raise at commit.
+// cleanupTestUsers already deletes a whole ledger_transaction's entries
+// in one statement (it discovers the transaction via the creator's own
+// wallet, which is in the same tracked id list) — that's the only safe
+// way to remove these rows, and it's already exactly what the existing
+// gift/donation/PPV tests rely on for the identical reason.
+export async function fundCreatorEarnings(creatorId: string, amountSantim: number): Promise<string> {
+  const viewer = await createUserWithWallet("earnings_source");
+  await pool.query(`UPDATE wallet_balances_cache SET balance_santim = $2 WHERE wallet_id = $1`, [
+    viewer.walletId,
+    amountSantim,
+  ]);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const platformWalletId = await getPlatformWalletId(client);
+    const { rows: walletRows } = await client.query<{ id: string }>(
+      `SELECT id FROM wallets WHERE owner_type = 'user' AND owner_id = $1 AND currency = 'ETB'`,
+      [creatorId]
+    );
+    const creatorWalletId = walletRows[0]!.id;
+    const { rows: txRows } = await client.query<{ id: string }>(
+      `INSERT INTO ledger_transactions (type, status, completed_at) VALUES ('gift', 'completed', now()) RETURNING id`
+    );
+    await creditCreatorFromViewerSpend(client, {
+      ledgerTransactionId: txRows[0]!.id,
+      viewerWalletId: viewer.walletId,
+      creatorId,
+      creatorWalletId,
+      platformWalletId,
+      totalAmount: amountSantim,
+      creatorShare: amountSantim,
+      platformShare: 0,
+      clearsInMs: 0,
+    });
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  await clearDueEarningHolds();
+  return viewer.id;
+}
+
 export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   if (userIds.length === 0) return;
 
@@ -221,6 +292,12 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   // ppv-service.test.ts's purchasePpvAccess coverage.
   await pool.query(`DELETE FROM donations WHERE donor_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM ppv_purchases WHERE buyer_id = ANY($1)`, [userIds]);
+  // Before payouts and ledger_entries below — earning_holds.ledger_entry_id
+  // and .consumed_by_payout_id both reference them with no ON DELETE
+  // CASCADE (db/migrations/0053_wallet_buckets_and_clearing.sql), so
+  // deleting either first would fail this creator's FK constraint the
+  // first time a test actually exercises a viewer-funded credit path.
+  await pool.query(`DELETE FROM earning_holds WHERE creator_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM payouts WHERE creator_id = ANY($1)`, [userIds]);
   // Also no CASCADE from users on chat_messages.user_id (0001_init.sql —
   // only stream_id cascades) — surfaced by chat/service.test.ts's first

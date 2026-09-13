@@ -2,6 +2,7 @@ import { pool } from "../../common/db.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../../common/ledger.js";
 import { notify } from "../../notifications/service.js";
 import { chapaPayoutClient } from "../chapa-client.js";
+import { consumeClearedEarningHoldsForPayout, restoreEarningHoldsForPayout } from "../earning-holds-service.js";
 import type { PayoutWorkflowInput } from "./types.js";
 
 // Every activity here wraps the exact same DB/Chapa logic
@@ -30,25 +31,10 @@ export async function reserveFunds(input: PayoutWorkflowInput): Promise<{ payout
     const creatorWalletId = await getUserWalletId(client, input.creatorId);
     const platformWalletId = await getPlatformWalletId(client);
 
-    const balanceResult = await client.query<{ balance_santim: number }>(
-      `SELECT balance_santim FROM wallet_balances_cache WHERE wallet_id = $1 FOR UPDATE`,
-      [creatorWalletId]
-    );
-    const balance = balanceResult.rows[0]?.balance_santim ?? 0;
-    if (balance < input.amountSantim) {
-      await client.query("ROLLBACK");
-      throw new Error("Insufficient balance");
-    }
-
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO ledger_transactions (type, status, completed_at) VALUES ('payout', 'completed', now()) RETURNING id`
     );
     const ledgerTransactionId = rows[0]!.id;
-
-    await insertEntry(client, ledgerTransactionId, creatorWalletId, "debit", input.amountSantim);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", input.amountSantim);
-    await applyBalanceDelta(client, creatorWalletId, -input.amountSantim);
-    await applyBalanceDelta(client, platformWalletId, input.amountSantim);
 
     const status = input.requiresManualApproval ? "pending_review" : "processing";
     await client.query(
@@ -66,6 +52,18 @@ export async function reserveFunds(input: PayoutWorkflowInput): Promise<{ payout
         input.requiresManualApproval,
       ]
     );
+
+    // The real eligibility gate: withdrawable is cleared earning_holds, not
+    // wallet_balances_cache's pooled total (which also holds pending and
+    // promotional money) — see wallet/earning-holds-service.ts. Throws
+    // "Insufficient withdrawable balance" if short, which rolls back the
+    // payouts/ledger_transactions inserts above along with everything else.
+    await consumeClearedEarningHoldsForPayout(client, input.creatorId, input.amountSantim, input.payoutId);
+
+    await insertEntry(client, ledgerTransactionId, creatorWalletId, "debit", input.amountSantim);
+    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", input.amountSantim);
+    await applyBalanceDelta(client, creatorWalletId, -input.amountSantim);
+    await applyBalanceDelta(client, platformWalletId, input.amountSantim);
 
     await client.query("COMMIT");
   } catch (err) {

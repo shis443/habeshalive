@@ -113,8 +113,14 @@ export async function redeemPoints(userId: string, points: number): Promise<Rede
       `INSERT INTO ledger_transactions (type, status, completed_at) VALUES ('points_redemption', 'completed', now()) RETURNING id`
     );
     const ledgerTransactionId = txRows[0]!.id;
-    await insertEntry(client, ledgerTransactionId, walletId, "credit", creditedSantim);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, "debit", creditedSantim);
+    // 'promotional': redeemed for free by watching, not paid for — a real
+    // platform marketing cost, and per T2's funding_bucket invariant, money
+    // that must never become a withdrawable creator earning if the viewer
+    // goes on to gift it. See wallet/service.ts's sendGift for the other
+    // half of that invariant (the proportional split on the creator's
+    // credit side).
+    await insertEntry(client, ledgerTransactionId, walletId, "credit", creditedSantim, "promotional");
+    await insertEntry(client, ledgerTransactionId, platformWalletId, "debit", creditedSantim, "promotional");
     await applyBalanceDelta(client, walletId, creditedSantim);
     await applyBalanceDelta(client, platformWalletId, -creditedSantim);
 

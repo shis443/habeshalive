@@ -10,6 +10,7 @@ import { reconcileStreamControls } from "./streams/emergency-controls-service.js
 import { renewPlatformSubscriptions } from "./subscriptions/platform-service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
+import { clearDueEarningHolds } from "./wallet/earning-holds-service.js";
 
 // Before buildApp() — Sentry needs to be initialized before anything it
 // might need to capture can run, same reasoning as every Sentry SDK's own
@@ -59,6 +60,14 @@ const CHAT_RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // grace period never actually got anonymized without this; fixed as part
 // of the same pass since it's the same "PII retention" concern.
 const ACCOUNT_DELETION_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// T2's clearing job — checked far more often than the 14-day window it's
+// enforcing needs, because the standing rule for this exact job is "an
+// enforcement control's acceptance test must observe the external system,
+// not a model of it": a creator whose hold clears at 03:14:07 should see it
+// reflected within minutes, not sit for up to 6 hours behind a job that
+// only runs "daily in spirit." Cheap to run this often — most ticks touch
+// zero rows.
+const EARNING_HOLDS_CLEARING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 // Wrapped so a rejection inside reapStaleStreams (e.g. a DB blip) never
 // becomes an unhandled rejection that could crash the process — this runs
@@ -137,6 +146,13 @@ function runAccountDeletions(): void {
   });
 }
 
+function runEarningHoldsClearing(): void {
+  clearDueEarningHolds().catch((err) => {
+    app.log.error(err, "clearDueEarningHolds failed");
+    captureUnexpectedError(err);
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -160,6 +176,8 @@ app
     setInterval(runChatRetention, CHAT_RETENTION_INTERVAL_MS);
     runAccountDeletions();
     setInterval(runAccountDeletions, ACCOUNT_DELETION_INTERVAL_MS);
+    runEarningHoldsClearing();
+    setInterval(runEarningHoldsClearing, EARNING_HOLDS_CLEARING_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);

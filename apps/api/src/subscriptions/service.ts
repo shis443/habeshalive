@@ -9,7 +9,7 @@ import type { PoolClient } from "pg";
 import { logAdminAction } from "../admin/audit.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
-import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
+import { creditCreatorFromViewerSpend, getPlatformWalletId, getUserWalletId } from "../common/ledger.js";
 import { notify } from "../notifications/service.js";
 
 export async function listTiers(): Promise<SubscriptionTier[]> {
@@ -58,13 +58,16 @@ async function chargeSubscriptionOrNull(
   );
   const ledgerTransactionId = rows[0]!.id;
 
-  await insertEntry(client, ledgerTransactionId, subscriberWalletId, "debit", priceSantim);
-  await insertEntry(client, ledgerTransactionId, creatorWalletId, "credit", creatorShare);
-  await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", platformShare);
-
-  await applyBalanceDelta(client, subscriberWalletId, -priceSantim);
-  await applyBalanceDelta(client, creatorWalletId, creatorShare);
-  await applyBalanceDelta(client, platformWalletId, platformShare);
+  await creditCreatorFromViewerSpend(client, {
+    ledgerTransactionId,
+    viewerWalletId: subscriberWalletId,
+    creatorId,
+    creatorWalletId,
+    platformWalletId,
+    totalAmount: priceSantim,
+    creatorShare,
+    platformShare,
+  });
 
   return ledgerTransactionId;
 }

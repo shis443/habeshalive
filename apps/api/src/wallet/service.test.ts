@@ -6,6 +6,7 @@ import {
   cleanupTestUsers,
   createTestCreator,
   createTestViewer,
+  fundCreatorEarnings,
   getGiftTypeId,
   getSubscriptionTierId,
   getWalletBalance,
@@ -258,7 +259,7 @@ describe("sendDonation", () => {
 describe("payout hold", () => {
   it("debits the wallet immediately and does not require manual approval below the threshold", async () => {
     const creator = await trackUser(await createTestCreator());
-    await fundWallet(creator.id, 100_000);
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 100_000));
 
     const payout = await requestPayout(creator.id, {
       amountSantim: 50_000,
@@ -273,7 +274,7 @@ describe("payout hold", () => {
 
   it("flags manual approval and still holds funds at/above the 5,000 ETB threshold", async () => {
     const creator = await trackUser(await createTestCreator());
-    await fundWallet(creator.id, 600_000);
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 600_000));
 
     const payout = await requestPayout(creator.id, {
       amountSantim: 500_000,
@@ -288,7 +289,7 @@ describe("payout hold", () => {
 
   it("rejects a payout larger than the available balance", async () => {
     const creator = await trackUser(await createTestCreator());
-    await fundWallet(creator.id, 1_000);
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 1_000));
 
     await expect(
       requestPayout(creator.id, { amountSantim: 5_000, method: "telebirr", destination: "0911234567" })
@@ -299,7 +300,7 @@ describe("payout hold", () => {
 
   it("balances the ledger transaction for a held payout", async () => {
     const creator = await trackUser(await createTestCreator());
-    await fundWallet(creator.id, 20_000);
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 20_000));
 
     const payout = await requestPayout(creator.id, {
       amountSantim: 10_000,
@@ -318,7 +319,7 @@ describe("payout hold", () => {
 describe("security hold + KYC gate on requestPayout", () => {
   it("blocks a payout within 72h of a password/2FA change, funds untouched", async () => {
     const creator = await trackUser(await createTestCreator());
-    await fundWallet(creator.id, 10_000);
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 10_000));
     await recordSecurityEvent(creator.id, "password_change");
 
     await expect(
@@ -330,7 +331,7 @@ describe("security hold + KYC gate on requestPayout", () => {
 
   it("does not block a payout once no security event is on record", async () => {
     const creator = await trackUser(await createTestCreator());
-    await fundWallet(creator.id, 10_000);
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 10_000));
 
     const payout = await requestPayout(creator.id, {
       amountSantim: 5_000,
@@ -342,7 +343,7 @@ describe("security hold + KYC gate on requestPayout", () => {
 
   it("blocks a payout when KYC is required and not approved, and unblocks once approved", async () => {
     const creator = await trackUser(await createTestCreator());
-    await fundWallet(creator.id, 10_000);
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 10_000));
 
     await pool.query(`UPDATE platform_config SET kyc_required_for_payouts = true WHERE id = TRUE`);
     try {

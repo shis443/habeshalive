@@ -148,6 +148,15 @@ export const manualAdjustmentSchema = z.object({
   amountSantim: z.number().int().positive(),
   direction: z.enum(["credit_user", "debit_user"]),
   reason: z.string().min(1).max(500),
+  // T2's funding_bucket invariant (migration 0053) — defaults to
+  // 'promotional' on the conservative side deliberately: an admin credit
+  // is either a goodwill gesture (promotional, the honest default) or a
+  // correction restoring real, already-settled revenue (paid, which an
+  // admin who knows that must say explicitly). An under-specified admin
+  // credit must never silently become spendable-and-withdrawable real
+  // money. Meaningless for debit_user (a debit has nothing to bucket —
+  // funding_bucket only exists on credits a wallet actually receives).
+  fundingBucket: z.enum(["paid", "promotional"]).optional(),
 });
 export type ManualAdjustmentInput = z.infer<typeof manualAdjustmentSchema>;
 

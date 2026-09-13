@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDefaultRevenueShareBps } from "../admin/config-service.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
-import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
+import { creditCreatorFromViewerSpend, getPlatformWalletId, getUserWalletId } from "../common/ledger.js";
 
 // Charges the buyer's wallet balance and records the purchase — same
 // funding source and revenue-share split as a gift (wallet/service.ts's
@@ -66,13 +66,16 @@ export async function purchasePpvAccess(buyerId: string, streamId: string): Prom
     );
     const ledgerTransactionId = txRows[0]!.id;
 
-    await insertEntry(client, ledgerTransactionId, buyerWalletId, "debit", price);
-    await insertEntry(client, ledgerTransactionId, creatorWalletId, "credit", creatorShare);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", platformShare);
-
-    await applyBalanceDelta(client, buyerWalletId, -price);
-    await applyBalanceDelta(client, creatorWalletId, creatorShare);
-    await applyBalanceDelta(client, platformWalletId, platformShare);
+    await creditCreatorFromViewerSpend(client, {
+      ledgerTransactionId,
+      viewerWalletId: buyerWalletId,
+      creatorId: stream.creator_id,
+      creatorWalletId,
+      platformWalletId,
+      totalAmount: price,
+      creatorShare,
+      platformShare,
+    });
 
     const jti = randomUUID();
     await client.query(

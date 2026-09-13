@@ -31,7 +31,14 @@ import { hasApprovedKyc } from "../kyc/service.js";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
-import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
+import {
+  applyBalanceDelta,
+  creditCreatorFromViewerSpend,
+  getPlatformWalletId,
+  getUserWalletId,
+  insertEntry,
+} from "../common/ledger.js";
+import { consumeClearedEarningHoldsForPayout, restoreEarningHoldsForPayout } from "./earning-holds-service.js";
 import { getActiveSecurityHold } from "../common/security-hold.js";
 import { flagIfMatched } from "../moderation/service.js";
 import { notify } from "../notifications/service.js";
@@ -512,13 +519,16 @@ export async function sendGift(senderId: string, input: SendGiftInput): Promise<
     );
     const ledgerTransactionId = rows[0]!.id;
 
-    await insertEntry(client, ledgerTransactionId, senderWalletId, "debit", totalAmount);
-    await insertEntry(client, ledgerTransactionId, creatorWalletId, "credit", creatorShare);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", platformShare);
-
-    await applyBalanceDelta(client, senderWalletId, -totalAmount);
-    await applyBalanceDelta(client, creatorWalletId, creatorShare);
-    await applyBalanceDelta(client, platformWalletId, platformShare);
+    await creditCreatorFromViewerSpend(client, {
+      ledgerTransactionId,
+      viewerWalletId: senderWalletId,
+      creatorId: stream.creator_id,
+      creatorWalletId,
+      platformWalletId,
+      totalAmount,
+      creatorShare,
+      platformShare,
+    });
 
     await client.query(
       `INSERT INTO gifts_sent (ledger_transaction_id, sender_id, creator_id, stream_id, gift_type_id, quantity, message, recipient_id, is_anonymous)
@@ -663,13 +673,16 @@ export async function sendDonation(donorId: string, input: DonateInput): Promise
     );
     const ledgerTransactionId = rows[0]!.id;
 
-    await insertEntry(client, ledgerTransactionId, donorWalletId, "debit", input.amountSantim);
-    await insertEntry(client, ledgerTransactionId, creatorWalletId, "credit", creatorShare);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", platformShare);
-
-    await applyBalanceDelta(client, donorWalletId, -input.amountSantim);
-    await applyBalanceDelta(client, creatorWalletId, creatorShare);
-    await applyBalanceDelta(client, platformWalletId, platformShare);
+    await creditCreatorFromViewerSpend(client, {
+      ledgerTransactionId,
+      viewerWalletId: donorWalletId,
+      creatorId: stream.creator_id,
+      creatorWalletId,
+      platformWalletId,
+      totalAmount: input.amountSantim,
+      creatorShare,
+      platformShare,
+    });
 
     const isAnonymous = input.isAnonymous ?? false;
     await client.query(
@@ -737,7 +750,8 @@ const TELEBIRR_BANK_NAME_FRAGMENT = "telebirr";
 async function reversePayoutLedger(
   client: import("pg").PoolClient,
   creatorId: string,
-  amountSantim: number
+  amountSantim: number,
+  payoutId: string
 ): Promise<void> {
   const creatorWalletId = await getUserWalletId(client, creatorId);
   const platformWalletId = await getPlatformWalletId(client);
@@ -751,6 +765,12 @@ async function reversePayoutLedger(
   await insertEntry(client, reversalId, platformWalletId, "debit", amountSantim);
   await applyBalanceDelta(client, creatorWalletId, amountSantim);
   await applyBalanceDelta(client, platformWalletId, -amountSantim);
+
+  // The reservation this reverses consumed 'cleared' earning_holds
+  // (requestPayoutLegacy / reserveFunds) — undo that too, or the refunded
+  // money becomes a real wallet balance the creator can never withdraw
+  // again.
+  await restoreEarningHoldsForPayout(client, payoutId);
 }
 
 // Dispatches to the Temporal-backed workflow when TEMPORAL_ADDRESS is
@@ -849,23 +869,10 @@ async function requestPayoutLegacy(
     const creatorWalletId = await getUserWalletId(client, creatorId);
     const platformWalletId = await getPlatformWalletId(client);
 
-    const balanceResult = await client.query<{ balance_santim: number }>(
-      `SELECT balance_santim FROM wallet_balances_cache WHERE wallet_id = $1 FOR UPDATE`,
-      [creatorWalletId]
-    );
-    const balance = balanceResult.rows[0]?.balance_santim ?? 0;
-    if (balance < input.amountSantim) throw new AppError(400, "Insufficient balance");
-
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO ledger_transactions (type, status, completed_at) VALUES ('payout', 'completed', now()) RETURNING id`
     );
     const ledgerTransactionId = rows[0]!.id;
-
-    await insertEntry(client, ledgerTransactionId, creatorWalletId, "debit", input.amountSantim);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", input.amountSantim);
-
-    await applyBalanceDelta(client, creatorWalletId, -input.amountSantim);
-    await applyBalanceDelta(client, platformWalletId, input.amountSantim);
 
     status = requiresManualApproval ? "pending_review" : "processing";
 
@@ -884,6 +891,19 @@ async function requestPayoutLegacy(
       ]
     );
     payoutId = payoutResult.rows[0]!.id;
+
+    // The real eligibility gate: withdrawable is cleared earning_holds, not
+    // wallet_balances_cache's pooled total — see reserveFunds's identical
+    // fix in wallet/temporal/activities.ts and
+    // wallet/earning-holds-service.ts for why. Throws "Insufficient
+    // withdrawable balance" if short, rolling back the inserts above.
+    await consumeClearedEarningHoldsForPayout(client, creatorId, input.amountSantim, payoutId);
+
+    await insertEntry(client, ledgerTransactionId, creatorWalletId, "debit", input.amountSantim);
+    await insertEntry(client, ledgerTransactionId, platformWalletId, "credit", input.amountSantim);
+
+    await applyBalanceDelta(client, creatorWalletId, -input.amountSantim);
+    await applyBalanceDelta(client, platformWalletId, input.amountSantim);
 
     await client.query("COMMIT");
   } catch (err) {
@@ -910,7 +930,7 @@ async function requestPayoutLegacy(
       const reverseClient = await pool.connect();
       try {
         await reverseClient.query("BEGIN");
-        await reversePayoutLedger(reverseClient, creatorId, input.amountSantim);
+        await reversePayoutLedger(reverseClient, creatorId, input.amountSantim, payoutId);
         await reverseClient.query(
           `UPDATE payouts SET status = 'failed', failure_reason = $1 WHERE id = $2`,
           [err instanceof Error ? err.message : "Transfer initiation failed", payoutId]
@@ -1116,7 +1136,7 @@ async function approvePayoutLegacy(payoutId: string, adminUserId: string): Promi
     const reverseClient = await pool.connect();
     try {
       await reverseClient.query("BEGIN");
-      await reversePayoutLedger(reverseClient, creatorId, amountSantim);
+      await reversePayoutLedger(reverseClient, creatorId, amountSantim, payoutId);
       await reverseClient.query(`UPDATE payouts SET status = 'failed', failure_reason = $1 WHERE id = $2`, [
         err instanceof Error ? err.message : "Transfer initiation failed",
         payoutId,
@@ -1175,7 +1195,7 @@ async function rejectPayoutLegacy(payoutId: string, adminUserId: string, reason:
     if (!payout) throw new AppError(404, "Payout not found");
     if (payout.status !== "pending_review") throw new AppError(400, "Payout is not awaiting review");
 
-    await reversePayoutLedger(client, payout.creator_id, payout.amount_santim);
+    await reversePayoutLedger(client, payout.creator_id, payout.amount_santim, payoutId);
     await client.query(
       `UPDATE payouts SET status = 'failed', failure_reason = $1, rejected_by = $2 WHERE id = $3`,
       [reason, adminUserId, payoutId]
@@ -1255,7 +1275,7 @@ async function completePayoutFromWebhookLegacy(webhook: ChapaTransferWebhook): P
     if (isSuccess) {
       await client.query(`UPDATE payouts SET status = 'paid', paid_at = now() WHERE id = $1`, [payout.id]);
     } else {
-      await reversePayoutLedger(client, payout.creator_id, payout.amount_santim);
+      await reversePayoutLedger(client, payout.creator_id, payout.amount_santim, payout.id);
       await client.query(`UPDATE payouts SET status = 'failed', failure_reason = $1 WHERE id = $2`, [
         `Chapa reported transfer status: ${webhook.status}`,
         payout.id,

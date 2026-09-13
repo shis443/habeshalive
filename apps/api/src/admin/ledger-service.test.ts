@@ -8,6 +8,7 @@ import {
   cleanupTestUsers,
   createTestCreator,
   createTestViewer,
+  fundCreatorEarnings,
   getGiftTypeId,
   getSubscriptionTierId,
   type TestUser,
@@ -98,7 +99,13 @@ describe("ledger invariant", () => {
     await cancelGiftCard(admin.id, cardToCancel.id);
 
     // payout hold (reserves funds immediately, same as any other
-    // ledger-writing operation, regardless of whether it's later approved)
+    // ledger-writing operation, regardless of whether it's later approved).
+    // The gift above only earns the creator a *pending* hold (14-day
+    // clearing window, migration 0053) — not yet withdrawable — so this
+    // test's payout draws on a separately-credited, already-cleared amount
+    // instead, exactly as any real creator's own already-cleared earnings
+    // would.
+    createdUserIds.push(await fundCreatorEarnings(creator.id, 1_000));
     await requestPayout(creator.id, { amountSantim: 1_000, method: "telebirr", destination: "0911234567" });
 
     const after = await getLedgerReconciliation();

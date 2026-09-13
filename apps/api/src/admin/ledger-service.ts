@@ -149,9 +149,13 @@ export async function performManualAdjustment(
     const userDirection = input.direction === "credit_user" ? "credit" : "debit";
     const platformDirection = input.direction === "credit_user" ? "debit" : "credit";
     const userDelta = input.direction === "credit_user" ? input.amountSantim : -input.amountSantim;
+    // Only meaningful for a credit — see manualAdjustmentSchema's own
+    // comment on why 'promotional' is the safe default when an admin
+    // doesn't say otherwise. A debit has nothing to bucket.
+    const fundingBucket = input.direction === "credit_user" ? (input.fundingBucket ?? "promotional") : "paid";
 
-    await insertEntry(client, ledgerTransactionId, userWalletId, userDirection, input.amountSantim);
-    await insertEntry(client, ledgerTransactionId, platformWalletId, platformDirection, input.amountSantim);
+    await insertEntry(client, ledgerTransactionId, userWalletId, userDirection, input.amountSantim, fundingBucket);
+    await insertEntry(client, ledgerTransactionId, platformWalletId, platformDirection, input.amountSantim, fundingBucket);
     await applyBalanceDelta(client, userWalletId, userDelta);
     await applyBalanceDelta(client, platformWalletId, -userDelta);
 
