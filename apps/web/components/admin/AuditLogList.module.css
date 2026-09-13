@@ -1,0 +1,51 @@
+.diffWrap {
+  margin-top: 4px;
+}
+
+.diffToggle {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.diffTable {
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.diffTable th,
+.diffTable td {
+  text-align: left;
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid var(--outline-variant, rgba(255, 255, 255, 0.08));
+}
+
+.diffTable th {
+  color: var(--on-surface-variant);
+  font-weight: 600;
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Only the fields that actually changed get emphasis — most rows in a real
+   before/after pair are unchanged context, and highlighting everything
+   would defeat the point of a diff. */
+.diffChanged td {
+  color: var(--on-background);
+  font-weight: 600;
+}
+
+.diffChanged td:first-child {
+  font-weight: 400;
+  color: var(--on-surface-variant);
+}

@@ -153,7 +153,13 @@ export async function rejectKyc(adminId: string, submissionId: string, reason: s
     [reason, adminId, submissionId]
   );
   if (!rows[0]) throw new AppError(404, "Submission not found or already reviewed");
-  await logAdminAction(adminId, "kyc.reject", "kyc_submission", submissionId, { reason });
+  // status='pending' in the WHERE clause above is what the UPDATE actually
+  // matched on, so "before" is known without a separate SELECT.
+  await logAdminAction(adminId, "kyc.reject", "kyc_submission", submissionId, {
+    reason,
+    before: { status: "pending" },
+    after: { status: "rejected", rejectionReason: reason },
+  });
   await notify(rows[0].user_id, "kyc_rejected", "Your identity verification needs another look", {
     body: reason,
     linkUrl: "/settings",

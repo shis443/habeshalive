@@ -137,6 +137,18 @@ export async function sendChatMessage(userId: string, streamId: string, body: st
   if (await isBlockedFromChannel(streamRow.creator_id, userId)) {
     throw new AppError(403, "You're blocked from chatting in this channel");
   }
+  // Admin emergency chat mute (admin/streams-controls-service.ts,
+  // migration 0050's stream_controls.chat_muted). This is the entire
+  // enforcement mechanism, not a flag a separate reconciler confirms — a
+  // muted stream's messages simply never insert, so muteStreamChat's own
+  // write is already the complete effect the moment it commits.
+  const muted = await pool.query<{ chat_muted: boolean }>(
+    `SELECT chat_muted FROM stream_controls WHERE stream_id = $1`,
+    [streamId]
+  );
+  if (muted.rows[0]?.chat_muted) {
+    throw new AppError(403, "Chat is temporarily disabled on this stream by a moderator");
+  }
 
   const { rows } = await pool.query<ChatMessageRow>(
     `INSERT INTO chat_messages (stream_id, user_id, body)

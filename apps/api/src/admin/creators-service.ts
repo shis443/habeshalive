@@ -88,12 +88,21 @@ export async function updateCreator(
 // wallet/service.ts's requestPayout), not chat/gifting/viewing — a
 // creator-specific business action, not a trust & safety one.
 export async function suspendCreator(adminId: string, creatorId: string, input: SuspendCreatorInput): Promise<void> {
+  const before = await pool.query<{ is_suspended: boolean; suspended_reason: string | null }>(
+    `SELECT is_suspended, suspended_reason FROM users WHERE id = $1 AND role = 'creator'`,
+    [creatorId]
+  );
+  if (!before.rows[0]) throw new AppError(404, "Creator not found");
   const { rowCount } = await pool.query(
     `UPDATE users SET is_suspended = TRUE, suspended_reason = $1, updated_at = now() WHERE id = $2 AND role = 'creator'`,
     [input.reason, creatorId]
   );
   if (!rowCount) throw new AppError(404, "Creator not found");
-  await logAdminAction(adminId, "creator.suspend", "creator", creatorId, { reason: input.reason });
+  await logAdminAction(adminId, "creator.suspend", "creator", creatorId, {
+    reason: input.reason,
+    before: { isSuspended: before.rows[0].is_suspended, suspendedReason: before.rows[0].suspended_reason },
+    after: { isSuspended: true, suspendedReason: input.reason },
+  });
 }
 
 export async function unsuspendCreator(adminId: string, creatorId: string): Promise<void> {

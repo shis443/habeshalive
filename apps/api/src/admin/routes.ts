@@ -6,6 +6,7 @@ import {
   createCategorySchema,
   extendGracePeriodSchema,
   forceEndStreamSchema,
+  streamControlReasonSchema,
   manualAdjustmentSchema,
   mergeStreamTagsSchema,
   rejectCreatorApplicationSchema,
@@ -41,6 +42,7 @@ import { createCategory, listCategoriesAdmin, updateCategory } from "../categori
 import { listTagsAdmin, mergeTags, setTagBanned } from "../streams/tags-service.js";
 import type { FastifyPluginAsync } from "fastify";
 import { forceEndStream, listAllLiveStreamsForAdmin, listStreamArchive } from "../streams/service.js";
+import { adminRevokeIngestKey, muteStreamChat, unmuteStreamChat } from "../streams/emergency-controls-service.js";
 import { listAnchorCandidates, listAnchorCreators } from "./anchor-service.js";
 import {
   approveApplication,
@@ -69,13 +71,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get("/summary", { preHandler: app.requireAdmin }, async () => getAdminSummary());
   app.get("/boosts", { preHandler: app.requireAdmin }, async () => listActiveBoosts());
 
-  app.get<{ Querystring: { limit?: string; action?: string } }>(
+  app.get<{ Querystring: { limit?: string; action?: string; session?: string } }>(
     "/audit-log",
     { preHandler: app.requireAdmin },
     async (req) =>
       listAdminActions({
         limit: req.query.limit ? Number(req.query.limit) : undefined,
         action: req.query.action,
+        session: req.query.session,
       })
   );
 
@@ -106,6 +109,45 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       // server could not confirm, so reaching here means enforced === true.
       const result = await forceEndStream(req.params.id, req.user.sub, input.reason);
       return { ok: true, enforced: result.enforced, killed: result.killed };
+    }
+  );
+
+  // Chat mute/unmute is self-enforcing (chat/service.ts's sendChatMessage
+  // reads stream_controls.chat_muted directly on every send) — there is no
+  // external system to confirm against the way force-end's kill has, so
+  // these two never throw 502 the way force-end can.
+  app.post<{ Params: { id: string } }>(
+    "/streams/:id/mute-chat",
+    { preHandler: app.requirePermission("stream:kick") },
+    async (req) => {
+      const input = streamControlReasonSchema.parse(req.body);
+      await muteStreamChat(req.user.sub, req.params.id, input.reason);
+      return { ok: true };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/streams/:id/unmute-chat",
+    { preHandler: app.requirePermission("stream:kick") },
+    async (req) => {
+      const input = streamControlReasonSchema.parse(req.body);
+      await unmuteStreamChat(req.user.sub, req.params.id, input.reason);
+      return { ok: true };
+    }
+  );
+
+  // Wraps the creator's own rotateStreamKey with admin attribution — see
+  // emergency-controls-service.ts's own comment on why this is logged as
+  // "the rotation happened" rather than "the kill was confirmed": the
+  // underlying teardown of any currently-open publish is best-effort by
+  // design, same as banUser's.
+  app.post<{ Params: { id: string } }>(
+    "/streams/:id/revoke-ingest",
+    { preHandler: app.requirePermission("stream:kick") },
+    async (req) => {
+      const input = streamControlReasonSchema.parse(req.body);
+      await adminRevokeIngestKey(req.user.sub, req.params.id, input.reason);
+      return { ok: true };
     }
   );
 

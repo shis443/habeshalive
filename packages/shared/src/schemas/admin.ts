@@ -86,6 +86,14 @@ export const forceEndStreamSchema = z.object({
 });
 export type ForceEndStreamInput = z.infer<typeof forceEndStreamSchema>;
 
+// Shared by the other stream_controls-backed emergency actions
+// (mute/unmute chat, revoke ingest key) — same shape, same server-side
+// enforcement (a route rejects an empty reason with 400, not just the UI).
+export const streamControlReasonSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type StreamControlReasonInput = z.infer<typeof streamControlReasonSchema>;
+
 export const streamArchiveItemSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
@@ -152,6 +160,14 @@ export const adminAuditActionSchema = z.object({
   reason: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()).nullable(),
   createdAt: z.string(),
+  // migration 0057. All four nullable because rows written before this
+  // migration (or by a caller outside a real request, e.g. a background
+  // job) genuinely have none of this — not because the column is optional
+  // in spirit.
+  actorIp: z.string().nullable(),
+  actorSessionId: z.string().uuid().nullable(),
+  beforeState: z.unknown().nullable(),
+  afterState: z.unknown().nullable(),
 });
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 

@@ -1,6 +1,7 @@
 import {
   renderThumbnailPlaceholderSvg,
   type AspectRatio,
+  type AdminLiveStream,
   type BoostStreamResponse,
   type CreateStreamInput,
   type CreatorStats,
@@ -318,9 +319,23 @@ export async function listLiveStreams(filters: {
 // is_sensitive, unlike listLiveStreams() above which is what viewers
 // browse and is gated by their own content preference. Internal ops needs
 // to see everything.
-export async function listAllLiveStreamsForAdmin(): Promise<StreamDetail[]> {
-  const { rows } = await pool.query<StreamRow>(
-    `SELECT ${STREAM_SELECT_COLUMNS}
+interface StreamControlsRow {
+  killed: boolean;
+  chat_muted: boolean;
+  ingest_revoked: boolean;
+  reason: string | null;
+  enforced_at: string | null;
+  last_error: string | null;
+  attempts: number;
+}
+
+export async function listAllLiveStreamsForAdmin(): Promise<AdminLiveStream[]> {
+  const { rows } = await pool.query<StreamRow & { controls_json: StreamControlsRow | null }>(
+    `SELECT ${STREAM_SELECT_COLUMNS},
+       (SELECT row_to_json(sc) FROM (
+          SELECT killed, chat_muted, ingest_revoked, reason, enforced_at, last_error, attempts
+          FROM stream_controls WHERE stream_id = s.id
+        ) sc) AS controls_json
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.status = 'live'
@@ -328,7 +343,24 @@ export async function listAllLiveStreamsForAdmin(): Promise<StreamDetail[]> {
   );
   // Admin ops view — always the real playbackUrl, PPV or not; moderation
   // needs to see what's actually airing regardless of who's paid for it.
-  return rows.map((row) => toStreamDetail(row, true));
+  // requested-vs-enforced (T1, the visible half of T0's kill-switch fix):
+  // controls is null for a stream nobody has ever applied an emergency
+  // control to — a distinct, and much more common, state from "applied
+  // and confirmed."
+  return rows.map((row) => ({
+    ...toStreamDetail(row, true),
+    controls: row.controls_json
+      ? {
+          killed: row.controls_json.killed,
+          chatMuted: row.controls_json.chat_muted,
+          ingestRevoked: row.controls_json.ingest_revoked,
+          reason: row.controls_json.reason,
+          enforcedAt: row.controls_json.enforced_at,
+          lastError: row.controls_json.last_error,
+          attempts: row.controls_json.attempts,
+        }
+      : null,
+  }));
 }
 
 export async function getStreamById(streamId: string, viewerId?: string): Promise<StreamDetail> {
@@ -742,6 +774,10 @@ export async function forceEndStream(
   adminId: string,
   reason: string
 ): Promise<ForceEndResult> {
+  // Real pre-state, not inferred from the UPDATE's own WHERE clause —
+  // that clause matches two possible statuses ('starting' or 'live'), so
+  // RETURNING alone can't say which one this row actually was.
+  const before = await pool.query<{ status: string }>(`SELECT status FROM streams WHERE id = $1`, [streamId]);
   // Matches 'starting' too — same reasoning as endStream() above.
   const { rows } = await pool.query<{ id: string; creator_id: string; title: string; srs_client_id: string | null }>(
     `UPDATE streams SET status = 'ended', ended_at = now()
@@ -755,6 +791,8 @@ export async function forceEndStream(
   await logAdminAction(adminId, "stream.force_end", "stream", stream.id, {
     reason,
     metadata: { creatorId: stream.creator_id, title: stream.title },
+    before: { status: before.rows[0]?.status ?? null },
+    after: { status: "ended" },
   });
 
   // Durable intent, written before the network call. ON CONFLICT because a

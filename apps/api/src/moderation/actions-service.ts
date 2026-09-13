@@ -335,7 +335,7 @@ export async function killPublisherConfirmed(
   );
 }
 
-export async function banUser(actorId: string, targetUserId: string, reason?: string): Promise<void> {
+export async function banUser(actorId: string, targetUserId: string, reason: string): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -351,7 +351,12 @@ export async function banUser(actorId: string, targetUserId: string, reason?: st
       `INSERT INTO moderation_actions (actor_id, target_user_id, action, reason) VALUES ($1, $2, 'ban', $3)`,
       [actorId, targetUserId, reason ?? null]
     );
-    await logAdminAction(actorId, "user.ban", "user", targetUserId, { reason, client });
+    await logAdminAction(actorId, "user.ban", "user", targetUserId, {
+      reason,
+      client,
+      before: { isBanned: rows[0].is_banned },
+      after: { isBanned: true },
+    });
     await client.query("COMMIT");
     await notify(targetUserId, "moderation_action", "Your account was banned", {
       body: reason,
@@ -405,7 +410,7 @@ export async function banUser(actorId: string, targetUserId: string, reason?: st
   }
 }
 
-export async function unbanUser(actorId: string, targetUserId: string, reason?: string): Promise<void> {
+export async function unbanUser(actorId: string, targetUserId: string, reason: string): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -421,7 +426,12 @@ export async function unbanUser(actorId: string, targetUserId: string, reason?: 
       `INSERT INTO moderation_actions (actor_id, target_user_id, action, reason) VALUES ($1, $2, 'unban', $3)`,
       [actorId, targetUserId, reason ?? null]
     );
-    await logAdminAction(actorId, "user.unban", "user", targetUserId, { reason, client });
+    await logAdminAction(actorId, "user.unban", "user", targetUserId, {
+      reason,
+      client,
+      before: { isBanned: rows[0].is_banned },
+      after: { isBanned: false },
+    });
     await client.query("COMMIT");
     await notify(targetUserId, "moderation_action", "Your account was unbanned", {
       body: reason,

@@ -1155,6 +1155,8 @@ export async function rejectPayout(payoutId: string, adminUserId: string, reason
     await logAdminAction(adminUserId, "payout.reject", "payout", payoutId, {
       reason,
       metadata: { creatorId: rows[0].creator_id, amountSantim: rows[0].amount_santim },
+      before: { status: rows[0].status },
+      after: { status: "rejected_via_workflow" },
     });
     return;
   }
@@ -1181,6 +1183,8 @@ async function rejectPayoutLegacy(payoutId: string, adminUserId: string, reason:
     await logAdminAction(adminUserId, "payout.reject", "payout", payoutId, {
       reason,
       metadata: { creatorId: payout.creator_id, amountSantim: payout.amount_santim },
+      before: { status: payout.status },
+      after: { status: "failed" },
       client,
     });
     await client.query("COMMIT");

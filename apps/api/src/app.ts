@@ -11,6 +11,7 @@ import { announcementRoutes } from "./announcements/routes.js";
 import { authRoutes } from "./auth/routes.js";
 import { touchAndCheckSession } from "./auth/session-service.js";
 import { isNonSessionToken } from "./auth/token-guards.js";
+import { setAdminRequestContext } from "./common/request-context.js";
 import { avatarRoutes } from "./avatars/routes.js";
 import { categoryRoutes } from "./categories/routes.js";
 import { chatRoutes } from "./chat/routes.js";
@@ -128,6 +129,15 @@ export function buildApp() {
     }
   }
 
+  // Populates the ambient request context (common/request-context.ts)
+  // with the IP for every request, authenticated or not — logAdminAction
+  // never runs for an unauthenticated request anyway, so there is no harm
+  // in it always being set; it just means auth doesn't have to special-
+  // case "what if IP was never captured".
+  app.addHook("onRequest", async (req) => {
+    setAdminRequestContext({ actorIp: req.ip, actorSession: null });
+  });
+
   app.decorate("authenticate", async (req, reply) => {
     try {
       await req.jwtVerify();
@@ -142,6 +152,9 @@ export function buildApp() {
         if (!active) {
           throw new Error("session revoked");
         }
+      }
+      if (req.user && "jti" in req.user) {
+        setAdminRequestContext({ actorIp: req.ip, actorSession: req.user.jti ?? null });
       }
     } catch {
       reply.status(401).send({ error: "unauthorized" });
@@ -212,6 +225,15 @@ export function buildApp() {
     } catch {
       reply.status(401).send({ error: "unauthorized" });
       return null;
+    }
+    // This is the actual path every admin/moderator mutation takes
+    // (requireAdmin, requirePermission below both call this) — separate
+    // from the plain `authenticate` decorator above, which only regular
+    // authenticated (non-admin) routes use. Without setting it here too,
+    // admin_actions.actor_session would be NULL for every real admin
+    // action, which is the one place this column matters most.
+    if (req.user && "jti" in req.user) {
+      setAdminRequestContext({ actorIp: req.ip, actorSession: req.user.jti ?? null });
     }
     const { rows } = await pool.query<{ role: string }>(`SELECT role FROM users WHERE id = $1`, [req.user.sub]);
     return rows[0]?.role ?? null;

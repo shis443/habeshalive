@@ -57,7 +57,7 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/actions/unban", { preHandler: app.requirePermission("chat:moderate") }, async (req) => {
     const input = unbanUserSchema.parse(req.body);
-    await unbanUser(req.user.sub, input.userId);
+    await unbanUser(req.user.sub, input.userId, input.reason);
     return { ok: true };
   });
 

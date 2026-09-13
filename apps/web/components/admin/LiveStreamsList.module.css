@@ -52,3 +52,36 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
+
+/* A control that is real and confirmed (mute, ingest revocation) rather
+   than merely requested — neutral, not warning-coloured, since there is
+   nothing unresolved about it the way an unconfirmed kill is. */
+.mutedBadge {
+  display: inline-block;
+  margin-top: 4px;
+  margin-right: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-container-high, rgba(255, 255, 255, 0.08));
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Same shape as .forceEndButton but neutral — mute/revoke are serious but
+   not the same "cut the stream immediately" severity as force-end, and
+   giving every button the same red would drown out which one actually
+   ends the broadcast. */
+.secondaryButton {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--outline, rgba(255, 255, 255, 0.24));
+  background: transparent;
+  color: var(--on-surface-variant);
+}

@@ -38,6 +38,7 @@ import {
   ledgerTransactionLookupSchema,
   linkedSocialAccountSchema,
   liveStreamSchema,
+  adminLiveStreamSchema,
   moderatedChannelSchema,
   moderationActionRecordSchema,
   moderationFlagSchema,
@@ -111,6 +112,7 @@ import {
   type LedgerTransactionLookup,
   type LinkedSocialAccount,
   type LiveStream,
+  type AdminLiveStream,
   type ModeratedChannel,
   type ModerationActionRecord,
   type ModerationFlag,
@@ -636,10 +638,13 @@ export async function getBlocklistTerms(): Promise<BlocklistTerm[]> {
   return blocklistTermSchema.array().parse(await unwrapData(res));
 }
 
-export async function getAdminAuditLog(filters: { limit?: number; action?: string } = {}): Promise<AdminAuditAction[]> {
+export async function getAdminAuditLog(
+  filters: { limit?: number; action?: string; session?: string } = {}
+): Promise<AdminAuditAction[]> {
   const params = new URLSearchParams();
   if (filters.limit) params.set("limit", String(filters.limit));
   if (filters.action) params.set("action", filters.action);
+  if (filters.session) params.set("session", filters.session);
   const qs = params.toString();
   const res = await fetchAuthed(`/admin/audit-log${qs ? `?${qs}` : ""}`);
   if (!res.ok) {
@@ -667,13 +672,17 @@ export async function getAnchorCandidates(): Promise<AnchorCandidate[]> {
   return anchorCandidateSchema.array().parse(await unwrapData(res));
 }
 
-export async function getAdminLiveStreams(): Promise<LiveStream[]> {
+export async function getAdminLiveStreams(): Promise<AdminLiveStream[]> {
   const res = await fetchAuthed("/admin/streams/live");
   if (!res.ok) {
     console.error(`Failed to load admin live streams (${res.status})`);
     return [];
   }
-  return liveStreamSchema.array().parse(await unwrapData(res));
+  // adminLiveStreamSchema, not the public liveStreamSchema — the admin
+  // route's response includes a `controls` field (stream_controls'
+  // requested-vs-enforced state) that liveStreamSchema doesn't know about
+  // and would silently strip on .parse().
+  return adminLiveStreamSchema.array().parse(await unwrapData(res));
 }
 
 export async function getStreamArchive(creator?: string): Promise<StreamArchiveItem[]> {

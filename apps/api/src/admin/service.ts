@@ -92,7 +92,9 @@ export async function listActiveBoosts(): Promise<ActiveBoost[]> {
 // `action` filters by prefix (actions follow a "domain.verb" convention,
 // e.g. "subscription.%", "creator.%") since there's no dedicated
 // domain/category column to filter on instead.
-export async function listAdminActions(filters: { limit?: number; action?: string } = {}): Promise<AdminAuditAction[]> {
+export async function listAdminActions(
+  filters: { limit?: number; action?: string; session?: string } = {}
+): Promise<AdminAuditAction[]> {
   const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
   const { rows } = await pool.query<{
     id: string;
@@ -103,14 +105,27 @@ export async function listAdminActions(filters: { limit?: number; action?: strin
     reason: string | null;
     metadata: Record<string, unknown> | null;
     created_at: string;
+    actor_ip: string | null;
+    actor_session: string | null;
+    before_state: unknown;
+    after_state: unknown;
   }>(
-    `SELECT aa.id, u.username AS actor_username, aa.action, aa.target_type, aa.target_id, aa.reason, aa.metadata, aa.created_at
+    `SELECT aa.id, u.username AS actor_username, aa.action, aa.target_type, aa.target_id, aa.reason, aa.metadata,
+            aa.created_at,
+            -- host(), not ::text: casting INET to text keeps the netmask
+            -- ('198.51.100.7/32' for a single address) — confirmed with a
+            -- real query before writing this, after the first version of
+            -- this SELECT shipped that /32 straight into the admin UI.
+            -- host() is the function that returns just the address.
+            host(aa.actor_ip) AS actor_ip,
+            aa.actor_session, aa.before_state, aa.after_state
      FROM admin_actions aa
      JOIN users u ON u.id = aa.actor_id
      WHERE ($2::text IS NULL OR aa.action LIKE $2 || '%')
+       AND ($3::uuid IS NULL OR aa.actor_session = $3::uuid)
      ORDER BY aa.created_at DESC
      LIMIT $1`,
-    [limit, filters.action ?? null]
+    [limit, filters.action ?? null, filters.session ?? null]
   );
   return rows.map((row) => ({
     id: row.id,
@@ -121,5 +136,9 @@ export async function listAdminActions(filters: { limit?: number; action?: strin
     reason: row.reason,
     metadata: row.metadata,
     createdAt: row.created_at,
+    actorIp: row.actor_ip,
+    actorSessionId: row.actor_session,
+    beforeState: row.before_state,
+    afterState: row.after_state,
   }));
 }

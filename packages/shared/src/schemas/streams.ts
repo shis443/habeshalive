@@ -49,6 +49,30 @@ export const streamDetailSchema = liveStreamSchema.extend({
 });
 export type StreamDetail = z.infer<typeof streamDetailSchema>;
 
+// Admin-only view of a live stream's emergency-control state
+// (stream_controls, migration 0050/0057) — never exposed to the public
+// streamDetailSchema above. enforcedAt null with killed/chatMuted/
+// ingestRevoked true means "requested, not yet confirmed" (force-end's
+// kill is the one of these three with an external system to confirm
+// against; mute/unmute and ingest revocation are self-enforcing writes,
+// see emergency-controls-service.ts, and set enforcedAt = now() on the
+// same write).
+export const streamControlsStateSchema = z.object({
+  killed: z.boolean(),
+  chatMuted: z.boolean(),
+  ingestRevoked: z.boolean(),
+  reason: z.string().nullable(),
+  enforcedAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+  attempts: z.number().int(),
+});
+export type StreamControlsState = z.infer<typeof streamControlsStateSchema>;
+
+export const adminLiveStreamSchema = streamDetailSchema.extend({
+  controls: streamControlsStateSchema.nullable(),
+});
+export type AdminLiveStream = z.infer<typeof adminLiveStreamSchema>;
+
 // D.1: individual viewer currently connected to the stream's chat channel,
 // resolved from Centrifugo's presence API (see streams/service.ts's
 // getViewerList) — anonymous connections (no logged-in userId) are

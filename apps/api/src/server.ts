@@ -6,6 +6,7 @@ import { env } from "./common/env.js";
 import { captureUnexpectedError, initSentry } from "./common/sentry.js";
 import { sendScheduledGiftCards } from "./gift-cards/service.js";
 import { promoteStartingStreams, reapStaleStreams } from "./streams/service.js";
+import { reconcileStreamControls } from "./streams/emergency-controls-service.js";
 import { renewPlatformSubscriptions } from "./subscriptions/platform-service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
@@ -26,6 +27,11 @@ const REAP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 // cheap: realistically a handful of concurrent 'starting' rows at most,
 // one manifest GET each.
 const PROMOTE_STARTING_INTERVAL_MS = 3 * 1000; // 3 seconds
+// A force-end kill that failed to confirm is exactly the situation T0
+// exists to make visible rather than silent — retried well inside a
+// human's likely attention span on a still-broadcasting stream, but not
+// so tight that a genuinely offline SRS gets hammered.
+const RECONCILE_STREAM_CONTROLS_INTERVAL_MS = 15 * 1000; // 15 seconds
 // "Daily" in spirit, not literally once per 24h from an arbitrary process
 // boot time (which would drift/stall across redeploys) — renewSubscriptions
 // is idempotent (only picks up rows whose expires_at has actually passed),
@@ -69,6 +75,15 @@ function runReaper(): void {
 function runPromoteStarting(): void {
   promoteStartingStreams().catch((err) => {
     app.log.error(err, "promoteStartingStreams failed");
+    captureUnexpectedError(err);
+  });
+}
+
+// Wrapped the same way as runReaper() above, same reasoning — this also
+// runs unattended on a timer.
+function runReconcileStreamControls(): void {
+  reconcileStreamControls().catch((err) => {
+    app.log.error(err, "reconcileStreamControls failed");
     captureUnexpectedError(err);
   });
 }
@@ -129,6 +144,8 @@ app
     setInterval(runReaper, REAP_INTERVAL_MS);
     runPromoteStarting();
     setInterval(runPromoteStarting, PROMOTE_STARTING_INTERVAL_MS);
+    runReconcileStreamControls();
+    setInterval(runReconcileStreamControls, RECONCILE_STREAM_CONTROLS_INTERVAL_MS);
     runSubscriptionRenewal();
     setInterval(runSubscriptionRenewal, SUBSCRIPTION_RENEWAL_INTERVAL_MS);
     runPlatformSubscriptionRenewal();

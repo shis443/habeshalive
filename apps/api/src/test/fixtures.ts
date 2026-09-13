@@ -175,7 +175,27 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   // Also no CASCADE from users — surfaced once a test actually exercised
   // an admin action (cancelBoost/cancelGiftCard, both call logAdminAction)
   // or sent more than one gift to the same creator (gifter_badges).
-  await pool.query(`DELETE FROM admin_actions WHERE actor_id = ANY($1)`, [userIds]);
+  //
+  // admin_actions is append-only in production (migration 0057) — the one
+  // bypass is a session-local GUC, which SET LOCAL scopes to a single
+  // transaction. It must be a dedicated client with an explicit
+  // BEGIN/COMMIT: pool.query() can hand two separate calls two different
+  // physical connections from the pool, and SET LOCAL on the wrong one
+  // would silently do nothing (or, with a plain session-level SET instead
+  // of SET LOCAL, worse — leak the bypass to a later, unrelated query that
+  // happens to reuse the same pooled connection).
+  const cleanupClient = await pool.connect();
+  try {
+    await cleanupClient.query("BEGIN");
+    await cleanupClient.query(`SET LOCAL app.allow_admin_actions_delete = 'on'`);
+    await cleanupClient.query(`DELETE FROM admin_actions WHERE actor_id = ANY($1)`, [userIds]);
+    await cleanupClient.query("COMMIT");
+  } catch (err) {
+    await cleanupClient.query("ROLLBACK");
+    throw err;
+  } finally {
+    cleanupClient.release();
+  }
   // Also no CASCADE from users (0001_init.sql — actor_id/target_user_id
   // both plain REFERENCES) — surfaced by actions-service.test.ts, the
   // first test coverage banUser/unbanUser ever had.

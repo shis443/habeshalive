@@ -77,15 +77,15 @@ describe("banUser", () => {
     const target = await trackUser(await createTestViewer());
     stubEmptyFetch();
 
-    await banUser(admin.id, target.id);
-    await expect(banUser(admin.id, target.id)).rejects.toMatchObject({ statusCode: 400 } satisfies Partial<AppError>);
+    await banUser(admin.id, target.id, "test: first ban");
+    await expect(banUser(admin.id, target.id, "test: second ban")).rejects.toMatchObject({ statusCode: 400 } satisfies Partial<AppError>);
   });
 
   it("404s for an unknown target user", async () => {
     const admin = await trackUser(await createTestAdmin());
     stubEmptyFetch();
 
-    await expect(banUser(admin.id, "00000000-0000-0000-0000-000000000000")).rejects.toMatchObject({
+    await expect(banUser(admin.id, "00000000-0000-0000-0000-000000000000", "test: unknown target")).rejects.toMatchObject({
       statusCode: 404,
     } satisfies Partial<AppError>);
   });
@@ -168,7 +168,7 @@ describe("unbanUser", () => {
     const target = await trackUser(await createTestViewer());
     stubEmptyFetch();
 
-    await banUser(admin.id, target.id);
+    await banUser(admin.id, target.id, "test: setup ban");
     await unbanUser(admin.id, target.id, "appeal approved");
 
     expect(await getIsBanned(target.id)).toBe(false);
@@ -183,6 +183,6 @@ describe("unbanUser", () => {
     const admin = await trackUser(await createTestAdmin());
     const target = await trackUser(await createTestViewer());
 
-    await expect(unbanUser(admin.id, target.id)).rejects.toMatchObject({ statusCode: 400 } satisfies Partial<AppError>);
+    await expect(unbanUser(admin.id, target.id, "test: not banned")).rejects.toMatchObject({ statusCode: 400 } satisfies Partial<AppError>);
   });
 });
