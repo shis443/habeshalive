@@ -4,6 +4,8 @@ import type { LiveStream } from "@birq/shared";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatViewerCount } from "@/lib/format";
+import { FollowButton } from "./FollowButton";
+import { OverflowMenu } from "./OverflowMenu";
 import styles from "./StreamCard.module.css";
 import { PersonIcon } from "./icons";
 import { StreamCardPreview } from "./StreamCardPreview";
@@ -19,7 +21,28 @@ import { StreamCardPreview } from "./StreamCardPreview";
 // for cards nobody's looking at anymore.
 const VISIBILITY_THRESHOLD = 0.6;
 
-export function StreamCard({ stream }: { stream: LiveStream }) {
+// Stops a click on an interactive child (Follow, the 3-dot menu) from
+// also triggering the card's own <Link> navigation — preventDefault
+// cancels the anchor's default action (a click anywhere inside an <a>
+// navigates by default, regardless of which descendant was actually
+// clicked), stopPropagation is a secondary guard against next/link's own
+// click handler.
+function stopCardNavigation(e: React.MouseEvent): void {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+export function StreamCard({
+  stream,
+  isAuthed,
+  onDismissed,
+}: {
+  stream: LiveStream;
+  isAuthed: boolean;
+  // Called after this card's creator is blocked or dismissed as "not
+  // interested" — lets ExploreGrid remove it from the grid immediately.
+  onDismissed?: (creatorId: string) => void;
+}) {
   const cardRef = useRef<HTMLAnchorElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
@@ -45,8 +68,11 @@ export function StreamCard({ stream }: { stream: LiveStream }) {
 
   const handlePreviewPlaying = useCallback(() => setIsPreviewPlaying(true), []);
 
+  const watchUrl = `/watch/${stream.creator.username}`;
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}${watchUrl}` : watchUrl;
+
   return (
-    <Link href={`/watch/${stream.creator.username}`} className={styles.card} ref={cardRef}>
+    <Link href={watchUrl} className={styles.card} ref={cardRef}>
       {/* .card establishes the container query context (container-type) but
           can't restyle its own display/flex-direction in response to its own
           query — that's a real CSS container-query self-reference
@@ -73,6 +99,17 @@ export function StreamCard({ stream }: { stream: LiveStream }) {
           <span className={styles.liveBadge}>Live</span>
           {stream.isBoosted && <span className={styles.boostedBadge}>Boosted</span>}
           {stream.isSensitive && <span className={styles.sensitiveBadge}>Sensitive</span>}
+          {/* The card is a fixed 16:9 box with object-fit: cover, so a
+              vertically-shot stream is centre-cropped here to keep the grid
+              uniform. This says so, and signals that opening it gives the
+              full-height 9:16 frame the player renders. Bottom-right because
+              the other three corners are taken (live/boosted top-left,
+              sensitive top-right, viewer count bottom-left). */}
+          {stream.aspectRatio === "9:16" && (
+            <span className={styles.portraitBadge} title="Vertical stream">
+              Vertical
+            </span>
+          )}
           <span className={styles.viewerCount}>
             <PersonIcon />
             {formatViewerCount(stream.viewerCount)}
@@ -80,7 +117,30 @@ export function StreamCard({ stream }: { stream: LiveStream }) {
         </div>
         <div className={styles.info}>
           <p className={styles.title}>{stream.title}</p>
-          <p className={styles.creator}>{stream.creator.displayName}</p>
+          <div className={styles.creatorRow}>
+            {stream.creator.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={stream.creator.avatarUrl} alt="" className={styles.avatar} />
+            ) : (
+              <div className={styles.avatarPlaceholder} />
+            )}
+            <p className={styles.creator}>{stream.creator.displayName}</p>
+            <div className={styles.creatorRowActions} onClick={stopCardNavigation}>
+              <FollowButton
+                creatorId={stream.creator.id}
+                isAuthed={isAuthed}
+                initialFollowing={stream.creator.isFollowing}
+              />
+              <OverflowMenu
+                streamId={stream.id}
+                creatorId={stream.creator.id}
+                shareUrl={shareUrl}
+                shareText={stream.title}
+                isAuthed={isAuthed}
+                onDismissed={() => onDismissed?.(stream.creator.id)}
+              />
+            </div>
+          </div>
           <div className={styles.tags}>
             {stream.category && <span className={styles.tag}>{stream.category}</span>}
             {stream.language && <span className={styles.tag}>{stream.language}</span>}

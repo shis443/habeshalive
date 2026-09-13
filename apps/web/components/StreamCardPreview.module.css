@@ -5,3 +5,29 @@
   height: 100%;
   object-fit: cover;
 }
+
+/* Bottom-center, not a corner — every corner of the thumbnail is already
+   claimed by a badge (live/boosted top-left, sensitive top-right, viewer
+   count bottom-left, portrait bottom-right — see StreamCard.module.css's
+   own comment on why), and this only appears once a preview is actually
+   playing, layered on top of all of them. */
+.muteButton {
+  position: absolute;
+  bottom: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  z-index: 1;
+}
+
+.muteButton:hover {
+  background: rgba(0, 0, 0, 0.75);
+}

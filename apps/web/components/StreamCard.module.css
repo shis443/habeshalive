@@ -100,6 +100,25 @@
   border-radius: 6px;
 }
 
+/* Bottom-right: the only corner not already claimed by a badge. Neutral
+   translucent fill rather than an accent colour — this is a format hint, not
+   a warning like .sensitiveBadge, and it should read as quieter than the
+   Live badge it shares the thumbnail with. */
+.portraitBadge {
+  position: absolute;
+  bottom: var(--space-2);
+  right: var(--space-2);
+  background: rgba(5, 8, 18, 0.82);
+  color: #ffffff;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
 .viewerCount {
   position: absolute;
   bottom: var(--space-2);
@@ -134,11 +153,43 @@
   white-space: nowrap;
 }
 
+.creatorRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.avatar,
+.avatarPlaceholder {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.avatarPlaceholder {
+  background: var(--surface-container-highest);
+}
+
 .creator {
   margin: 0;
   font-family: var(--font-label);
   font-size: 13px;
   color: color-mix(in srgb, var(--on-surface-variant) 87%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.creatorRowActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .tags {

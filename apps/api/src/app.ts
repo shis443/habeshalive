@@ -17,6 +17,7 @@ import { categoryRoutes } from "./categories/routes.js";
 import { chatRoutes } from "./chat/routes.js";
 import { env } from "./common/env.js";
 import { AppError } from "./common/errors.js";
+import { blockRoutes } from "./blocks/routes.js";
 import { creatorApplicationRoutes } from "./creator-applications/routes.js";
 import { creatorRoutes } from "./creators/routes.js";
 import { dmcaRoutes } from "./dmca/routes.js";
@@ -395,6 +396,7 @@ export function buildApp() {
   app.register(categoryRoutes, { prefix: "/categories" });
   app.register(chatRoutes, { prefix: "/chat" });
   app.register(followRoutes, { prefix: "/follows" });
+  app.register(blockRoutes, { prefix: "/blocks" });
   app.register(creatorRoutes, { prefix: "/creators" });
   app.register(creatorApplicationRoutes, { prefix: "/creator-applications" });
   app.register(adRoutes, { prefix: "/ads" });

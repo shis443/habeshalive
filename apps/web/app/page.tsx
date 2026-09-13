@@ -28,7 +28,12 @@ export default async function ExplorePage({
       <TopNav isAuthed={!!user} />
       <LiveChannelsSidebar streams={allStreams} />
       <main className={styles.main}>
-        <ExploreGrid streams={gridStreams} selectedCategory={category ?? "all"} sponsoredCard={sponsoredCard} />
+        <ExploreGrid
+          streams={gridStreams}
+          selectedCategory={category ?? "all"}
+          sponsoredCard={sponsoredCard}
+          isAuthed={!!user}
+        />
       </main>
       <BottomNav active="explore" />
     </>

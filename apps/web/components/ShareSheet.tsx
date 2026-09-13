@@ -2,29 +2,9 @@
 
 import { useState } from "react";
 import { useDropdown } from "@/lib/useDropdown";
+import { SHARE_TARGETS } from "@/lib/shareTargets";
 import styles from "./ShareSheet.module.css";
 import { ShareIcon } from "./icons";
-
-// D.3: NOT Twitch's target list — VK and Reddit are near-irrelevant in
-// Ethiopia. Telegram is dominant locally, so it leads.
-const TARGETS = [
-  {
-    label: "Telegram",
-    href: (url: string, text: string) => `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
-  },
-  {
-    label: "WhatsApp",
-    href: (url: string, text: string) => `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`,
-  },
-  {
-    label: "Facebook",
-    href: (url: string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-  },
-  {
-    label: "X",
-    href: (url: string, text: string) => `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
-  },
-];
 
 export function ShareSheet({ embedPath }: { embedPath?: string }) {
   const dropdown = useDropdown<HTMLDivElement>();
@@ -69,7 +49,7 @@ export function ShareSheet({ embedPath }: { embedPath?: string }) {
         <div className={styles.menu}>
           {!showEmbed ? (
             <>
-              {TARGETS.map((target) => (
+              {SHARE_TARGETS.map((target) => (
                 <a
                   key={target.label}
                   href={target.href(url, text)}

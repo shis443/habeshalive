@@ -41,6 +41,7 @@ interface StreamSearchRow {
   is_ppv: boolean;
   ppv_price_santim: number | null;
   aspect_ratio: AspectRatio;
+  is_following: boolean;
 }
 
 // viewerId gates labeled (is_sensitive) streams the same way
@@ -60,7 +61,10 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
               (SELECT array_agg(st.name ORDER BY st.name) FROM stream_tag_links stl
                JOIN stream_tags st ON st.id = stl.tag_id WHERE stl.stream_id = s.id),
               ARRAY[]::text[]
-            ) AS tags
+            ) AS tags,
+            EXISTS (
+              SELECT 1 FROM follows f WHERE f.follower_id = $3 AND f.creator_id = s.creator_id
+            ) AS is_following
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.status = 'live' AND s.search_vector @@ to_tsquery('simple', $1)
@@ -100,6 +104,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
           avatarUrl: row.avatar_url,
           bio: row.bio,
           isVerified: row.is_verified,
+          isFollowing: row.is_following,
         },
       };
     })

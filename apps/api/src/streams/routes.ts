@@ -7,6 +7,7 @@ import { AppError } from "../common/errors.js";
 import { createVodFromRecording } from "../vods/service.js";
 import {
   boostStream,
+  dismissCreator,
   endStream,
   getCreatorStats,
   getLiveStreamByUsername,
@@ -81,6 +82,16 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get<{ Querystring: { q?: string } }>("/tags/search", async (req) => searchTagNames(req.query.q ?? ""));
+
+  // Explore feed's "Not Interested" — see service.ts's dismissCreator.
+  app.post<{ Params: { creatorId: string } }>(
+    "/:creatorId/dismiss",
+    { preHandler: app.authenticate },
+    async (req, reply) => {
+      await dismissCreator(req.user.sub, req.params.creatorId);
+      reply.status(204).send();
+    }
+  );
 
   app.get("/defaults", { preHandler: app.authenticate }, async (req) => getStreamDefaults(req.user.sub));
 

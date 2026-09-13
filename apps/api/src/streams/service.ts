@@ -82,6 +82,7 @@ interface StreamRow {
   is_ppv: boolean;
   ppv_price_santim: number | null;
   aspect_ratio: AspectRatio;
+  is_following: boolean;
 }
 
 // Module 2 — the creator always has access to their own stream; anyone
@@ -130,6 +131,7 @@ function toStreamDetail(row: StreamRow, hasAccess: boolean): StreamDetail {
       avatarUrl: row.avatar_url,
       bio: row.bio,
       isVerified: row.is_verified,
+      isFollowing: row.is_following,
     },
   };
 }
@@ -138,7 +140,14 @@ function toStreamDetail(row: StreamRow, hasAccess: boolean): StreamDetail {
 // listAllLiveStreamsForAdmin, getStreamById, getLiveStreamByUsername) —
 // adding tags here once flows through all of them, rather than touching
 // four separate queries.
-const STREAM_SELECT_COLUMNS = `
+// A function, not a plain constant, because "is this viewer following the
+// creator" needs a viewer id — and every call site below binds its own
+// params at different positions (or, for the admin ops view, has no viewer
+// at all). `viewerIdPlaceholder` is either a real bound param ("$2", "$4",
+// ...) or the literal "NULL" for a query with no viewer context — never
+// user input, so inlining it is safe.
+function streamSelectColumns(viewerIdPlaceholder: string): string {
+  return `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
   s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim, s.aspect_ratio,
   u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
@@ -149,8 +158,12 @@ const STREAM_SELECT_COLUMNS = `
     (SELECT array_agg(st.name ORDER BY st.name) FROM stream_tag_links stl
      JOIN stream_tags st ON st.id = stl.tag_id WHERE stl.stream_id = s.id),
     ARRAY[]::text[]
-  ) AS tags
+  ) AS tags,
+  EXISTS (
+    SELECT 1 FROM follows f WHERE f.follower_id = ${viewerIdPlaceholder} AND f.creator_id = s.creator_id
+  ) AS is_following
 `;
+}
 
 async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> {
   const existing = await pool.query<CreatorProfileRow>(
@@ -291,7 +304,7 @@ export async function listLiveStreams(filters: {
 } = {}): Promise<StreamDetail[]> {
   const sortClause = SORT_CLAUSES[filters.sort ?? "birqRank"];
   const { rows } = await pool.query<StreamRow>(
-    `SELECT ${STREAM_SELECT_COLUMNS}
+    `SELECT ${streamSelectColumns("$4")}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.status = 'live'
@@ -304,6 +317,8 @@ export async function listLiveStreams(filters: {
        AND (s.is_sensitive = FALSE OR EXISTS (
          SELECT 1 FROM users v WHERE v.id = $4 AND v.show_sensitive_content = TRUE
        ))
+       AND NOT EXISTS (SELECT 1 FROM creator_blocks cb WHERE cb.blocker_id = $4 AND cb.creator_id = s.creator_id)
+       AND NOT EXISTS (SELECT 1 FROM stream_dismissals sd WHERE sd.viewer_id = $4 AND sd.creator_id = s.creator_id)
      ORDER BY is_boosted DESC, ${sortClause}`,
     [filters.category ?? null, filters.language ?? null, filters.tag ?? null, filters.viewerId ?? null]
   );
@@ -331,7 +346,7 @@ interface StreamControlsRow {
 
 export async function listAllLiveStreamsForAdmin(): Promise<AdminLiveStream[]> {
   const { rows } = await pool.query<StreamRow & { controls_json: StreamControlsRow | null }>(
-    `SELECT ${STREAM_SELECT_COLUMNS},
+    `SELECT ${streamSelectColumns("NULL")},
        (SELECT row_to_json(sc) FROM (
           SELECT killed, chat_muted, ingest_revoked, reason, enforced_at, last_error, attempts
           FROM stream_controls WHERE stream_id = s.id
@@ -365,11 +380,11 @@ export async function listAllLiveStreamsForAdmin(): Promise<AdminLiveStream[]> {
 
 export async function getStreamById(streamId: string, viewerId?: string): Promise<StreamDetail> {
   const { rows } = await pool.query<StreamRow>(
-    `SELECT ${STREAM_SELECT_COLUMNS}
+    `SELECT ${streamSelectColumns("$2")}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.id = $1`,
-    [streamId]
+    [streamId, viewerId ?? null]
   );
   const row = rows[0];
   if (!row) throw new AppError(404, "Stream not found");
@@ -378,7 +393,7 @@ export async function getStreamById(streamId: string, viewerId?: string): Promis
 
 export async function getLiveStreamByUsername(username: string, viewerId?: string): Promise<StreamDetail> {
   const { rows } = await pool.query<StreamRow>(
-    `SELECT ${STREAM_SELECT_COLUMNS}
+    `SELECT ${streamSelectColumns("$2")}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE u.username = $1 AND s.status = 'live'
@@ -406,12 +421,12 @@ export async function getLiveStreamByUsername(username: string, viewerId?: strin
 // surface.
 export async function getLiveStreamByCreatorId(creatorId: string, viewerId?: string): Promise<StreamDetail | null> {
   const { rows } = await pool.query<StreamRow>(
-    `SELECT ${STREAM_SELECT_COLUMNS}
+    `SELECT ${streamSelectColumns("$2")}
      FROM streams s
      JOIN users u ON u.id = s.creator_id
      WHERE s.creator_id = $1 AND s.status = 'live'
      ORDER BY s.started_at DESC LIMIT 1`,
-    [creatorId]
+    [creatorId, viewerId ?? null]
   );
   const row = rows[0];
   if (!row) return null;
@@ -1316,5 +1331,18 @@ export async function markEndedByProviderStreamId(providerStreamId: string, prov
     [creatorId]
   );
   if (rows[0]) await logStreamEvent(rows[0].id, "ended");
+}
+
+// The Explore feed's "Not Interested" — lighter than blocks/service.ts's
+// blockCreator: only affects what this viewer sees on Explore (see
+// listLiveStreams's stream_dismissals exclusion above), doesn't touch the
+// follow relationship, and doesn't stop this viewer reaching the creator
+// directly (search, a shared watch link).
+export async function dismissCreator(viewerId: string, creatorId: string): Promise<void> {
+  if (viewerId === creatorId) throw new AppError(400, "You can't dismiss yourself");
+  await pool.query(
+    `INSERT INTO stream_dismissals (viewer_id, creator_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [viewerId, creatorId]
+  );
 }
 

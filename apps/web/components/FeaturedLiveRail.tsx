@@ -12,12 +12,12 @@ import styles from "./FeaturedLiveRail.module.css";
 // accessible). Reuses StreamCard as-is, so live preview-on-visible,
 // tap-through to /watch/[username], and the live/boosted/sensitive badges
 // all keep working exactly as they do in the grid layouts.
-export function FeaturedLiveRail({ streams }: { streams: LiveStream[] }) {
+export function FeaturedLiveRail({ streams, isAuthed }: { streams: LiveStream[]; isAuthed: boolean }) {
   return (
     <div className={styles.rail} role="list">
       {streams.map((stream) => (
         <div key={stream.id} className={styles.item} role="listitem">
-          <StreamCard stream={stream} />
+          <StreamCard stream={stream} isAuthed={isAuthed} />
         </div>
       ))}
     </div>

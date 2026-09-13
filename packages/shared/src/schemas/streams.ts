@@ -40,6 +40,9 @@ export const liveStreamSchema = z.object({
     // Admin-set only (see admin/creators-service.ts) — no automated
     // verification criteria exist yet.
     isVerified: z.boolean(),
+    // False for an anonymous viewer, never omitted — lets a stream card
+    // render Follow/Following without a second per-card request.
+    isFollowing: z.boolean(),
   }),
 });
 export type LiveStream = z.infer<typeof liveStreamSchema>;

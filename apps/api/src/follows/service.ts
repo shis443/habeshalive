@@ -113,6 +113,9 @@ export async function getFollowedCreators(followerId: string): Promise<FollowedC
             avatarUrl: row.avatar_url,
             bio: row.bio,
             isVerified: false,
+            // This whole list is "creators followerId follows" by
+            // definition — always true here.
+            isFollowing: true,
           },
         }
       : null,

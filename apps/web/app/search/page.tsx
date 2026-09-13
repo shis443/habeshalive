@@ -30,7 +30,7 @@ export default async function SearchPage({
             <h2 className={styles.sectionTitle}>Live streams</h2>
             <div className={styles.streamGrid}>
               {results.streams.map((stream) => (
-                <StreamCard key={stream.id} stream={stream} />
+                <StreamCard key={stream.id} stream={stream} isAuthed={!!user} />
               ))}
             </div>
           </section>

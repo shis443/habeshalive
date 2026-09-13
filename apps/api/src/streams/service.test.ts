@@ -2,10 +2,13 @@ import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { pool } from "../common/db.js";
 import { resolveStreamKey } from "../common/crypto.js";
 import { cleanupTestUsers, createTestCreator, createTestViewer, type TestUser } from "../test/fixtures.js";
+import { blockCreator } from "../blocks/service.js";
 import {
+  dismissCreator,
   getLiveStreamByUsername,
   getStreamById,
   getStreamKey,
+  listLiveStreams,
   markEndedByProviderStreamId,
   markLiveByProviderStreamId,
   promoteStartingStreams,
@@ -303,5 +306,88 @@ describe("PPV access gating (toStreamDetail/resolvePpvAccess)", () => {
     // getStreamById threads the same check.
     const byId = await getStreamById(streamId, viewer.id);
     expect(byId.hasPpvAccess).toBe(true);
+  });
+});
+
+describe("listLiveStreams — isFollowing, blocks, and dismissals", () => {
+  it("reports isFollowing true only for an actual follower, false for everyone else", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const follower = await trackUser(await createTestViewer());
+    const stranger = await trackUser(await createTestViewer());
+    await createLiveStream(creator.id);
+    await pool.query(`INSERT INTO follows (follower_id, creator_id) VALUES ($1, $2)`, [
+      follower.id,
+      creator.id,
+    ]);
+
+    const forFollower = await listLiveStreams({ viewerId: follower.id });
+    const forStranger = await listLiveStreams({ viewerId: stranger.id });
+    const forAnonymous = await listLiveStreams({});
+
+    expect(forFollower.find((s) => s.creator.id === creator.id)?.creator.isFollowing).toBe(true);
+    expect(forStranger.find((s) => s.creator.id === creator.id)?.creator.isFollowing).toBe(false);
+    expect(forAnonymous.find((s) => s.creator.id === creator.id)?.creator.isFollowing).toBe(false);
+  });
+
+  it("excludes a blocked creator's live stream only for the blocker", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const blocker = await trackUser(await createTestViewer());
+    const stranger = await trackUser(await createTestViewer());
+    await createLiveStream(creator.id);
+    await blockCreator(blocker.id, creator.id);
+
+    const forBlocker = await listLiveStreams({ viewerId: blocker.id });
+    const forStranger = await listLiveStreams({ viewerId: stranger.id });
+
+    expect(forBlocker.some((s) => s.creator.id === creator.id)).toBe(false);
+    expect(forStranger.some((s) => s.creator.id === creator.id)).toBe(true);
+  });
+
+  it("blocking a creator also removes an existing follow", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const viewer = await trackUser(await createTestViewer());
+    await pool.query(`INSERT INTO follows (follower_id, creator_id) VALUES ($1, $2)`, [
+      viewer.id,
+      creator.id,
+    ]);
+
+    await blockCreator(viewer.id, creator.id);
+
+    const { rows } = await pool.query(`SELECT 1 FROM follows WHERE follower_id = $1 AND creator_id = $2`, [
+      viewer.id,
+      creator.id,
+    ]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("excludes a dismissed creator's live stream only for the dismissing viewer", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const dismisser = await trackUser(await createTestViewer());
+    const stranger = await trackUser(await createTestViewer());
+    await createLiveStream(creator.id);
+    await dismissCreator(dismisser.id, creator.id);
+
+    const forDismisser = await listLiveStreams({ viewerId: dismisser.id });
+    const forStranger = await listLiveStreams({ viewerId: stranger.id });
+
+    expect(forDismisser.some((s) => s.creator.id === creator.id)).toBe(false);
+    expect(forStranger.some((s) => s.creator.id === creator.id)).toBe(true);
+  });
+
+  it("dismissing a creator does not touch the follow relationship", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const viewer = await trackUser(await createTestViewer());
+    await pool.query(`INSERT INTO follows (follower_id, creator_id) VALUES ($1, $2)`, [
+      viewer.id,
+      creator.id,
+    ]);
+
+    await dismissCreator(viewer.id, creator.id);
+
+    const { rows } = await pool.query(`SELECT 1 FROM follows WHERE follower_id = $1 AND creator_id = $2`, [
+      viewer.id,
+      creator.id,
+    ]);
+    expect(rows).toHaveLength(1);
   });
 });

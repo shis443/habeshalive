@@ -33,7 +33,9 @@
 }
 
 .menuItem {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: var(--space-2) var(--space-2);
@@ -45,6 +47,11 @@
   font-size: 14px;
   text-decoration: none;
   cursor: pointer;
+}
+
+.menuItem:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .menuItem:hover {
@@ -68,4 +75,10 @@
   padding: var(--space-2);
   font-family: "SF Mono", monospace;
   font-size: 11px;
+}
+
+.error {
+  color: var(--error, #ffb4ab);
+  font-size: 12px;
+  padding: var(--space-1) var(--space-2);
 }

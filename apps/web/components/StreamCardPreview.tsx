@@ -1,8 +1,9 @@
 "use client";
 
 import Hls from "hls.js";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./StreamCardPreview.module.css";
+import { MutedIcon, VolumeIcon } from "./icons";
 
 // Module-level, shared across every mounted StreamCardPreview — a big
 // grid can have many cards simultaneously "visible" (any part of them on
@@ -35,6 +36,8 @@ export function StreamCardPreview({
   onPlaying: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -55,6 +58,7 @@ export function StreamCardPreview({
     let hls: Hls | null = null;
     function handlePlaying() {
       onPlaying();
+      setIsPlaying(true);
     }
     video.addEventListener("playing", handlePlaying);
 
@@ -92,8 +96,32 @@ export function StreamCardPreview({
       if (claimedSlot) {
         activePreviewCount -= 1;
       }
+      setIsPlaying(false);
     };
   }, [active, playbackUrl, onPlaying]);
 
-  return <video ref={videoRef} className={styles.video} muted playsInline aria-hidden="true" />;
+  function toggleMute(e: React.MouseEvent): void {
+    // Same navigation guard as StreamCard.tsx's stopCardNavigation — this
+    // sits inside the card's own <Link>, so a click here must never also
+    // open the watch page.
+    e.preventDefault();
+    e.stopPropagation();
+    setMuted((m) => !m);
+  }
+
+  return (
+    <>
+      <video ref={videoRef} className={styles.video} muted={muted} playsInline aria-hidden="true" />
+      {isPlaying && (
+        <button
+          type="button"
+          className={styles.muteButton}
+          aria-label={muted ? "Unmute preview" : "Mute preview"}
+          onClick={toggleMute}
+        >
+          {muted ? <MutedIcon /> : <VolumeIcon />}
+        </button>
+      )}
+    </>
+  );
 }

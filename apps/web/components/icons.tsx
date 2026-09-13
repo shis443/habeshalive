@@ -339,3 +339,23 @@ export function SkipForwardIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function FlagIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <path d="M5 3v18" />
+      <path d="M5 4h11l-2.5 3.5L16 11H5" />
+    </svg>
+  );
+}
+
+export function EyeOffIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="18" height="18" className={className}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.2A10.6 10.6 0 0 1 12 5c5.4 0 9.3 4 10.5 7-0.5 1.2-1.4 2.7-2.7 4" />
+      <path d="M6.6 6.6C4.4 8 2.9 10 1.5 12c1.2 3 5.1 7 10.5 7 1.7 0 3.2-0.4 4.6-1" />
+      <path d="M9.9 10a3 3 0 0 0 4.1 4.1" />
+    </svg>
+  );
+}
