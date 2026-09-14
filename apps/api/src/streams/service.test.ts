@@ -5,6 +5,7 @@ import { cleanupTestUsers, createTestCreator, createTestViewer, type TestUser } 
 import { blockCreator } from "../blocks/service.js";
 import {
   dismissCreator,
+  endStream,
   getLiveStreamByUsername,
   getStreamById,
   getStreamKey,
@@ -224,6 +225,78 @@ describe("stream key encryption at rest + rotation", () => {
     });
     await expect(markEndedByProviderStreamId(creator.id, secret)).resolves.toBeUndefined();
     expect(await getStreamStatus(creator.streamId)).toBe("ended");
+  });
+
+  it("does not revive a deliberately-ended stream on a late/retried publish (real bug: End Stream going live again)", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const { streamKey } = await getStreamKey(creator.id);
+    const secret = streamKey.split("?key=")[1]!;
+
+    // createTestCreator's own fixture row has no provider_stream_id set —
+    // clear it out of the way so the real INSERT path below (the one that
+    // actually stamps provider_stream_id, see markLiveByProviderStreamId's
+    // own comment) runs, matching what a real first-ever publish does.
+    await pool.query(`UPDATE streams SET status = 'ended' WHERE id = $1`, [creator.streamId]);
+
+    await markLiveByProviderStreamId(creator.id, secret);
+    const firstStreamId = (await pool.query<{ id: string }>(
+      `SELECT id FROM streams WHERE provider_stream_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [creator.id]
+    )).rows[0]!.id;
+
+    // The creator deliberately ends — sets ended_reason = 'creator_ended',
+    // unlike a real on_unpublish (markEndedByProviderStreamId), which
+    // leaves it NULL. endStream() also auto-rotates the stream key, so the
+    // retry below re-fetches it — this test is proving the ended_reason
+    // guard itself, independent of the separate old-key-vs-new-key race
+    // that also happens in production.
+    await endStream(creator.id);
+    expect(await getStreamStatus(firstStreamId)).toBe("ended");
+
+    const { streamKey: rotatedKey } = await getStreamKey(creator.id);
+    const rotatedSecret = rotatedKey.split("?key=")[1]!;
+
+    // A late/retried RTMP publish handshake lands seconds later — same
+    // provider_stream_id, well within the 2-minute grace window.
+    await markLiveByProviderStreamId(creator.id, rotatedSecret);
+
+    // The deliberately-ended row must stay ended, not get revived...
+    expect(await getStreamStatus(firstStreamId)).toBe("ended");
+    // ...and the new publish must start a genuinely new stream instead.
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM streams WHERE provider_stream_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [creator.id]
+    );
+    expect(rows[0]!.id).not.toBe(firstStreamId);
+    expect(await getStreamStatus(rows[0]!.id)).toBe("starting");
+  });
+
+  it("still revives on a real reconnect (network blip), same as before this fix", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const { streamKey } = await getStreamKey(creator.id);
+    const secret = streamKey.split("?key=")[1]!;
+
+    await pool.query(`UPDATE streams SET status = 'ended' WHERE id = $1`, [creator.streamId]);
+
+    await markLiveByProviderStreamId(creator.id, secret);
+    const firstStreamId = (await pool.query<{ id: string }>(
+      `SELECT id FROM streams WHERE provider_stream_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [creator.id]
+    )).rows[0]!.id;
+
+    // A real on_unpublish from the media server — ended_reason stays NULL.
+    await markEndedByProviderStreamId(creator.id, secret);
+    expect(await getStreamStatus(firstStreamId)).toBe("ended");
+
+    // Reconnects within the grace window.
+    await markLiveByProviderStreamId(creator.id, secret);
+
+    expect(await getStreamStatus(firstStreamId)).toBe("starting");
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM streams WHERE provider_stream_id = $1`,
+      [creator.id]
+    );
+    expect(rows).toHaveLength(1);
   });
 
   it("dual-compat: a legacy plaintext row (pre-encryption) still authenticates correctly", async () => {

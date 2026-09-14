@@ -287,10 +287,24 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
   app.post("/webhooks/live-started", async (req, reply) => {
     assertWebhookSecret(req);
     const input = srsCallbackSchema.parse(req.body);
-    await markLiveByProviderStreamId(input.stream, extractKeyFromParam(input.param), {
-      clientId: input.client_id,
-      serverId: input.server_id,
-    });
+    try {
+      await markLiveByProviderStreamId(input.stream, extractKeyFromParam(input.param), {
+        clientId: input.client_id,
+        serverId: input.server_id,
+      });
+    } catch (err) {
+      // SRS aborts the publish the instant this rejects (see this route's
+      // own comment on its response contract), and the global error
+      // handler (app.ts) never logs a 4xx AppError — only Sentry sees it.
+      // A real RTMP "connects then immediately disconnects" report has no
+      // way to be diagnosed from that alone; this is the one plain-text
+      // line stating which stream and which check actually failed.
+      app.log.error(
+        { streamKey: input.stream, err: err instanceof Error ? err.message : err },
+        "[streams] on_publish rejected"
+      );
+      throw err;
+    }
     reply.send({ code: 0 });
   });
 

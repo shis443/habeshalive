@@ -28,24 +28,31 @@ async function trackCreator(creator: TestCreator): Promise<TestCreator> {
   return creator;
 }
 
-// Binds a real instrument and backdates its usable_from past the 72h
-// cooling-off (the same real clock-advance pattern T2's earning-holds
-// tests use for clears_at, rather than mocking the hold away). Does NOT
-// verify it — reserveFunds requires status='verified', so every call
-// site also calls verifyPayoutInstrument with a real, tracked admin id
-// afterward (verified_by has its own FK to users(id), so a bare
-// randomUUID() here would fail the same way an untracked creator id
-// would).
+// Binds a real instrument. Does NOT verify it — reserveFunds requires
+// status='verified', so every call site also calls verifyAndBackdate
+// (below) with a real, tracked admin id afterward (verified_by has its
+// own FK to users(id), so a bare randomUUID() here would fail the same
+// way an untracked creator id would).
 async function bindUsableInstrument(creatorId: string): Promise<string> {
   const instrument = await bindPayoutInstrument(creatorId, {
     method: "telebirr",
     accountNumber: "0911234567",
     accountHolder: "Test Creator",
   });
-  await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
-    instrument.id,
-  ]);
   return instrument.id;
+}
+
+// Verifies, then backdates past the 72h cooling-off (the same real
+// clock-advance pattern T2's earning-holds tests use for clears_at,
+// rather than mocking the hold away) — in that order, since
+// verifyPayoutInstrument recomputes usable_from = now() + 72h itself (a
+// real bug fix: the window used to stay fixed at bind time), which would
+// otherwise clobber a backdate done beforehand.
+async function verifyAndBackdate(adminId: string, instrumentId: string): Promise<void> {
+  await verifyPayoutInstrument(adminId, instrumentId);
+  await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
+    instrumentId,
+  ]);
 }
 
 function buildInput(
@@ -81,7 +88,7 @@ describe("reserveFunds", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
 
     const result = await reserveFunds(input);
@@ -98,7 +105,7 @@ describe("reserveFunds", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({
       creatorId: creator.id,
       amountSantim: 20_000,
@@ -116,7 +123,7 @@ describe("reserveFunds", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 5_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
 
     await expect(reserveFunds(input)).rejects.toThrow(/Insufficient withdrawable balance/);
@@ -129,7 +136,7 @@ describe("reserveFunds", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
 
     await reserveFunds(input);
@@ -147,7 +154,7 @@ describe("reverseFunds", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
     const balanceAfterReserve = await getWalletBalance(creator.walletId);
@@ -166,7 +173,7 @@ describe("reverseFunds", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
 
@@ -182,7 +189,7 @@ describe("reverseFunds", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
     await markPaid(input.payoutId, input.amountSantim, creator.id);
@@ -201,7 +208,7 @@ describe("markApproved / markPaid", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({
       creatorId: creator.id,
       amountSantim: 20_000,
@@ -225,7 +232,7 @@ describe("markApproved / markPaid", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
 
@@ -241,7 +248,7 @@ describe("initiateChapaTransfer", () => {
     createdUserIds.push(await fundCreatorEarnings(creator.id, 50_000));
     const admin = await trackCreator(await createTestCreator());
     const instrumentId = await bindUsableInstrument(creator.id);
-    await verifyPayoutInstrument(admin.id, instrumentId);
+    await verifyAndBackdate(admin.id, instrumentId);
     const input = buildInput({ creatorId: creator.id, amountSantim: 20_000, instrumentId });
     await reserveFunds(input);
 

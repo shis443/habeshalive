@@ -87,8 +87,35 @@ describe("getUsableVerifiedInstrument — the payout eligibility gate", () => {
     });
     await verifyPayoutInstrument(admin.id, instrument.id);
 
-    // usable_from defaults to now() + 72h (0060's migration) — untouched
-    // here, so this instrument is verified but still cooling off.
+    // verifyPayoutInstrument recomputes usable_from = now() + 72h at the
+    // moment of verification (not left at 0060's bind-time default) — see
+    // that function's own comment. Either way, this instrument was just
+    // verified, so it's still cooling off.
+    await expect(getUsableVerifiedInstrument(creator.id, instrument.id)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("real bug: still enforces a real 72h hold even when admin review took longer than 72h", async () => {
+    const creator = await trackUser(await createTestCreator());
+    const admin = await trackUser(await createTestViewer());
+    const instrument = await bindPayoutInstrument(creator.id, {
+      method: "telebirr",
+      accountNumber: "0911234567",
+      accountHolder: "Test Creator",
+    });
+
+    // Simulates a slow admin queue: bind-time's usable_from (0060's
+    // default, now() + 72h) has already elapsed by the time this gets
+    // reviewed. Before this fix, verifyPayoutInstrument left usable_from
+    // untouched, so the instrument became immediately usable the instant
+    // it was verified — a real security-hold bypass, not a hypothetical.
+    await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 hour' WHERE id = $1`, [
+      instrument.id,
+    ]);
+
+    await verifyPayoutInstrument(admin.id, instrument.id);
+
     await expect(getUsableVerifiedInstrument(creator.id, instrument.id)).rejects.toMatchObject({
       statusCode: 400,
     });

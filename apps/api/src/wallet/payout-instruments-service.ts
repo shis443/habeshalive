@@ -152,9 +152,20 @@ export async function decryptPayoutInstrumentAccountNumber(instrumentId: string)
 // Mirrors kyc/service.ts's approveKyc/rejectKyc pattern — human review
 // before an instrument can ever receive real money, same reasoning as
 // KYC: this is exactly the kind of thing a person should check.
+//
+// usable_from is recomputed HERE, not left at 0060's INSERT-time default
+// (now() + 72h at bind time) — a real bug found by a live user report:
+// admin review can take longer than 72 hours, and a fixed bind-time
+// deadline that's already passed by the time an admin gets to it means
+// the hold provides zero real protection the moment it's verified. The
+// security intent ("give the real owner 72h to notice and cancel a
+// compromised-account payout method after it's confirmed legitimate")
+// only makes sense measured from verification, not from submission.
 export async function verifyPayoutInstrument(adminId: string, instrumentId: string): Promise<void> {
   const { rows } = await pool.query<{ creator_id: string }>(
-    `UPDATE payout_instruments SET status = 'verified', verified_at = now(), verified_by = $1
+    `UPDATE payout_instruments
+     SET status = 'verified', verified_at = now(), verified_by = $1,
+         usable_from = now() + interval '72 hours'
      WHERE id = $2 AND status = 'unverified'
      RETURNING creator_id`,
     [adminId, instrumentId]

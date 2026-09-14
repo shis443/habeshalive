@@ -7,6 +7,7 @@ interface ConfigRow {
   boost_duration_ms: number;
   default_revenue_share_bps: number;
   payout_manual_review_threshold_santim: number;
+  payout_minimum_amount_santim: number;
   vod_retention_days_default: number;
   vod_retention_days_anchor: number;
   vod_retention_days_birq_plus: number;
@@ -33,7 +34,8 @@ interface ConfigRow {
 export async function getPlatformConfig(): Promise<PlatformConfig> {
   const { rows } = await pool.query<ConfigRow>(
     `SELECT pc.boost_price_santim, pc.boost_duration_ms, pc.default_revenue_share_bps,
-            pc.payout_manual_review_threshold_santim, pc.vod_retention_days_default, pc.vod_retention_days_anchor,
+            pc.payout_manual_review_threshold_santim, pc.payout_minimum_amount_santim,
+            pc.vod_retention_days_default, pc.vod_retention_days_anchor,
             pc.vod_retention_days_birq_plus, pc.birq_plus_emote_slot_count,
             pc.approved_creator_cap, pc.ad_revenue_share_bps, pc.ad_frequency_cap_per_hour,
             pc.preroll_slot1_duration_seconds, pc.preroll_slot2_skip_after_seconds, pc.gift_card_expiry_months,
@@ -53,6 +55,7 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
     boostDurationMs: row.boost_duration_ms,
     defaultRevenueShareBps: row.default_revenue_share_bps,
     payoutManualReviewThresholdSantim: row.payout_manual_review_threshold_santim,
+    payoutMinimumAmountSantim: row.payout_minimum_amount_santim,
     vodRetentionDaysDefault: row.vod_retention_days_default,
     vodRetentionDaysAnchor: row.vod_retention_days_anchor,
     vodRetentionDaysBirqPlus: row.vod_retention_days_birq_plus,
@@ -102,6 +105,14 @@ export async function getPayoutManualReviewThreshold(): Promise<number> {
     `SELECT payout_manual_review_threshold_santim FROM platform_config WHERE id = TRUE`
   );
   return rows[0]!.payout_manual_review_threshold_santim;
+}
+
+// Read fresh in requestPayout() (wallet/service.ts) on every payout request.
+export async function getPayoutMinimumAmount(): Promise<number> {
+  const { rows } = await pool.query<{ payout_minimum_amount_santim: number }>(
+    `SELECT payout_minimum_amount_santim FROM platform_config WHERE id = TRUE`
+  );
+  return rows[0]!.payout_minimum_amount_santim;
 }
 
 // Read fresh in createVodFromRecording() (vods/service.ts) on every VOD
@@ -232,7 +243,8 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
        creator_tier_partner_gift_volume_santim = $21,
        vod_retention_days_birq_plus = $22,
        birq_plus_emote_slot_count = $23,
-       updated_at = now(), updated_by = $24
+       payout_minimum_amount_santim = $24,
+       updated_at = now(), updated_by = $25
      WHERE id = TRUE`,
     [
       input.boostPriceSantim,
@@ -258,6 +270,7 @@ export async function updatePlatformConfig(adminId: string, input: UpdatePlatfor
       input.creatorTierPartnerGiftVolumeSantim,
       input.vodRetentionDaysBirqPlus,
       input.birqPlusEmoteSlotCount,
+      input.payoutMinimumAmountSantim,
       adminId,
     ]
   );

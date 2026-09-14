@@ -11,6 +11,7 @@ import { TransactionsList } from "@/components/TransactionsList";
 import {
   getCurrentUser,
   getMyGiftCards,
+  getMyPayoutInstruments,
   getMySubscriptions,
   getPointsBalance,
   getTransactions,
@@ -22,13 +23,15 @@ export default async function WalletPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirect=/wallet");
 
-  const [balance, transactions, subscriptions, giftCards, pointsBalance] = await Promise.all([
+  const [balance, transactions, subscriptions, giftCards, pointsBalance, payoutInstruments] = await Promise.all([
     getWalletBalance(),
     getTransactions(),
     getMySubscriptions(),
     getMyGiftCards(),
     getPointsBalance(),
+    getMyPayoutInstruments(),
   ]);
+  const verifiedInstrument = payoutInstruments.find((i) => i.status === "verified") ?? null;
 
   return (
     <>
@@ -38,6 +41,7 @@ export default async function WalletPage() {
         <BalanceCard
           balanceSantim={balance?.balanceSantim ?? 0}
           weeklyDeltaSantim={balance?.weeklyDeltaSantim ?? 0}
+          verifiedInstrument={verifiedInstrument}
         />
         <AddFundsSection />
         <PointsCard balance={pointsBalance} />

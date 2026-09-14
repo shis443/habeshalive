@@ -1,0 +1,1 @@
+ALTER TABLE platform_config DROP COLUMN payout_minimum_amount_santim;

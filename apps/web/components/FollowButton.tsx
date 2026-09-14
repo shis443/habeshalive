@@ -7,10 +7,23 @@ import { useDropdown } from "@/lib/useDropdown";
 import { BellIcon } from "./icons";
 import styles from "./FollowButton.module.css";
 
+// Real user feedback: "Personalized" read as if it meant something more
+// than it does, and the only thing it actually changes (skipping
+// scheduled-stream announcements while still alerting on go-live) is
+// invisible unless you specifically test a scheduled stream rather than
+// a live one. Relabeled to say exactly what each mode does — same
+// distinction Twitch's own bell makes (All / Live only / Off), just
+// worded plainly instead of a vague middle option. The underlying
+// notify_mode values ('all'/'personalized'/'muted') are unchanged.
 const NOTIFY_MODE_LABELS: Record<FollowNotifyMode, string> = {
   all: "All notifications",
-  personalized: "Personalized",
-  muted: "Muted",
+  personalized: "Live only",
+  muted: "Off",
+};
+const NOTIFY_MODE_DESCRIPTIONS: Record<FollowNotifyMode, string> = {
+  all: "Alerts when they go live or schedule a stream",
+  personalized: "Alerts only when they go live — no schedule announcements",
+  muted: "No alerts, but you're still following",
 };
 
 export function FollowButton({
@@ -113,6 +126,7 @@ export function FollowButton({
                   type="button"
                   className={`${styles.bellMenuItem} ${mode === notifyMode ? styles.bellMenuItemActive : ""}`}
                   onClick={() => handleSetNotifyMode(mode)}
+                  title={NOTIFY_MODE_DESCRIPTIONS[mode]}
                 >
                   {NOTIFY_MODE_LABELS[mode]}
                 </button>

@@ -271,6 +271,10 @@ export const platformConfigSchema = z.object({
   boostDurationMs: z.number().int(),
   defaultRevenueShareBps: z.number().int(),
   payoutManualReviewThresholdSantim: z.number().int(),
+  // The smallest amount a creator is allowed to request as a payout —
+  // real gap found during a live admin walkthrough (there was no floor
+  // at all). See wallet/service.ts's requestPayout.
+  payoutMinimumAmountSantim: z.number().int(),
   vodRetentionDaysDefault: z.number().int(),
   vodRetentionDaysAnchor: z.number().int(),
   // Build 3 — Birq Plus perk (see subscriptions/platform-service.ts's
@@ -317,6 +321,7 @@ export const updatePlatformConfigSchema = z.object({
   boostDurationMs: z.number().int().positive(),
   defaultRevenueShareBps: z.number().int().min(0).max(10000),
   payoutManualReviewThresholdSantim: z.number().int().positive(),
+  payoutMinimumAmountSantim: z.number().int().positive(),
   vodRetentionDaysDefault: z.number().int().positive(),
   vodRetentionDaysAnchor: z.number().int().positive(),
   vodRetentionDaysBirqPlus: z.number().int().positive(),

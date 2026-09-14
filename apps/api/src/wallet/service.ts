@@ -27,7 +27,7 @@ import type {
 import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { logAdminAction } from "../admin/audit.js";
-import { getKycRequiredForPayouts, getPayoutManualReviewThreshold } from "../admin/config-service.js";
+import { getKycRequiredForPayouts, getPayoutManualReviewThreshold, getPayoutMinimumAmount } from "../admin/config-service.js";
 import { hasApprovedKyc } from "../kyc/service.js";
 import { env } from "../common/env.js";
 import { pool } from "../common/db.js";
@@ -811,6 +811,14 @@ export async function reversePayoutLedger(
 // (see docs/temporal-migration-plan.md). Same dispatch pattern for
 // approvePayout/rejectPayout/completePayoutFromWebhook further down.
 export async function requestPayout(creatorId: string, input: RequestPayoutInput): Promise<PayoutResponse> {
+  // Real gap found during a live admin walkthrough: there was no floor on
+  // payout size at all. Checked once here, ahead of the Temporal/legacy
+  // split below, so both paths enforce it identically.
+  const minimumAmount = await getPayoutMinimumAmount();
+  if (input.amountSantim < minimumAmount) {
+    throw new AppError(400, `The minimum payout amount is ${(minimumAmount / 100).toFixed(2)} birr.`);
+  }
+
   // Module 1.3: a 72h hold after a password change or 2FA enable/disable —
   // see common/security-hold.ts. Checked once here, ahead of both the
   // Temporal and legacy paths below, since either is a real funds

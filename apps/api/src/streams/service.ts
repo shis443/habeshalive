@@ -731,7 +731,7 @@ export async function endStream(userId: string): Promise<void> {
   // they realize their encoder is misconfigured during the startup
   // window), not only once promoteStartingStreams() has flipped it live.
   const { rows } = await pool.query<{ id: string }>(
-    `UPDATE streams SET status = 'ended', ended_at = now()
+    `UPDATE streams SET status = 'ended', ended_at = now(), ended_reason = 'creator_ended'
      WHERE creator_id = $1 AND status IN ('starting', 'live')
      RETURNING id`,
     [userId]
@@ -799,7 +799,7 @@ export async function forceEndStream(
   const before = await pool.query<{ status: string }>(`SELECT status FROM streams WHERE id = $1`, [streamId]);
   // Matches 'starting' too — same reasoning as endStream() above.
   const { rows } = await pool.query<{ id: string; creator_id: string; title: string; srs_client_id: string | null }>(
-    `UPDATE streams SET status = 'ended', ended_at = now()
+    `UPDATE streams SET status = 'ended', ended_at = now(), ended_reason = 'force_ended'
      WHERE id = $1 AND status IN ('starting', 'live')
      RETURNING id, creator_id, title, srs_client_id`,
     [streamId]
@@ -961,7 +961,10 @@ export async function boostStream(creatorId: string): Promise<BoostStreamRespons
 // this ends a specific stream by id rather than scoping by creator/provider key, since
 // the reaper isn't acting on behalf of any particular caller.
 async function endStreamById(streamId: string): Promise<void> {
-  await pool.query(`UPDATE streams SET status = 'ended', ended_at = now() WHERE id = $1`, [streamId]);
+  await pool.query(
+    `UPDATE streams SET status = 'ended', ended_at = now(), ended_reason = 'timeout' WHERE id = $1`,
+    [streamId]
+  );
   await logStreamEvent(streamId, "ended");
 }
 
@@ -1263,8 +1266,18 @@ export async function markLiveByProviderStreamId(
   // window makes a quick reconnect invisible to anyone already watching,
   // same provider_stream_id (the creator's stable stream key) required so
   // this can't revive a different creator's session.
+  //
+  // ended_reason IS NULL is load-bearing (0071_stream_ended_reason.sql):
+  // only a row ended by markEndedByProviderStreamId's own real on_unpublish
+  // (which never sets a reason) is eligible. A creator's deliberate
+  // endStream() ('creator_ended'), an admin's forceEndStream()
+  // ('force_ended'), or the reaper's timeout ('timeout') must never be
+  // revived by a late/retried publish handshake landing seconds later —
+  // that was the actual bug: "End Stream" appearing to un-end itself.
   const recentlyEnded = await pool.query<{ id: string }>(
-    `SELECT id FROM streams WHERE provider_stream_id = $1 AND status = 'ended' AND ended_at > now() - interval '2 minutes'
+    `SELECT id FROM streams
+     WHERE provider_stream_id = $1 AND status = 'ended' AND ended_reason IS NULL
+       AND ended_at > now() - interval '2 minutes'
      ORDER BY created_at DESC LIMIT 1`,
     [providerStreamId]
   );

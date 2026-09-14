@@ -112,10 +112,13 @@ describe("ledger invariant", () => {
       accountNumber: "0911234567",
       accountHolder: "Test Creator",
     });
+    // verifyPayoutInstrument recomputes usable_from = now() + 72h itself
+    // (a real bug fix — the window used to stay fixed at bind time), so
+    // the backdate has to happen after verify, not before.
+    await verifyPayoutInstrument(admin.id, instrument.id);
     await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
       instrument.id,
     ]);
-    await verifyPayoutInstrument(admin.id, instrument.id);
     await requestPayout(creator.id, { amountSantim: 1_000, instrumentId: instrument.id });
 
     const after = await getLedgerReconciliation();

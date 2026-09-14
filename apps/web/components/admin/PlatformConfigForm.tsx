@@ -15,6 +15,9 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   const [reviewThresholdBirr, setReviewThresholdBirr] = useState(
     config ? String(santimToBirr(config.payoutManualReviewThresholdSantim)) : ""
   );
+  const [minimumPayoutBirr, setMinimumPayoutBirr] = useState(
+    config ? String(santimToBirr(config.payoutMinimumAmountSantim)) : ""
+  );
   const [vodDefaultDays, setVodDefaultDays] = useState(config ? String(config.vodRetentionDaysDefault) : "");
   const [vodAnchorDays, setVodAnchorDays] = useState(config ? String(config.vodRetentionDaysAnchor) : "");
   const [vodBirqPlusDays, setVodBirqPlusDays] = useState(
@@ -63,6 +66,7 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           boostDurationMs: Math.round(parseFloat(durationHours || "0") * 3_600_000),
           defaultRevenueShareBps: Math.round(parseFloat(revenueSharePct || "0") * 100),
           payoutManualReviewThresholdSantim: birrToSantim(parseFloat(reviewThresholdBirr || "0")),
+          payoutMinimumAmountSantim: birrToSantim(parseFloat(minimumPayoutBirr || "0")),
           vodRetentionDaysDefault: Math.round(parseFloat(vodDefaultDays || "0")),
           vodRetentionDaysAnchor: Math.round(parseFloat(vodAnchorDays || "0")),
           vodRetentionDaysBirqPlus: Math.round(parseFloat(vodBirqPlusDays || "0")),
@@ -142,6 +146,15 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
         className={filterStyles.input}
         value={reviewThresholdBirr}
         onChange={(e) => setReviewThresholdBirr(e.target.value)}
+      />
+
+      <label className={formStyles.fieldLabel}>Minimum payout amount (ETB)</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={minimumPayoutBirr}
+        onChange={(e) => setMinimumPayoutBirr(e.target.value)}
       />
 
       <label className={formStyles.fieldLabel}>VOD retention (days)</label>

@@ -90,6 +90,12 @@ export function PayoutInstrumentSection({ initial }: { initial: PayoutInstrument
                 <span className={styles.currentValue} style={{ margin: 0, flex: 1 }}>
                   {instrument.method === "telebirr" ? "Telebirr" : "Bank"} ····{instrument.displayTail} —{" "}
                   {STATUS_LABEL[instrument.status]}
+                  {instrument.status === "unverified" && (
+                    <span className={styles.pendingNote}>
+                      {" "}
+                      · the 72-hour security hold starts once an admin verifies this
+                    </span>
+                  )}
                   {coolingOff && (
                     <span className={styles.pendingNote}> · usable from {coolingOff}</span>
                   )}

@@ -54,10 +54,14 @@ async function bindUsableInstrument(
     accountHolder: "Test Creator",
     ...(method === "bank" ? { bankCode: "TEST_BANK" } : {}),
   });
+  // verifyPayoutInstrument recomputes usable_from = now() + 72h itself
+  // (see that function's own comment — a real bug fix, the window used to
+  // stay fixed at bind time), so the backdate has to happen after it, not
+  // before, or verify's own write clobbers it.
+  await verifyPayoutInstrument(admin.id, instrument.id);
   await pool.query(`UPDATE payout_instruments SET usable_from = now() - interval '1 second' WHERE id = $1`, [
     instrument.id,
   ]);
-  await verifyPayoutInstrument(admin.id, instrument.id);
   return instrument.id;
 }
 
