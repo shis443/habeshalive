@@ -1,6 +1,14 @@
+import { updateFollowNotifyModeSchema } from "@birq/shared";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getCategoryFollowStatus, toggleCategoryFollow } from "./category-service.js";
-import { getFollowedCreators, getFollowStatus, listMyFollowers, markFollowingSeen, toggleFollow } from "./service.js";
+import {
+  getFollowedCreators,
+  getFollowStatus,
+  listMyFollowers,
+  markFollowingSeen,
+  setFollowNotifyMode,
+  toggleFollow,
+} from "./service.js";
 
 // Same keying rationale as wallet/routes.ts's keyByUser.
 function keyByUser(req: FastifyRequest): string {
@@ -50,6 +58,22 @@ export const followRoutes: FastifyPluginAsync = async (app) => {
       config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler", keyGenerator: keyByUser } },
     },
     async (req) => toggleFollow(req.user.sub, req.params.creatorId)
+  );
+
+  // Per-creator notification granularity (All/Personalized/Muted) — the
+  // bell menu next to the Following pill. Same rate-limit posture as the
+  // toggle above: a real UI action, generous cap just to stop a script.
+  app.patch<{ Params: { creatorId: string } }>(
+    "/:creatorId/notify-mode",
+    {
+      preHandler: app.authenticate,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute", hook: "preHandler", keyGenerator: keyByUser } },
+    },
+    async (req) => {
+      const input = updateFollowNotifyModeSchema.parse(req.body);
+      await setFollowNotifyMode(req.user.sub, req.params.creatorId, input.notifyMode);
+      return { ok: true };
+    }
   );
 
   // Phase 3.4 — category following. Registered under a static "category"

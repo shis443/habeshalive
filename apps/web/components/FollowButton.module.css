@@ -1,3 +1,67 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bellWrap {
+  position: relative;
+}
+
+.bellButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface-variant);
+  background: transparent;
+}
+
+.bellButton:hover {
+  background: var(--surface-container-high);
+  color: var(--on-background);
+}
+
+.bellMenu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  min-width: 180px;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
+  border-radius: 8px;
+  padding: var(--space-1);
+  z-index: 30;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.bellMenuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2);
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--on-background);
+  font-family: var(--font-body);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.bellMenuItem:hover {
+  background: var(--surface-container-highest);
+}
+
+.bellMenuItemActive {
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .button {
   padding: 10px var(--space-3);
   border-radius: 4px;
@@ -10,6 +74,7 @@
   text-transform: uppercase;
   background: transparent;
   white-space: nowrap;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .button:hover:not(:disabled) {
@@ -22,7 +87,34 @@
   background: rgba(208, 188, 255, 0.1);
 }
 
+/* Fires once, right when a follow lands — a full solid fill that eases
+   back down to .buttonFollowing's own tinted-outline values (the
+   animation's end state matches it exactly, so there's no visible jump
+   when this class is removed afterward). */
+.buttonJustFollowed {
+  animation: followFlash 0.38s ease-out;
+}
+
+@keyframes followFlash {
+  0% {
+    background: var(--primary);
+    color: var(--on-primary);
+    border-color: var(--primary);
+  }
+  100% {
+    background: rgba(208, 188, 255, 0.1);
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+}
+
 .button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buttonJustFollowed {
+    animation: none;
+  }
 }

@@ -1,6 +1,7 @@
 import type { CreatorProfile } from "@birq/shared";
 import { FollowButton } from "./FollowButton";
 import { VerifiedIcon } from "./icons";
+import { SocialLinksRow } from "./SocialLinksRow";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import styles from "./ChannelHeader.module.css";
 
@@ -36,9 +37,16 @@ export function ChannelHeader({ profile, isAuthed }: { profile: CreatorProfile; 
           <p className={styles.followerCount}>
             {profile.followerCount.toLocaleString()} follower{profile.followerCount === 1 ? "" : "s"}
           </p>
+          <SocialLinksRow socialLinks={profile.socialLinks} />
         </div>
       </div>
-      <FollowButton creatorId={profile.id} isAuthed={isAuthed} initialFollowing={profile.isFollowing} />
+      <FollowButton
+        creatorId={profile.id}
+        isAuthed={isAuthed}
+        initialFollowing={profile.isFollowing}
+        initialNotifyMode={profile.notifyMode}
+        showNotifyBell
+      />
     </div>
   );
 }

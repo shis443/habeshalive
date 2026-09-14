@@ -76,6 +76,14 @@
   vertical-align: middle;
 }
 
+.emote {
+  height: 1.4em;
+  width: auto;
+  vertical-align: middle;
+  display: inline-block;
+  margin: 0 1px;
+}
+
 .subBadge {
   color: var(--secondary);
   font-size: 0.85em;

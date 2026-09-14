@@ -19,16 +19,21 @@ import {
   avatarSelectionSchema,
   blocklistTermSchema,
   boostRevenueByCreatorSchema,
+  categoryFollowStatusSchema,
   clipSchema,
   contentCategorySchema,
   creatorAdsSettingsSchema,
+  creatorAnalyticsSchema,
   creatorApplicationAdminItemSchema,
+  creatorTierSchema,
   creatorApplicationCapStatusSchema,
   creatorListItemSchema,
   creatorProfileSchema,
   creatorStatsSchema,
   earningsThisMonthSchema,
   eligibleCreatorSchema,
+  emoteAdminItemSchema,
+  emoteSchema,
   followedCreatorSchema,
   followerListItemSchema,
   followStatusSchema,
@@ -65,6 +70,7 @@ import {
   publicClipSchema,
   publicVodSchema,
   reportSchema,
+  scheduledStreamSchema,
   searchResultsSchema,
   servedAdSchema,
   squadSchema,
@@ -105,11 +111,15 @@ import {
   type AvatarSelection,
   type BlocklistTerm,
   type BoostRevenueByCreator,
+  type CategoryFollowStatus,
   type Clip,
   type ContentCategory,
   type CreatorAdsSettings,
+  type CreatorAnalytics,
+  type CreatorAnalyticsWindow,
   type CreatorApplicationAdminItem,
   type CreatorApplicationCapStatus,
+  type CreatorTier,
   type CreatorListItem,
   type CreatorProfile,
   type CreatorStats,
@@ -148,6 +158,7 @@ import {
   type PublicClip,
   type PublicVod,
   type Report,
+  type ScheduledStream,
   type SearchResults,
   type ServedAd,
   type Squad,
@@ -241,6 +252,25 @@ export async function getLiveStreamByUsername(username: string, ticket?: string)
   }
   const data = await unwrapData(res);
   return streamDetailSchema.parse(data);
+}
+
+// db/migrations/0066_scheduled_streams.sql — the audience-facing "Upcoming
+// Stream" card. Null is a normal, common state (no pending schedule), not
+// an error — same degrade-not-crash posture as getLiveStreamByUsername.
+export async function getScheduledStreamForUsername(username: string): Promise<ScheduledStream | null> {
+  const res = await fetchAuthed(`/streams/scheduled/${encodeURIComponent(username)}`);
+  if (!res.ok) return null;
+  const data = await unwrapData(res);
+  return data ? scheduledStreamSchema.parse(data) : null;
+}
+
+// The creator's own stream-manager dashboard — same null-is-normal
+// posture as above.
+export async function getMyScheduledStream(): Promise<ScheduledStream | null> {
+  const res = await fetchAuthed(`/streams/scheduled/mine`);
+  if (!res.ok) return null;
+  const data = await unwrapData(res);
+  return data ? scheduledStreamSchema.parse(data) : null;
 }
 
 // Module 3 — null both when the creator has no active squad and on any
@@ -452,6 +482,19 @@ export async function getMyVods(): Promise<Vod[]> {
   return vodSchema.array().parse(await unwrapData(res));
 }
 
+// Build 2c — Content page's clip management list (publish toggle,
+// download). Includes unpublished clips, unlike getClipsForUsername
+// above (public, published-only), same relationship as getMyVods/
+// getVods.
+export async function getMyClips(): Promise<Clip[]> {
+  const res = await fetchAuthed("/vods/clips/mine");
+  if (!res.ok) {
+    console.error(`Failed to load own clips (${res.status})`);
+    return [];
+  }
+  return clipSchema.array().parse(await unwrapData(res));
+}
+
 // Creator Dashboard's Community > Followers.
 export async function getMyFollowers(): Promise<FollowerListItem[]> {
   const res = await fetchAuthed("/follows/followers");
@@ -517,6 +560,24 @@ export async function getCreatorStats(): Promise<CreatorStats | null> {
   return creatorStatsSchema.parse(await unwrapData(res));
 }
 
+export async function getCreatorTier(): Promise<CreatorTier | null> {
+  const res = await fetchAuthed("/streams/creator-tier");
+  if (!res.ok) {
+    console.error(`Failed to load creator tier (${res.status})`);
+    return null;
+  }
+  return creatorTierSchema.parse(await unwrapData(res));
+}
+
+export async function getCreatorAnalytics(window: CreatorAnalyticsWindow): Promise<CreatorAnalytics | null> {
+  const res = await fetchAuthed(`/streams/analytics?window=${window}`);
+  if (!res.ok) {
+    console.error(`Failed to load creator analytics (${res.status})`);
+    return null;
+  }
+  return creatorAnalyticsSchema.parse(await unwrapData(res));
+}
+
 export async function getTransactions(): Promise<Transaction[] | null> {
   const res = await fetchAuthed("/wallet/transactions");
   if (res.status === 401) return null;
@@ -567,20 +628,22 @@ export async function getFollowStatus(creatorId: string): Promise<FollowStatus> 
   const res = await fetchAuthed(`/follows/${creatorId}/status`);
   if (!res.ok) {
     console.error(`Failed to load follow status (${res.status})`);
-    return { following: false, followerCount: 0 };
+    return { following: false, followerCount: 0, notifyMode: "all" };
   }
   return followStatusSchema.parse(await unwrapData(res));
 }
 
 // Phase 3.4 — category detail page's follow button. Same public/
-// graceful-default posture as getFollowStatus above.
-export async function getCategoryFollowStatus(category: string): Promise<FollowStatus> {
+// graceful-default posture as getFollowStatus above. Its own lighter
+// CategoryFollowStatus type — no per-creator notify granularity makes
+// sense for a category.
+export async function getCategoryFollowStatus(category: string): Promise<CategoryFollowStatus> {
   const res = await fetchAuthed(`/follows/category/${encodeURIComponent(category)}/status`);
   if (!res.ok) {
     console.error(`Failed to load category follow status (${res.status})`);
     return { following: false, followerCount: 0 };
   }
-  return followStatusSchema.parse(await unwrapData(res));
+  return categoryFollowStatusSchema.parse(await unwrapData(res));
 }
 
 // Left throwing, unlike the rest of this file after the k6 finding above:
@@ -968,6 +1031,29 @@ export async function getMyKycStatus() {
   const res = await fetchAuthed("/kyc/status");
   if (!res.ok) return null;
   return kycStatusSchema.parse(await unwrapData(res));
+}
+
+// --- Emotes (Build 3 — Birq Plus's "global emote slot") ---
+
+export async function getEmoteSubmissions(status?: "pending" | "approved" | "rejected") {
+  const qs = status ? `?status=${status}` : "";
+  const res = await fetchAuthed(`/admin/emotes${qs}`);
+  if (!res.ok) {
+    console.error(`Failed to load emote submissions (${res.status})`);
+    return [];
+  }
+  return emoteAdminItemSchema.array().parse(await unwrapData(res));
+}
+
+// Creator's own emotes (Settings) — every status, so a rejection reason
+// is visible, same relationship as getMyKycStatus above.
+export async function getMyEmotes() {
+  const res = await fetchAuthed("/emotes/mine");
+  if (!res.ok) {
+    console.error(`Failed to load your emotes (${res.status})`);
+    return [];
+  }
+  return emoteSchema.array().parse(await unwrapData(res));
 }
 
 // --- Ads (B.2) ---

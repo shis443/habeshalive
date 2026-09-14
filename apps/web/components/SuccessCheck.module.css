@@ -1,0 +1,75 @@
+/* --ease-spring-bounce (globals.css) is explicitly scoped to the Gursha
+   send button's own bounce — deliberately not used here. This is a
+   routine confirmation surface, not that one Peak Moment. */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  animation: successPop 0.3s var(--ease-spring-smooth);
+}
+
+.circle {
+  width: 56px;
+  height: 56px;
+}
+
+.circleTrack {
+  fill: none;
+  stroke: var(--done, #6cc394);
+  stroke-width: 3;
+  opacity: 0.25;
+}
+
+.check {
+  fill: none;
+  stroke: var(--done, #6cc394);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: checkDraw 0.35s ease-out 0.15s forwards;
+}
+
+@keyframes successPop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes checkDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.title {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--on-background);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap {
+    animation: none;
+  }
+  .check {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

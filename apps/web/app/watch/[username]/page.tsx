@@ -14,6 +14,7 @@ import { RecentCategoriesPlaceholder } from "@/components/RecentCategoriesPlaceh
 import { SquadGrid } from "@/components/SquadGrid";
 import { StreamMeta } from "@/components/StreamMeta";
 import { TopNav } from "@/components/TopNav";
+import { UpcomingStreamCard } from "@/components/UpcomingStreamCard";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { WatchPlayerGate } from "@/components/WatchPlayerGate";
 import {
@@ -25,6 +26,7 @@ import {
   getLiveStreamByUsername,
   getLiveStreams,
   getPrerollBreak,
+  getScheduledStreamForUsername,
   getServedAd,
   getSquadForUsername,
   getStreamActivity,
@@ -54,10 +56,11 @@ export default async function WatchPage({
   ]);
 
   if (!stream) {
-    const [vods, profile, clips] = await Promise.all([
+    const [vods, profile, clips, scheduledStream] = await Promise.all([
       getVods(username),
       getCreatorProfile(username),
       getClipsForUsername(username),
+      getScheduledStreamForUsername(username),
     ]);
 
     // Genuinely nonexistent username (not just "not live right now") —
@@ -83,6 +86,18 @@ export default async function WatchPage({
         <TopNav isAuthed={!!user} />
         <OfflineNotice username={username} />
         <ChannelHeader profile={profile} isAuthed={!!user} />
+        {scheduledStream && (
+          <div className={styles.offlineTabContent}>
+            <UpcomingStreamCard
+              scheduledStream={scheduledStream}
+              creatorUsername={username}
+              creatorId={profile.id}
+              isAuthed={!!user}
+              initialFollowing={profile.isFollowing}
+              initialNotifyMode={profile.notifyMode}
+            />
+          </div>
+        )}
         <ChannelTabs username={username} active={tab} />
         {tab === "home" && (
           <>
@@ -93,7 +108,12 @@ export default async function WatchPage({
         )}
         {tab === "about" && (
           <div className={styles.offlineTabContent}>
-            <AboutCreator displayName={profile.displayName} bio={profile.bio} followerCount={profile.followerCount} />
+            <AboutCreator
+              displayName={profile.displayName}
+              bio={profile.bio}
+              followerCount={profile.followerCount}
+              socialLinks={profile.socialLinks}
+            />
           </div>
         )}
         {tab === "videos" && <PastBroadcasts vods={vods} />}
@@ -140,6 +160,7 @@ export default async function WatchPage({
               creatorUsername={stream.creator.username}
               isAuthed={!!user}
               isFollowing={followStatus.following}
+              initialNotifyMode={followStatus.notifyMode}
               isOwner={!!user && user.id === stream.creator.id}
               tiers={tiers}
             />
@@ -147,6 +168,7 @@ export default async function WatchPage({
               displayName={stream.creator.displayName}
               bio={stream.creator.bio}
               followerCount={followStatus.followerCount}
+              socialLinks={stream.creator.socialLinks}
             />
           </div>
         </div>

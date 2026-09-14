@@ -1,0 +1,12 @@
+-- Public social links on a profile (Twitch/X/YouTube/Instagram/Discord/
+-- TikTok) — lives on `users`, not `creator_profiles`, matching where
+-- display_name/avatar_url/bio already live (0001_init.sql): any account
+-- can set these, not only creators, and getCreatorProfile/getMyAccount
+-- both already SELECT straight from `users`.
+--
+-- A JSONB map of {platform: url} rather than 6 separate nullable columns
+-- — the platform set is validated application-side (a fixed zod enum),
+-- so a DB-level CHECK per key would just duplicate that without adding
+-- real protection, and a map keeps adding a 7th platform later a
+-- one-line schema change instead of a migration.
+ALTER TABLE users ADD COLUMN social_links JSONB NOT NULL DEFAULT '{}';

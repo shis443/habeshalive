@@ -3,17 +3,30 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./CreatorDashboardSidebar.module.css";
-import { GearIcon, GiftIcon, GoLiveIcon, GroupIcon, HomeIcon, PlayIcon, ShieldIcon, VerifiedIcon, WalletIcon } from "./icons";
+import {
+  AnalyticsIcon,
+  GearIcon,
+  GiftIcon,
+  GoLiveIcon,
+  GroupIcon,
+  HomeIcon,
+  PlayIcon,
+  ShieldIcon,
+  VerifiedIcon,
+  WalletIcon,
+} from "./icons";
 
 // Same principle as AdminSidebar.tsx's own comment: only sections that
-// are actually built get a link. Twitch's real Creator Dashboard also has
-// Analytics (Research/Achievements/Discovery/Engagement), Video
+// are actually built get a link. Analytics now has a real pipeline
+// (streams/analytics-service.ts, reusing the same stream_viewer_samples/
+// stream_watch_time_daily/ledger_entries tables the admin-only dashboard
+// already read) — Twitch's real Creator Dashboard also has Video
 // Collections, a Copyright Claims Manager, Channel Points/Drops, and an
-// Extensions marketplace — none of those have any backing feature or
-// data source in this codebase (no event/analytics pipeline, no content-
-// ID system, no third-party extension SDK, no game-publisher Drops
-// partnerships), so they're deliberately not represented here rather than
-// linking to a page that would either 404 or show fabricated numbers.
+// Extensions marketplace, none of which have any backing feature or data
+// source in this codebase (no content-ID system, no third-party
+// extension SDK, no game-publisher Drops partnerships), so those stay
+// deliberately unrepresented rather than linking to a page that would
+// either 404 or show fabricated numbers.
 const COMMUNITY_SUBSECTIONS = [
   { href: "/dashboard/community/followers", label: "Followers" },
   { href: "/dashboard/community/my-roles", label: "My Assigned Roles" },
@@ -39,6 +52,13 @@ export function CreatorDashboardSidebar() {
       <Link href="/dashboard/content" className={pathname.startsWith("/dashboard/content") ? styles.linkActive : styles.link}>
         <PlayIcon />
         Content
+      </Link>
+      <Link
+        href="/dashboard/analytics"
+        className={pathname.startsWith("/dashboard/analytics") ? styles.linkActive : styles.link}
+      >
+        <AnalyticsIcon />
+        Analytics
       </Link>
       <Link href="/dashboard/community" className={inCommunity ? styles.linkActive : styles.link}>
         <GroupIcon />

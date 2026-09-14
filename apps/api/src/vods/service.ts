@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { AspectRatio, PublicVod, PublishVodInput, Vod } from "@birq/shared";
 import { getVodRetentionDays } from "../admin/config-service.js";
+import { hasActivePlatformSubscription } from "../subscriptions/platform-service.js";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { deleteObject, getSignedVodUrl, uploadObject } from "../common/object-storage.js";
@@ -275,8 +276,14 @@ export async function createVodFromRecording(streamId: string, fileUrl: string):
   const key = `${streamId}/${Date.now()}.mp4`;
   await uploadObject(key, body, "video/mp4");
 
-  const retention = await getVodRetentionDays();
-  const retentionDays = stream.is_anchor_creator ? retention.anchor : retention.default;
+  const [retention, isBirqPlus] = await Promise.all([
+    getVodRetentionDays(),
+    hasActivePlatformSubscription(stream.creator_id),
+  ]);
+  const baseRetentionDays = stream.is_anchor_creator ? retention.anchor : retention.default;
+  // Combinable, not exclusive — a Birq Plus subscriber who's also an
+  // Anchor creator keeps whichever window is longer, never a downgrade.
+  const retentionDays = isBirqPlus ? Math.max(baseRetentionDays, retention.birqPlus) : baseRetentionDays;
 
   const { rows } = await pool.query<{
     id: string;

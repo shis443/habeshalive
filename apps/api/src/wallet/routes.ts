@@ -16,6 +16,7 @@ import { env } from "../common/env.js";
 import { AppError } from "../common/errors.js";
 import { initiateDiasporaTopup } from "./diaspora-topup-service.js";
 import { verifyPaypalWebhook } from "./paypal-client.js";
+import { verifySantimPaySignature } from "./santimpay-client.js";
 import {
   approvePayout,
   completePayoutFromWebhook,
@@ -132,7 +133,7 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req) => {
       const input = initiateTopupSchema.parse(req.body);
-      return initiateTopup(req.user.sub, input.amountSantim);
+      return initiateTopup(req.user.sub, input.amountSantim, input.provider);
     }
   );
 
@@ -144,6 +145,26 @@ export const walletRoutes: FastifyPluginAsync = async (app) => {
       throw new AppError(501, "Chapa webhook verification not configured");
     }
     if (!verifyChapaSignature(req)) {
+      throw new AppError(401, "Invalid webhook signature");
+    }
+    const input = chapaWebhookSchema.parse(req.body);
+    await completeTopupFromWebhook(input);
+    reply.send({ ok: true });
+  });
+
+  // Build 3 — SantimPay's webhook. Always 501s today: SANTIMPAY_WEBHOOK_SECRET
+  // being unset (see env.ts) means verifySantimPaySignature is unreachable,
+  // and that function itself always returns false regardless (see
+  // santimpay-client.ts's own comment) since there's no real SantimPay
+  // webhook doc yet to verify a signature scheme against — refusing an
+  // unverifiable webhook rather than accepting unauthenticated wallet
+  // credits, same posture as the Chapa/Stripe/PayPal handlers above/below
+  // when their own secrets are unset.
+  app.post("/webhooks/santimpay", async (req, reply) => {
+    if (!env.SANTIMPAY_WEBHOOK_SECRET) {
+      throw new AppError(501, "SantimPay webhook verification not configured");
+    }
+    if (!verifySantimPaySignature()) {
       throw new AppError(401, "Invalid webhook signature");
     }
     const input = chapaWebhookSchema.parse(req.body);

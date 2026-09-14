@@ -17,6 +17,11 @@ export const clipSchema = z.object({
   // consumer, same reasoning as streams.ts's aspectRatioSchema.
   aspectRatio: aspectRatioSchema,
   createdAt: z.string(),
+  // db/migrations/0068_download_jobs.sql — same "published to profile"
+  // concept as Vod's own isPublished; a creator can pull a clip out of
+  // their public post grid without deleting it. Defaults true (every
+  // clip that already existed before this column shipped stays visible).
+  isPublished: z.boolean(),
 });
 export type Clip = z.infer<typeof clipSchema>;
 

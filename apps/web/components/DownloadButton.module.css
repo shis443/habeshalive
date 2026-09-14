@@ -1,0 +1,43 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.button {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-background);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pending {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
+.readyLink {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.error {
+  font-size: 11px;
+  color: var(--error, #ffb4ab);
+  margin: 0;
+  text-align: right;
+}

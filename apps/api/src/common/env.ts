@@ -92,6 +92,22 @@ const envSchema = z.object({
   // there's no real Chapa sandbox account behind this yet.
   CHAPA_SECRET_KEY: z.string().default(""),
   CHAPA_WEBHOOK_SECRET: z.string().default(""),
+  // Build 3 — SantimPay, a second local ETB rail alongside Chapa (both
+  // real, independent payment gateways with their own developer APIs,
+  // unlike Telebirr/CBE Birr/HelloCash which are payment METHODS inside
+  // Chapa's own hosted checkout — see diaspora-topup-service.ts's own
+  // comment on that distinction). Same empty-by-default stub-switch
+  // pattern as Chapa/Stripe/PayPal above, but genuinely un-integratable
+  // beyond the stub today: no real SantimPay merchant account, API
+  // contract, or webhook signature scheme has been supplied to verify
+  // against (unlike Chapa/Stripe/PayPal's clients, each built against a
+  // real, cited API doc) — wallet/santimpay-client.ts's "real" branch is
+  // therefore left unimplemented (throws) rather than guessed at, so a
+  // future real integration replaces a clearly-marked placeholder instead
+  // of silently trusting fabricated endpoint/signature behavior.
+  SANTIMPAY_API_KEY: z.string().default(""),
+  SANTIMPAY_MERCHANT_ID: z.string().default(""),
+  SANTIMPAY_WEBHOOK_SECRET: z.string().default(""),
   // Module 2 diaspora bridge — international-card top-ups for donors
   // outside Ethiopia (Chapa's own hosted checkout already covers Telebirr/
   // CBE Birr/HelloCash/local cards natively, so those two don't get a
@@ -156,6 +172,15 @@ const envSchema = z.object({
   VOD_S3_ACCESS_KEY_ID: z.string().default(""),
   VOD_S3_SECRET_ACCESS_KEY: z.string().default(""),
   VOD_S3_BUCKET: z.string().default("habeshalive-vods"),
+  // The watermarked-download job's (streams/download-service.ts) drawtext
+  // filter needs a real font FILE path — ffmpeg's drawtext has no default
+  // font of its own, and node:22-slim ships with none at all. Defaults to
+  // where apps/api/Dockerfile's `fonts-dejavu-core` package actually
+  // installs it in the real production container; overridden in local
+  // dev's own .env to whatever real font path exists on that machine
+  // (different per OS), same reasoning as every other environment-
+  // specific path in this file.
+  FFMPEG_WATERMARK_FONT_PATH: z.string().default("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
   // Image moderation (AWS Rekognition's DetectModerationLabels) — same
   // empty-by-default stub switch as everywhere else in this file. Chosen
   // over Google Cloud Vision SafeSearch/Hive because it's the option this

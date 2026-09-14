@@ -273,6 +273,14 @@ export const platformConfigSchema = z.object({
   payoutManualReviewThresholdSantim: z.number().int(),
   vodRetentionDaysDefault: z.number().int(),
   vodRetentionDaysAnchor: z.number().int(),
+  // Build 3 — Birq Plus perk (see subscriptions/platform-service.ts's
+  // hasActivePlatformSubscription). Combinable with, not a replacement
+  // for, Anchor's own retention — createVodFromRecording takes the
+  // longer of whichever windows apply.
+  vodRetentionDaysBirqPlus: z.number().int(),
+  // Build 3 — how many custom emotes a Birq Plus subscriber can
+  // contribute to the platform-wide catalog (emotes/service.ts).
+  birqPlusEmoteSlotCount: z.number().int(),
   approvedCreatorCap: z.number().int(),
   adRevenueShareBps: z.number().int(),
   adFrequencyCapPerHour: z.number().int(),
@@ -288,6 +296,17 @@ export const platformConfigSchema = z.object({
   // queue is actually staffed, rather than this shipping hard-on and
   // instantly blocking every existing creator's payouts.
   kycRequiredForPayouts: z.boolean(),
+  // Streamer partner/activity tier thresholds — db/migrations/
+  // 0067_creator_tiers.sql. A creator must clear BOTH the watch-hours AND
+  // gift-volume threshold for a tier (see creator-tiers-service.ts).
+  creatorTierBronzeWatchHours: z.number().int(),
+  creatorTierBronzeGiftVolumeSantim: z.number().int(),
+  creatorTierSilverWatchHours: z.number().int(),
+  creatorTierSilverGiftVolumeSantim: z.number().int(),
+  creatorTierGoldWatchHours: z.number().int(),
+  creatorTierGoldGiftVolumeSantim: z.number().int(),
+  creatorTierPartnerWatchHours: z.number().int(),
+  creatorTierPartnerGiftVolumeSantim: z.number().int(),
   updatedAt: z.string(),
   updatedByUsername: z.string().nullable(),
 });
@@ -300,6 +319,8 @@ export const updatePlatformConfigSchema = z.object({
   payoutManualReviewThresholdSantim: z.number().int().positive(),
   vodRetentionDaysDefault: z.number().int().positive(),
   vodRetentionDaysAnchor: z.number().int().positive(),
+  vodRetentionDaysBirqPlus: z.number().int().positive(),
+  birqPlusEmoteSlotCount: z.number().int().positive(),
   approvedCreatorCap: z.number().int().positive(),
   adRevenueShareBps: z.number().int().min(0).max(10000),
   adFrequencyCapPerHour: z.number().int().positive(),
@@ -307,6 +328,14 @@ export const updatePlatformConfigSchema = z.object({
   prerollSlot2SkipAfterSeconds: z.number().int().positive(),
   giftCardExpiryMonths: z.number().int().positive(),
   kycRequiredForPayouts: z.boolean(),
+  creatorTierBronzeWatchHours: z.number().int().positive(),
+  creatorTierBronzeGiftVolumeSantim: z.number().int().positive(),
+  creatorTierSilverWatchHours: z.number().int().positive(),
+  creatorTierSilverGiftVolumeSantim: z.number().int().positive(),
+  creatorTierGoldWatchHours: z.number().int().positive(),
+  creatorTierGoldGiftVolumeSantim: z.number().int().positive(),
+  creatorTierPartnerWatchHours: z.number().int().positive(),
+  creatorTierPartnerGiftVolumeSantim: z.number().int().positive(),
 });
 export type UpdatePlatformConfigInput = z.infer<typeof updatePlatformConfigSchema>;
 

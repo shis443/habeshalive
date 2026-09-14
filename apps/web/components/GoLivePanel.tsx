@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { unwrapClientData } from "@/lib/clientApi";
 import { SRS_WHIP_URL } from "@/lib/config";
+import { fileToCompressedDataUrl } from "@/lib/image";
 import { SquadPanel } from "./SquadPanel";
 import { StreamKeyRow } from "./StreamKeyRow";
 import { StreamTagsInput } from "./StreamTagsInput";
@@ -19,38 +20,6 @@ import styles from "./GoLivePanel.module.css";
 
 type Method = "obs" | "browser";
 type BrowserPhase = "idle" | "previewing" | "starting" | "live" | "error";
-
-const MAX_THUMBNAIL_DIMENSION = 640;
-
-// Resizes/compresses in the browser and returns a data: URI — see
-// createStreamSchema's comment for why this is fine to send as
-// thumbnailUrl directly: no object storage is wired up yet (Section 4),
-// and a compressed JPEG this size is small enough to just store inline.
-function fileToCompressedDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = document.createElement("img");
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const scale = Math.min(1, MAX_THUMBNAIL_DIMENSION / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Couldn't process that image"));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Couldn't read that image file"));
-    };
-    img.src = objectUrl;
-  });
-}
 
 // streamKeyField is the composed "{userId}?key={secret}" string (see
 // apps/api/src/streams/service.ts's composeStreamKeyField) — same value

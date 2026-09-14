@@ -1,4 +1,12 @@
-import { createSquadSchema, createStreamSchema, joinSquadSchema, srsCallbackSchema, srsDvrCallbackSchema } from "@birq/shared";
+import {
+  createScheduledStreamSchema,
+  createSquadSchema,
+  createStreamSchema,
+  creatorAnalyticsWindowSchema,
+  joinSquadSchema,
+  srsCallbackSchema,
+  srsDvrCallbackSchema,
+} from "@birq/shared";
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { getBoostPricing } from "../admin/config-service.js";
@@ -26,7 +34,15 @@ import {
   thumbnailPlaceholderSvg,
   type LiveStreamSort,
 } from "./service.js";
+import { getCreatorAnalytics } from "./analytics-service.js";
+import { getCreatorTier } from "./creator-tiers-service.js";
 import { purchasePpvAccess } from "./ppv-service.js";
+import {
+  cancelScheduledStream,
+  createOrReplaceScheduledStream,
+  getMyScheduledStream,
+  getScheduledStreamForUsername,
+} from "./scheduled-service.js";
 import { createSquad, getMySquad, getSquadForUsername, joinSquad, leaveSquad } from "./squad-service.js";
 import { searchTagNames } from "./tags-service.js";
 
@@ -144,6 +160,19 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     getCreatorStats(req.user.sub)
   );
 
+  // Creator-facing analytics dashboard (unlike admin/analytics-service.ts,
+  // which is platform-wide) — always the caller's own numbers, no creatorId
+  // param, so there's no ownership check to get wrong.
+  app.get<{ Querystring: { window?: string } }>(
+    "/analytics",
+    { preHandler: app.authenticate },
+    async (req) => getCreatorAnalytics(req.user.sub, creatorAnalyticsWindowSchema.parse(req.query.window ?? "7d"))
+  );
+
+  // Streamer partner/activity tier — always the caller's own, same
+  // no-ownership-param reasoning as /analytics above.
+  app.get("/creator-tier", { preHandler: app.authenticate }, async (req) => getCreatorTier(req.user.sub));
+
   app.get<{ Params: { id: string } }>(
     "/:id",
     { preHandler: app.tryAuthenticate },
@@ -193,6 +222,28 @@ export const streamRoutes: FastifyPluginAsync = async (app) => {
     await endStream(req.user.sub);
     reply.send({ ok: true });
   });
+
+  // YouTube-style scheduled broadcasts (db/migrations/0066). "/scheduled/
+  // mine" is a static segment, same non-collision reasoning as this file's
+  // other static-vs-:param routes, so it can never be shadowed by
+  // "/scheduled/:username" regardless of registration order.
+  app.get("/scheduled/mine", { preHandler: app.authenticate }, async (req) =>
+    getMyScheduledStream(req.user.sub)
+  );
+
+  app.post("/scheduled", { preHandler: [app.authenticate, app.rejectIfBanned] }, async (req) => {
+    const input = createScheduledStreamSchema.parse(req.body);
+    return createOrReplaceScheduledStream(req.user.sub, input);
+  });
+
+  app.delete("/scheduled/mine", { preHandler: app.authenticate }, async (req, reply) => {
+    await cancelScheduledStream(req.user.sub);
+    reply.send({ ok: true });
+  });
+
+  app.get<{ Params: { username: string } }>("/scheduled/:username", async (req) =>
+    getScheduledStreamForUsername(req.params.username)
+  );
 
   // Module 3 — squad co-streaming (grid-view, no new media infra — see
   // squad-service.ts's own comment).

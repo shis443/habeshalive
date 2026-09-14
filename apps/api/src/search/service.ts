@@ -1,4 +1,4 @@
-import type { AspectRatio, CreatorSearchResult, StreamDetail } from "@birq/shared";
+import type { AspectRatio, CreatorSearchResult, SocialLinks, StreamDetail } from "@birq/shared";
 import { pool } from "../common/db.js";
 import { hasPpvAccess } from "../streams/ppv-service.js";
 
@@ -34,6 +34,7 @@ interface StreamSearchRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  social_links: SocialLinks;
   is_verified: boolean;
   is_boosted: boolean;
   is_sensitive: boolean;
@@ -53,7 +54,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
   const { rows } = await pool.query<StreamSearchRow>(
     `SELECT s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
             s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim, s.aspect_ratio,
-            u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
+            u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.social_links, u.is_verified,
             EXISTS (
               SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
             ) AS is_boosted,
@@ -103,6 +104,7 @@ export async function searchStreams(query: string, limit = 20, viewerId?: string
           displayName: row.display_name,
           avatarUrl: row.avatar_url,
           bio: row.bio,
+          socialLinks: row.social_links,
           isVerified: row.is_verified,
           isFollowing: row.is_following,
         },

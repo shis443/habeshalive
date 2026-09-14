@@ -1,6 +1,6 @@
 "use client";
 
-import type { SubscriptionTier } from "@birq/shared";
+import type { FollowNotifyMode, SubscriptionTier } from "@birq/shared";
 import { useTranslations } from "next-intl";
 import { EndStreamButton } from "./EndStreamButton";
 import { FollowButton } from "./FollowButton";
@@ -16,6 +16,7 @@ export function ActionRow({
   creatorUsername,
   isAuthed,
   isFollowing,
+  initialNotifyMode = "all",
   isOwner = false,
   tiers,
 }: {
@@ -24,6 +25,7 @@ export function ActionRow({
   creatorUsername: string;
   isAuthed: boolean;
   isFollowing: boolean;
+  initialNotifyMode?: FollowNotifyMode;
   isOwner?: boolean;
   tiers: SubscriptionTier[];
 }) {
@@ -32,7 +34,13 @@ export function ActionRow({
   return (
     <div className={styles.row}>
       {isOwner && <EndStreamButton />}
-      <FollowButton creatorId={creatorId} isAuthed={isAuthed} initialFollowing={isFollowing} />
+      <FollowButton
+        creatorId={creatorId}
+        isAuthed={isAuthed}
+        initialFollowing={isFollowing}
+        initialNotifyMode={initialNotifyMode}
+        showNotifyBell
+      />
       <GurshaActionButton />
       <TierActionDropdown
         label={t("giftASub")}

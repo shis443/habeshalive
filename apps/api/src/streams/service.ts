@@ -8,6 +8,7 @@ import {
   type StreamActivity,
   type StreamArchiveItem,
   type StreamDefaults,
+  type SocialLinks,
   type StreamDetail,
   type StreamKeyResponse,
   type ViewerList,
@@ -26,6 +27,7 @@ import { isApprovedCreator } from "../creator-applications/service.js";
 import { notifyFollowersCategoryLive, notifyFollowersCreatorLive } from "../notifications/service.js";
 import { appendHlsToken } from "./hls-token.js";
 import { hasPpvAccess } from "./ppv-service.js";
+import { promoteScheduledStreamsForCreator } from "./scheduled-service.js";
 import { linkTagsToStream } from "./tags-service.js";
 import { sendGoLiveAnnouncement } from "./telegram-client.js";
 import { videoProvider } from "./video-provider.js";
@@ -74,6 +76,7 @@ interface StreamRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  social_links: SocialLinks;
   is_verified: boolean;
   peak_viewers: number;
   is_boosted: boolean;
@@ -130,6 +133,7 @@ function toStreamDetail(row: StreamRow, hasAccess: boolean): StreamDetail {
       displayName: row.display_name,
       avatarUrl: row.avatar_url,
       bio: row.bio,
+      socialLinks: row.social_links,
       isVerified: row.is_verified,
       isFollowing: row.is_following,
     },
@@ -150,7 +154,7 @@ function streamSelectColumns(viewerIdPlaceholder: string): string {
   return `
   s.id, s.title, s.category, s.language, s.thumbnail_url, s.playback_url,
   s.started_at, s.status, s.peak_viewers, s.is_sensitive, s.is_ppv, s.ppv_price_santim, s.aspect_ratio,
-  u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.is_verified,
+  u.id AS creator_id, u.username, u.display_name, u.avatar_url, u.bio, u.social_links, u.is_verified,
   EXISTS (
     SELECT 1 FROM stream_boosts b WHERE b.creator_id = s.creator_id AND b.ends_at > now()
   ) AS is_boosted,
@@ -165,7 +169,7 @@ function streamSelectColumns(viewerIdPlaceholder: string): string {
 `;
 }
 
-async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> {
+export async function ensureCreatorProfile(userId: string): Promise<CreatorProfileRow> {
   const existing = await pool.query<CreatorProfileRow>(
     `SELECT user_id, stream_key FROM creator_profiles WHERE user_id = $1`,
     [userId]
@@ -1112,6 +1116,7 @@ async function isManifestReady(playbackUrl: string): Promise<boolean> {
 
 interface StartingStreamRow {
   id: string;
+  creator_id: string;
   playback_url: string | null;
   started_at: string | null;
 }
@@ -1135,7 +1140,7 @@ interface StartingStreamRow {
 // rest.
 export async function promoteStartingStreams(): Promise<void> {
   const { rows } = await pool.query<StartingStreamRow>(
-    `SELECT id, playback_url, started_at FROM streams WHERE status = 'starting'`
+    `SELECT id, creator_id, playback_url, started_at FROM streams WHERE status = 'starting'`
   );
 
   for (const row of rows) {
@@ -1144,6 +1149,12 @@ export async function promoteStartingStreams(): Promise<void> {
       if (ready) {
         await pool.query(`UPDATE streams SET status = 'live' WHERE id = $1`, [row.id]);
         console.log(`[promote] stream ${row.id} confirmed live`);
+        // Covers both ingest paths (WHIP and RTMP both funnel through
+        // this same confirmation point) — see promoteScheduledStreamsForCreator's
+        // own comment for why this is a better hook than goLive() itself.
+        promoteScheduledStreamsForCreator(row.creator_id, row.id).catch((err) => {
+          console.error(`[promote] promoteScheduledStreamsForCreator failed for ${row.creator_id}:`, err);
+        });
         continue;
       }
 

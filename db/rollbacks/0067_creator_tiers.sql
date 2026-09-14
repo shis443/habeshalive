@@ -1,0 +1,9 @@
+ALTER TABLE platform_config DROP COLUMN creator_tier_bronze_watch_hours;
+ALTER TABLE platform_config DROP COLUMN creator_tier_bronze_gift_volume_santim;
+ALTER TABLE platform_config DROP COLUMN creator_tier_silver_watch_hours;
+ALTER TABLE platform_config DROP COLUMN creator_tier_silver_gift_volume_santim;
+ALTER TABLE platform_config DROP COLUMN creator_tier_gold_watch_hours;
+ALTER TABLE platform_config DROP COLUMN creator_tier_gold_gift_volume_santim;
+ALTER TABLE platform_config DROP COLUMN creator_tier_partner_watch_hours;
+ALTER TABLE platform_config DROP COLUMN creator_tier_partner_gift_volume_santim;
+DROP TABLE creator_tiers;

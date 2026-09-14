@@ -122,7 +122,16 @@ describe("createClip", () => {
     expect(clip.vodId).toBe(vodId);
     expect(clip.startSeconds).toBe(1);
     expect(clip.durationSeconds).toBe(3);
-    expect(uploadObjectMock).toHaveBeenCalledTimes(1);
+    // Two real, distinct uploads, not a duplicate — the clip video itself
+    // (0035_clips_and_points.sql) and its OG preview image
+    // (0045_clip_og_image.sql, added later; createClip's own comment
+    // calls this fail-open, so a real clip is never lost over an OG-image
+    // hiccup). This assertion used to say `toHaveBeenCalledTimes(1)`,
+    // written before the OG-image upload existed — audited as part of
+    // 2026-09-05's health audit, which flagged the mismatch without
+    // determining which side was wrong; confirmed here that it's a real,
+    // intentional second upload, not a duplicate-upload bug.
+    expect(uploadObjectMock).toHaveBeenCalledTimes(2);
 
     const [key, buffer, contentType] = uploadObjectMock.mock.calls[0]!;
     expect(key).toMatch(new RegExp(`^clips/${creator.id}/.+\\.mp4$`));
@@ -152,6 +161,14 @@ describe("createClip", () => {
     } finally {
       await rm(probeDir, { recursive: true, force: true });
     }
+
+    const [ogKey, ogBuffer, ogContentType] = uploadObjectMock.mock.calls[1]!;
+    expect(ogKey).toMatch(new RegExp(`^clips-og/${creator.id}/.+\\.jpg$`));
+    expect(ogContentType).toBe("image/jpeg");
+    // JPEG's magic bytes — same "real file, not empty/corrupt" sanity
+    // check the video buffer gets above, for the OG image.
+    expect(ogBuffer.length).toBeGreaterThan(100);
+    expect(ogBuffer.subarray(0, 2).toString("hex")).toBe("ffd8");
   }, 30_000);
 
   it("rejects a clip range extending past the VOD's duration", async () => {

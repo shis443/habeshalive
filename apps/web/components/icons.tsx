@@ -126,6 +126,15 @@ export function CloseIcon({ className }: IconProps) {
   );
 }
 
+export function AnalyticsIcon({ className }: IconProps) {
+  return (
+    <svg {...baseProps} width="20" height="20" className={className}>
+      <path d="M4 20V10M12 20V4M20 20v-7" />
+      <path d="M3 20h18" />
+    </svg>
+  );
+}
+
 export function ShareIcon({ className }: IconProps) {
   return (
     <svg {...baseProps} width="18" height="18" className={className}>

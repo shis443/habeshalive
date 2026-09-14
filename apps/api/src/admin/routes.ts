@@ -13,6 +13,7 @@ import {
   manualAdjustmentSchema,
   mergeStreamTagsSchema,
   rejectCreatorApplicationSchema,
+  rejectEmoteSchema,
   rejectKycSchema,
   suspendCreatorSchema,
   updateAdCampaignStatusSchema,
@@ -61,6 +62,7 @@ import {
   listSubscriptionsForAdmin,
 } from "../subscriptions/service.js";
 import { cancelBoost, listBoostRevenueByCreator } from "./boosts-service.js";
+import { approveEmote, listEmotesForAdmin, rejectEmote } from "../emotes/service.js";
 import { approveKyc, getKycDocumentUrl, listKycSubmissions, rejectKyc } from "../kyc/service.js";
 import { getPlatformConfig, updatePlatformConfig } from "./config-service.js";
 import { listGiftTypesForAdmin, updateGiftType } from "./gift-catalog-service.js";
@@ -491,6 +493,25 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Params: { id: string } }>("/kyc/:id/reject", { preHandler: app.requireAdmin }, async (req) => {
     const input = rejectKycSchema.parse(req.body);
     await rejectKyc(req.user.sub, req.params.id, input.reason);
+    return { ok: true };
+  });
+
+  // --- Emotes (Build 3 — Birq Plus's "global emote slot" review queue) ---
+
+  app.get<{ Querystring: { status?: "pending" | "approved" | "rejected" } }>(
+    "/emotes",
+    { preHandler: app.requireAdmin },
+    async (req) => listEmotesForAdmin(req.query.status)
+  );
+
+  app.post<{ Params: { id: string } }>("/emotes/:id/approve", { preHandler: app.requireAdmin }, async (req) => {
+    await approveEmote(req.user.sub, req.params.id);
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/emotes/:id/reject", { preHandler: app.requireAdmin }, async (req) => {
+    const input = rejectEmoteSchema.parse(req.body);
+    await rejectEmote(req.user.sub, req.params.id, input.reason);
     return { ok: true };
   });
 

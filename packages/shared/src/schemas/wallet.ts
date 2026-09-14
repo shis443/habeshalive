@@ -287,8 +287,18 @@ export const chapaTransferWebhookSchema = z.object({
 });
 export type ChapaTransferWebhook = z.infer<typeof chapaTransferWebhookSchema>;
 
+// Build 3 — SantimPay, a second local ETB rail alongside Chapa (both real,
+// independent gateways with their own developer APIs — see
+// diaspora-topup-service.ts's own comment on why Telebirr/CBE Birr/
+// HelloCash don't get this same treatment). Defaults to "chapa" so every
+// existing caller (web's AddFundsRow, mobile's wallet screen before this
+// build) keeps working unchanged.
+export const topupProviderSchema = z.enum(["chapa", "santimpay"]);
+export type TopupProvider = z.infer<typeof topupProviderSchema>;
+
 export const initiateTopupSchema = z.object({
   amountSantim: z.coerce.number().int().positive(),
+  provider: topupProviderSchema.default("chapa"),
 });
 export type InitiateTopupInput = z.infer<typeof initiateTopupSchema>;
 

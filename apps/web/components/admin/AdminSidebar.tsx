@@ -41,6 +41,9 @@ export function AdminSidebar() {
       <Link href="/admin/kyc" className={pathname.startsWith("/admin/kyc") ? styles.linkActive : styles.link}>
         KYC Review
       </Link>
+      <Link href="/admin/emotes" className={pathname.startsWith("/admin/emotes") ? styles.linkActive : styles.link}>
+        Emote Review
+      </Link>
       <Link href="/admin/moderation" className={inModeration ? styles.linkActive : styles.link}>
         Moderation
       </Link>

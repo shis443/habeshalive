@@ -117,6 +117,7 @@ interface ClipRow {
   start_seconds: number;
   duration_seconds: number;
   aspect_ratio: AspectRatio;
+  is_published: boolean;
   created_at: string;
 }
 
@@ -129,6 +130,7 @@ async function toClip(row: ClipRow): Promise<Clip> {
     startSeconds: row.start_seconds,
     durationSeconds: row.duration_seconds,
     aspectRatio: row.aspect_ratio,
+    isPublished: row.is_published,
     createdAt: row.created_at,
   };
 }
@@ -177,23 +179,63 @@ export async function createClip(userId: string, vodId: string, input: CreateCli
   const { rows: inserted } = await pool.query<ClipRow>(
     `INSERT INTO clips (vod_id, creator_id, title, object_key, start_seconds, duration_seconds, og_image_key)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, vod_id, title, object_key, start_seconds, duration_seconds, aspect_ratio, created_at`,
+     RETURNING id, vod_id, title, object_key, start_seconds, duration_seconds, aspect_ratio, is_published, created_at`,
     [vodId, userId, input.title ?? null, objectKey, input.startSeconds, input.durationSeconds, ogImageKey]
   );
   return toClip(inserted[0]!);
 }
 
+// Public path (GET /vods/:username/clips, no auth, FeaturedClips.tsx on
+// the public profile) — is_published = true only, same gate
+// listVodsForCreator (vods/service.ts) applies to VODs. A creator's own
+// management view is listMyClips below.
 export async function listClipsForCreator(username: string): Promise<Clip[]> {
   const { rows } = await pool.query<ClipRow>(
-    `SELECT c.id, c.vod_id, c.title, c.object_key, c.start_seconds, c.duration_seconds, c.created_at
+    `SELECT c.id, c.vod_id, c.title, c.object_key, c.start_seconds, c.duration_seconds, c.aspect_ratio, c.is_published, c.created_at
      FROM clips c
      JOIN users u ON u.id = c.creator_id
-     WHERE u.username = $1 AND c.dmca_removed_at IS NULL
+     WHERE u.username = $1 AND c.is_published = true AND c.dmca_removed_at IS NULL
      ORDER BY c.created_at DESC
      LIMIT 20`,
     [username]
   );
   return Promise.all(rows.map(toClip));
+}
+
+// Authenticated — a creator managing their own clips needs to see
+// unpublished ones too, same "ownership is the query itself" pattern as
+// listMyVods (vods/service.ts).
+export async function listMyClips(userId: string): Promise<Clip[]> {
+  const { rows } = await pool.query<ClipRow>(
+    `SELECT id, vod_id, title, object_key, start_seconds, duration_seconds, aspect_ratio, is_published, created_at
+     FROM clips
+     WHERE creator_id = $1 AND dmca_removed_at IS NULL
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+  return Promise.all(rows.map(toClip));
+}
+
+export async function publishClip(clipId: string, userId: string): Promise<Clip> {
+  const { rows } = await pool.query<ClipRow>(
+    `UPDATE clips SET is_published = true WHERE id = $1 AND creator_id = $2
+     RETURNING id, vod_id, title, object_key, start_seconds, duration_seconds, aspect_ratio, is_published, created_at`,
+    [clipId, userId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "Clip not found");
+  return toClip(row);
+}
+
+export async function unpublishClip(clipId: string, userId: string): Promise<Clip> {
+  const { rows } = await pool.query<ClipRow>(
+    `UPDATE clips SET is_published = false WHERE id = $1 AND creator_id = $2
+     RETURNING id, vod_id, title, object_key, start_seconds, duration_seconds, aspect_ratio, is_published, created_at`,
+    [clipId, userId]
+  );
+  const row = rows[0];
+  if (!row) throw new AppError(404, "Clip not found");
+  return toClip(row);
 }
 
 interface PublicClipRow {
@@ -248,7 +290,7 @@ const PUBLIC_CLIP_SELECT = `SELECT c.id, c.title, c.object_key, c.duration_secon
 // disappear from listClipsForCreator.
 export async function getPublicClipById(clipId: string): Promise<PublicClip | null> {
   const { rows } = await pool.query<PublicClipRow>(
-    `${PUBLIC_CLIP_SELECT} WHERE c.id = $1 AND c.dmca_removed_at IS NULL`,
+    `${PUBLIC_CLIP_SELECT} WHERE c.id = $1 AND c.is_published = true AND c.dmca_removed_at IS NULL`,
     [clipId]
   );
   const row = rows[0];
@@ -280,7 +322,7 @@ export async function getClipOgImage(clipId: string): Promise<{ buffer: Buffer; 
 export async function listClipsByCategory(category: string): Promise<PublicClip[]> {
   const { rows } = await pool.query<PublicClipRow>(
     `${PUBLIC_CLIP_SELECT}
-     WHERE COALESCE(v.category, s.category) = $1 AND c.dmca_removed_at IS NULL
+     WHERE COALESCE(v.category, s.category) = $1 AND c.is_published = true AND c.dmca_removed_at IS NULL
      ORDER BY c.created_at DESC
      LIMIT 24`,
     [category]
@@ -296,7 +338,7 @@ export async function listClipsByCategory(category: string): Promise<PublicClip[
 export async function listTrendingClips(): Promise<PublicClip[]> {
   const { rows } = await pool.query<PublicClipRow>(
     `${PUBLIC_CLIP_SELECT}
-     WHERE c.dmca_removed_at IS NULL AND c.created_at > now() - interval '30 days'
+     WHERE c.is_published = true AND c.dmca_removed_at IS NULL AND c.created_at > now() - interval '30 days'
      ORDER BY c.views DESC, c.created_at DESC
      LIMIT 12`
   );

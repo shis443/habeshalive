@@ -17,6 +17,10 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   );
   const [vodDefaultDays, setVodDefaultDays] = useState(config ? String(config.vodRetentionDaysDefault) : "");
   const [vodAnchorDays, setVodAnchorDays] = useState(config ? String(config.vodRetentionDaysAnchor) : "");
+  const [vodBirqPlusDays, setVodBirqPlusDays] = useState(
+    config ? String(config.vodRetentionDaysBirqPlus) : ""
+  );
+  const [emoteSlotCount, setEmoteSlotCount] = useState(config ? String(config.birqPlusEmoteSlotCount) : "");
   const [approvedCreatorCap, setApprovedCreatorCap] = useState(config ? String(config.approvedCreatorCap) : "");
   const [adRevenueSharePct, setAdRevenueSharePct] = useState(config ? String(config.adRevenueShareBps / 100) : "");
   const [adFrequencyCap, setAdFrequencyCap] = useState(config ? String(config.adFrequencyCapPerHour) : "");
@@ -28,6 +32,22 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
   );
   const [giftCardExpiryMonths, setGiftCardExpiryMonths] = useState(config ? String(config.giftCardExpiryMonths) : "");
   const [kycRequiredForPayouts, setKycRequiredForPayouts] = useState(config?.kycRequiredForPayouts ?? false);
+  const [tierBronzeHours, setTierBronzeHours] = useState(config ? String(config.creatorTierBronzeWatchHours) : "");
+  const [tierBronzeGiftBirr, setTierBronzeGiftBirr] = useState(
+    config ? String(santimToBirr(config.creatorTierBronzeGiftVolumeSantim)) : ""
+  );
+  const [tierSilverHours, setTierSilverHours] = useState(config ? String(config.creatorTierSilverWatchHours) : "");
+  const [tierSilverGiftBirr, setTierSilverGiftBirr] = useState(
+    config ? String(santimToBirr(config.creatorTierSilverGiftVolumeSantim)) : ""
+  );
+  const [tierGoldHours, setTierGoldHours] = useState(config ? String(config.creatorTierGoldWatchHours) : "");
+  const [tierGoldGiftBirr, setTierGoldGiftBirr] = useState(
+    config ? String(santimToBirr(config.creatorTierGoldGiftVolumeSantim)) : ""
+  );
+  const [tierPartnerHours, setTierPartnerHours] = useState(config ? String(config.creatorTierPartnerWatchHours) : "");
+  const [tierPartnerGiftBirr, setTierPartnerGiftBirr] = useState(
+    config ? String(santimToBirr(config.creatorTierPartnerGiftVolumeSantim)) : ""
+  );
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -45,6 +65,8 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           payoutManualReviewThresholdSantim: birrToSantim(parseFloat(reviewThresholdBirr || "0")),
           vodRetentionDaysDefault: Math.round(parseFloat(vodDefaultDays || "0")),
           vodRetentionDaysAnchor: Math.round(parseFloat(vodAnchorDays || "0")),
+          vodRetentionDaysBirqPlus: Math.round(parseFloat(vodBirqPlusDays || "0")),
+          birqPlusEmoteSlotCount: Math.round(parseFloat(emoteSlotCount || "0")),
           approvedCreatorCap: Math.round(parseFloat(approvedCreatorCap || "0")),
           adRevenueShareBps: Math.round(parseFloat(adRevenueSharePct || "0") * 100),
           adFrequencyCapPerHour: Math.round(parseFloat(adFrequencyCap || "0")),
@@ -52,6 +74,14 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           prerollSlot2SkipAfterSeconds: Math.round(parseFloat(prerollSlot2SkipSeconds || "0")),
           giftCardExpiryMonths: Math.round(parseFloat(giftCardExpiryMonths || "0")),
           kycRequiredForPayouts,
+          creatorTierBronzeWatchHours: Math.round(parseFloat(tierBronzeHours || "0")),
+          creatorTierBronzeGiftVolumeSantim: birrToSantim(parseFloat(tierBronzeGiftBirr || "0")),
+          creatorTierSilverWatchHours: Math.round(parseFloat(tierSilverHours || "0")),
+          creatorTierSilverGiftVolumeSantim: birrToSantim(parseFloat(tierSilverGiftBirr || "0")),
+          creatorTierGoldWatchHours: Math.round(parseFloat(tierGoldHours || "0")),
+          creatorTierGoldGiftVolumeSantim: birrToSantim(parseFloat(tierGoldGiftBirr || "0")),
+          creatorTierPartnerWatchHours: Math.round(parseFloat(tierPartnerHours || "0")),
+          creatorTierPartnerGiftVolumeSantim: birrToSantim(parseFloat(tierPartnerGiftBirr || "0")),
         }),
       });
       const data = await res.json();
@@ -132,7 +162,24 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
           value={vodAnchorDays}
           onChange={(e) => setVodAnchorDays(e.target.value)}
         />
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Birq Plus"
+          value={vodBirqPlusDays}
+          onChange={(e) => setVodBirqPlusDays(e.target.value)}
+        />
       </div>
+
+      <label className={formStyles.fieldLabel}>Birq Plus emote slots per creator</label>
+      <input
+        type="number"
+        step="1"
+        className={filterStyles.input}
+        value={emoteSlotCount}
+        onChange={(e) => setEmoteSlotCount(e.target.value)}
+      />
 
       <label className={formStyles.fieldLabel}>Approved creator cap (A.4 launch gate)</label>
       <input
@@ -189,6 +236,85 @@ export function PlatformConfigForm({ config }: { config: PlatformConfig | null }
         value={giftCardExpiryMonths}
         onChange={(e) => setGiftCardExpiryMonths(e.target.value)}
       />
+
+      <label className={formStyles.fieldLabel}>
+        Streamer tiers — a creator must clear BOTH thresholds to reach a tier
+      </label>
+      <div className={formStyles.row}>
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Bronze: watch hours"
+          value={tierBronzeHours}
+          onChange={(e) => setTierBronzeHours(e.target.value)}
+        />
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Bronze: gift volume (ETB)"
+          value={tierBronzeGiftBirr}
+          onChange={(e) => setTierBronzeGiftBirr(e.target.value)}
+        />
+      </div>
+      <div className={formStyles.row}>
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Silver: watch hours"
+          value={tierSilverHours}
+          onChange={(e) => setTierSilverHours(e.target.value)}
+        />
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Silver: gift volume (ETB)"
+          value={tierSilverGiftBirr}
+          onChange={(e) => setTierSilverGiftBirr(e.target.value)}
+        />
+      </div>
+      <div className={formStyles.row}>
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Gold: watch hours"
+          value={tierGoldHours}
+          onChange={(e) => setTierGoldHours(e.target.value)}
+        />
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Gold: gift volume (ETB)"
+          value={tierGoldGiftBirr}
+          onChange={(e) => setTierGoldGiftBirr(e.target.value)}
+        />
+      </div>
+      <div className={formStyles.row}>
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Partner: watch hours"
+          value={tierPartnerHours}
+          onChange={(e) => setTierPartnerHours(e.target.value)}
+        />
+        <input
+          type="number"
+          step="1"
+          className={filterStyles.input}
+          placeholder="Partner: gift volume (ETB)"
+          value={tierPartnerGiftBirr}
+          onChange={(e) => setTierPartnerGiftBirr(e.target.value)}
+        />
+      </div>
+      <p className={formStyles.warning}>
+        Reaching Partner automatically flags the creator as an Anchor Creator (extended VOD retention).
+      </p>
 
       <label className={formStyles.fieldLabel}>
         <input

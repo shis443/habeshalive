@@ -1,0 +1,22 @@
+.windowRow {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.windowTab {
+  padding: 6px var(--space-3);
+  border-radius: 999px;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.windowTabActive {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(208, 188, 255, 0.1);
+}

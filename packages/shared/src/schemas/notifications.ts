@@ -18,6 +18,15 @@ export const notificationTypeSchema = z.enum([
   "kyc_rejected",
   "donation_received",
   "ppv_purchase_received",
+  // db/migrations/0066_scheduled_streams.sql — fired once, at scheduling
+  // time (not at go-live; creator_live above already covers that).
+  // Suppressed for a follow's 'personalized' notify_mode, unlike
+  // creator_live — see follows.notify_mode's own comment.
+  "stream_scheduled",
+  // Build 3 — emote review queue (emotes/service.ts), same
+  // approve/reject-notify shape as kyc_approved/kyc_rejected above.
+  "emote_approved",
+  "emote_rejected",
 ]);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 

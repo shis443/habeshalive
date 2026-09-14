@@ -2,6 +2,7 @@ import type {
   AuthUser,
   ChangePasswordInput,
   MyAccount,
+  SocialLinks,
   UpdateProfileInput,
   VerifyEmailOtpInput,
   VerifyOtpInput,
@@ -320,6 +321,7 @@ interface MyAccountRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  social_links: SocialLinks;
   phone_number: string | null;
   email: string | null;
   pending_phone_number: string | null;
@@ -331,7 +333,7 @@ interface MyAccountRow {
   created_at: string;
 }
 
-const MY_ACCOUNT_COLUMNS = `id, username, display_name, avatar_url, bio, phone_number, email,
+const MY_ACCOUNT_COLUMNS = `id, username, display_name, avatar_url, bio, social_links, phone_number, email,
   pending_phone_number, pending_email, password_hash, role, is_verified, deletion_requested_at, created_at`;
 
 function toMyAccount(row: MyAccountRow): MyAccount {
@@ -341,6 +343,7 @@ function toMyAccount(row: MyAccountRow): MyAccount {
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
     bio: row.bio,
+    socialLinks: row.social_links,
     phoneNumber: row.phone_number,
     email: row.email,
     pendingPhoneNumber: row.pending_phone_number,
@@ -364,9 +367,10 @@ export async function getMyAccount(userId: string): Promise<MyAccount> {
 
 export async function updateProfile(userId: string, input: UpdateProfileInput): Promise<MyAccount> {
   const { rows } = await pool.query<MyAccountRow>(
-    `UPDATE users SET display_name = COALESCE($1, display_name), bio = COALESCE($2, bio), updated_at = now()
-     WHERE id = $3 RETURNING ${MY_ACCOUNT_COLUMNS}`,
-    [input.displayName ?? null, input.bio ?? null, userId]
+    `UPDATE users SET display_name = COALESCE($1, display_name), bio = COALESCE($2, bio),
+       social_links = COALESCE($3, social_links), updated_at = now()
+     WHERE id = $4 RETURNING ${MY_ACCOUNT_COLUMNS}`,
+    [input.displayName ?? null, input.bio ?? null, input.socialLinks ? JSON.stringify(input.socialLinks) : null, userId]
   );
   const row = rows[0];
   if (!row) throw new AppError(404, "User not found");

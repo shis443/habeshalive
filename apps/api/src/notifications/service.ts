@@ -88,42 +88,69 @@ const PREFERENCE_COLUMN: Record<NotificationType, keyof NotificationPreferences 
   kyc_rejected: null,
   donation_received: "gurshaReceived",
   ppv_purchase_received: "gurshaReceived",
+  // Same global toggle as creator_live/category_live above — this is
+  // still fundamentally "tell me about this creator's broadcasts." The
+  // per-creator override (notifyFollowersStreamScheduled's own
+  // notify_mode filter) is where scheduled-announcement noise actually
+  // gets suppressed for a 'personalized' follower.
+  stream_scheduled: "liveAlerts",
+  // Same "no dedicated toggle, always sent" posture as kyc_approved/
+  // kyc_rejected above — a rare, self-initiated review outcome, not
+  // recurring platform noise a user would want to mute.
+  emote_approved: null,
+  emote_rejected: null,
 };
 
 // Single-recipient notification (everything except creator_live, which
 // has its own batched path below). Checks preferences first — a muted
 // category writes nothing at all, not a row that's just never surfaced.
+//
+// Never throws — this is called, unguarded, after a money commit in
+// several places (wallet/service.ts's sendGift/subscribe/payout paths,
+// subscriptions/*, gift-cards/service.ts, wallet/temporal/activities.ts).
+// The 2026-09-05 health audit's own fix pass found exactly this failure
+// class already live in production-shaped code: a real gift-send
+// committed the money correctly, then threw a 500 from an unrelated
+// post-commit query, leaving the buyer charged with no confirmation and
+// the creator's alert/notification silently lost. A notification is
+// legitimately never critical enough to justify that — better to log and
+// move on than to turn "the money moved, but I couldn't tell you about
+// it" into "the request failed" for an already-completed transaction.
 export async function notify(
   userId: string,
   type: NotificationType,
   title: string,
   options?: { body?: string; linkUrl?: string; actorId?: string }
 ): Promise<void> {
-  const prefColumn = PREFERENCE_COLUMN[type];
-  if (prefColumn) {
-    const { rows } = await pool.query<Record<string, boolean>>(
-      `SELECT * FROM notification_preferences WHERE user_id = $1`,
+  try {
+    const prefColumn = PREFERENCE_COLUMN[type];
+    if (prefColumn) {
+      const { rows } = await pool.query<Record<string, boolean>>(
+        `SELECT * FROM notification_preferences WHERE user_id = $1`,
+        [userId]
+      );
+      // No row yet means defaults apply (all TRUE except marketing — see
+      // db/migrations/0024) — a user who's never touched notification
+      // settings still gets notified, matching every column's DEFAULT TRUE.
+      const dbColumn = prefColumn.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+      if (rows[0] && rows[0][dbColumn] === false) return;
+    }
+
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO notifications (user_id, type, title, body, link_url, actor_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [userId, type, title, options?.body ?? null, options?.linkUrl ?? null, options?.actorId ?? null]
+    );
+    if (!rows[0]) return;
+
+    const { rows: countRows } = await pool.query<{ count: string }>(
+      `SELECT count(*) FROM notifications WHERE user_id = $1 AND read_at IS NULL`,
       [userId]
     );
-    // No row yet means defaults apply (all TRUE except marketing — see
-    // db/migrations/0024) — a user who's never touched notification
-    // settings still gets notified, matching every column's DEFAULT TRUE.
-    const dbColumn = prefColumn.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
-    if (rows[0] && rows[0][dbColumn] === false) return;
+    await publishUnreadUpdate(userId, Number(countRows[0]!.count));
+  } catch (err) {
+    console.error(`[notifications] notify(${userId}, ${type}) failed:`, err);
   }
-
-  const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO notifications (user_id, type, title, body, link_url, actor_id)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [userId, type, title, options?.body ?? null, options?.linkUrl ?? null, options?.actorId ?? null]
-  );
-  if (!rows[0]) return;
-
-  const { rows: countRows } = await pool.query<{ count: string }>(
-    `SELECT count(*) FROM notifications WHERE user_id = $1 AND read_at IS NULL`,
-    [userId]
-  );
-  await publishUnreadUpdate(userId, Number(countRows[0]!.count));
 }
 
 // E.6's explicit "must be batched" requirement: a creator with thousands
@@ -146,6 +173,12 @@ export async function notifyFollowersCreatorLive(
      FROM follows f
      LEFT JOIN notification_preferences np ON np.user_id = f.follower_id
      WHERE f.creator_id = $1 AND COALESCE(np.live_alerts, TRUE) = TRUE
+       -- Per-creator override (db/migrations/0065) — 'muted' suppresses
+       -- this specific creator's alerts even when the global preference
+       -- above is on; 'all'/'personalized' both still get a live-start
+       -- notification (only scheduled-announcement noise is what
+       -- 'personalized' skips — see follows.notify_mode's own comment).
+       AND f.notify_mode != 'muted'
      RETURNING user_id`,
     [creatorId, creatorDisplayName, creatorUsername]
   );
@@ -164,6 +197,40 @@ export async function notifyFollowersCreatorLive(
   // durably stored regardless of whether the real-time push lands.
   Promise.all(followerIds.map((userId) => publishUnreadUpdate(userId, countByUser.get(userId) ?? 0))).catch((err) => {
     console.error("[notifications] batched live-alert publish failed:", err);
+  });
+}
+
+// db/migrations/0066_scheduled_streams.sql — fired once, when a creator
+// schedules a broadcast. Same batching shape as notifyFollowersCreatorLive
+// above, but filtered to notify_mode = 'all' only: 'personalized' skips
+// scheduled-announcement noise and only gets the real live-start alert
+// (see follows.notify_mode's own comment).
+export async function notifyFollowersStreamScheduled(
+  creatorId: string,
+  creatorUsername: string,
+  creatorDisplayName: string
+): Promise<void> {
+  const { rows: inserted } = await pool.query<{ user_id: string }>(
+    `INSERT INTO notifications (user_id, type, title, link_url, actor_id)
+     SELECT f.follower_id, 'stream_scheduled', $2 || ' scheduled a stream', '/watch/' || $3, $1
+     FROM follows f
+     LEFT JOIN notification_preferences np ON np.user_id = f.follower_id
+     WHERE f.creator_id = $1 AND COALESCE(np.live_alerts, TRUE) = TRUE AND f.notify_mode = 'all'
+     RETURNING user_id`,
+    [creatorId, creatorDisplayName, creatorUsername]
+  );
+  if (inserted.length === 0) return;
+
+  const followerIds = inserted.map((r) => r.user_id);
+  const { rows: counts } = await pool.query<{ user_id: string; count: string }>(
+    `SELECT user_id, count(*) FROM notifications WHERE user_id = ANY($1::uuid[]) AND read_at IS NULL GROUP BY user_id`,
+    [followerIds]
+  );
+  const countByUser = new Map(counts.map((r) => [r.user_id, Number(r.count)]));
+
+  // Detached on purpose — same reasoning as notifyFollowersCreatorLive.
+  Promise.all(followerIds.map((userId) => publishUnreadUpdate(userId, countByUser.get(userId) ?? 0))).catch((err) => {
+    console.error("[notifications] batched scheduled-stream publish failed:", err);
   });
 }
 

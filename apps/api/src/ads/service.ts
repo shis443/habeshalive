@@ -23,6 +23,7 @@ import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 import { applyBalanceDelta, getPlatformWalletId, getUserWalletId, insertEntry } from "../common/ledger.js";
 import { getSignedAdCreativeUrl, uploadObject } from "../common/object-storage.js";
+import { hasActivePlatformSubscription } from "../subscriptions/platform-service.js";
 
 // A creative's assetUrl is either a literal external URL (the original,
 // still-supported "paste a URL" flow) or a bucket key produced by the new
@@ -74,11 +75,7 @@ export async function getAdForStream(
     // Platform-wide sliding-scale subscription (0025_gursha_gift_economy.sql)
     // exempts every creator's stream, not just one — separate check since
     // it's a different table with no creator_id to match against.
-    const platformSubResult = await pool.query(
-      `SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1 AND status = 'active'`,
-      [viewerId]
-    );
-    if (platformSubResult.rows[0]) return null;
+    if (await hasActivePlatformSubscription(viewerId)) return null;
   }
 
   const { frequencyCapPerHour } = await getAdConfig();
@@ -153,11 +150,7 @@ export async function getSponsoredCard(
   viewerId: string | null
 ): Promise<ServedAd | null> {
   if (viewerId) {
-    const platformSubResult = await pool.query(
-      `SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1 AND status = 'active'`,
-      [viewerId]
-    );
-    if (platformSubResult.rows[0]) return null;
+    if (await hasActivePlatformSubscription(viewerId)) return null;
   }
 
   const { rows } = await pool.query<{
@@ -253,11 +246,7 @@ export async function getPrerollBreak(streamId: string, viewerId: string | null)
     );
     if (subResult.rows[0]) return none;
 
-    const platformSubResult = await pool.query(
-      `SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1 AND status = 'active'`,
-      [viewerId]
-    );
-    if (platformSubResult.rows[0]) return none;
+    if (await hasActivePlatformSubscription(viewerId)) return none;
   }
 
   const { frequencyCapPerHour } = await getAdConfig();

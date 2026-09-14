@@ -1,0 +1,1 @@
+ALTER TABLE platform_config DROP COLUMN vod_retention_days_birq_plus;

@@ -136,6 +136,28 @@ describe("top-up", () => {
       completeTopupFromWebhook({ tx_ref: "topup_does_not_exist", status: "success", amount: 1, currency: "ETB" })
     ).rejects.toMatchObject({ statusCode: 404 } satisfies Partial<AppError>);
   });
+
+  // Build 3 — SantimPay, a second gateway alongside Chapa (see
+  // wallet/santimpay-client.ts). The ledger side is provider-agnostic
+  // (completeTopupFromWebhook only ever looks at `reference`), so the only
+  // thing to prove here is that the provider selection actually reaches
+  // the right client and the money still moves identically either way.
+  it("routes to the SantimPay stub and completes the same as a Chapa top-up", async () => {
+    const viewer = await trackUser(await createTestViewer());
+    const { reference, checkoutUrl } = await initiateTopup(viewer.id, 8_000, "santimpay");
+
+    expect(checkoutUrl).toContain("stub-checkout.santimpay.com");
+
+    await completeTopupFromWebhook({ tx_ref: reference, status: "success", amount: 8_000, currency: "ETB" });
+
+    expect(await getWalletBalance(viewer.walletId)).toBe(8_000);
+  });
+
+  it("defaults to Chapa when no provider is passed", async () => {
+    const viewer = await trackUser(await createTestViewer());
+    const { checkoutUrl } = await initiateTopup(viewer.id, 1_000);
+    expect(checkoutUrl).toContain("stub-checkout.chapa.co");
+  });
 });
 
 describe("gift split", () => {

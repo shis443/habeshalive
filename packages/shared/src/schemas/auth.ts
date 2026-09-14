@@ -148,12 +148,30 @@ export type TotpLoginVerifyInput = z.infer<typeof totpLoginVerifySchema>;
 
 // --- E.1: account identity ---
 
+// db/migrations/0064_user_social_links.sql — a fixed platform set (not an
+// open string key) so a renderer can pick the right brand icon without
+// guessing at an arbitrary label. Keyed as a partial record: any subset
+// of platforms may be set, matching the JSONB column's default `{}`.
+export const socialLinkPlatformSchema = z.enum([
+  "twitch",
+  "twitter",
+  "youtube",
+  "instagram",
+  "discord",
+  "tiktok",
+]);
+export type SocialLinkPlatform = z.infer<typeof socialLinkPlatformSchema>;
+
+export const socialLinksSchema = z.record(socialLinkPlatformSchema, z.string().url().max(300));
+export type SocialLinks = z.infer<typeof socialLinksSchema>;
+
 export const myAccountSchema = z.object({
   id: z.string().uuid(),
   username: z.string(),
   displayName: z.string(),
   avatarUrl: z.string().nullable(),
   bio: z.string().nullable(),
+  socialLinks: socialLinksSchema,
   phoneNumber: z.string().nullable(),
   email: z.string().nullable(),
   pendingPhoneNumber: z.string().nullable(),
@@ -175,6 +193,7 @@ export type MyAccount = z.infer<typeof myAccountSchema>;
 export const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(50).optional(),
   bio: z.string().max(300).optional(),
+  socialLinks: socialLinksSchema.optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 

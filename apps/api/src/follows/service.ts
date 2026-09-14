@@ -1,4 +1,11 @@
-import type { FollowedCreator, CreatorProfile, FollowerListItem, FollowStatus } from "@birq/shared";
+import type {
+  FollowedCreator,
+  CreatorProfile,
+  FollowerListItem,
+  FollowNotifyMode,
+  FollowStatus,
+  SocialLinks,
+} from "@birq/shared";
 import { pool } from "../common/db.js";
 import { AppError } from "../common/errors.js";
 
@@ -8,6 +15,7 @@ interface FollowedCreatorRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  social_links: SocialLinks;
   category: string | null;
   is_live: boolean;
   new_content_count: number;
@@ -40,7 +48,7 @@ export async function getFollowedCreators(followerId: string): Promise<FollowedC
   const lastSeenAt = userRows[0]?.following_last_seen_at ?? null;
 
   const { rows } = await pool.query<FollowedCreatorRow>(
-    `SELECT u.id, u.username, u.display_name, u.avatar_url, u.bio, cp.category,
+    `SELECT u.id, u.username, u.display_name, u.avatar_url, u.bio, u.social_links, cp.category,
             s.id AS stream_id,
             s.title AS stream_title,
             s.category AS stream_category,
@@ -112,6 +120,7 @@ export async function getFollowedCreators(followerId: string): Promise<FollowedC
             displayName: row.display_name,
             avatarUrl: row.avatar_url,
             bio: row.bio,
+            socialLinks: row.social_links,
             isVerified: false,
             // This whole list is "creators followerId follows" by
             // definition — always true here.
@@ -179,6 +188,7 @@ interface CreatorProfileRow {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  social_links: SocialLinks;
   is_verified: boolean;
 }
 
@@ -189,20 +199,23 @@ interface CreatorProfileRow {
 // currently live, which is exactly when a profile page needs this most).
 export async function getCreatorProfile(username: string, viewerId: string | null): Promise<CreatorProfile | null> {
   const { rows } = await pool.query<CreatorProfileRow>(
-    `SELECT id, username, display_name, avatar_url, bio, is_verified
+    `SELECT id, username, display_name, avatar_url, bio, social_links, is_verified
      FROM users WHERE username = $1`,
     [username]
   );
   const row = rows[0];
   if (!row) return null;
 
-  const [followerCount, isFollowing] = await Promise.all([
+  const [followerCount, followRow] = await Promise.all([
     getFollowerCount(row.id),
     viewerId
       ? pool
-          .query(`SELECT 1 FROM follows WHERE follower_id = $1 AND creator_id = $2`, [viewerId, row.id])
-          .then((r) => r.rows.length > 0)
-      : Promise.resolve(false),
+          .query<{ notify_mode: FollowNotifyMode }>(
+            `SELECT notify_mode FROM follows WHERE follower_id = $1 AND creator_id = $2`,
+            [viewerId, row.id]
+          )
+          .then((r) => r.rows[0] ?? null)
+      : Promise.resolve(null),
   ]);
 
   return {
@@ -211,9 +224,11 @@ export async function getCreatorProfile(username: string, viewerId: string | nul
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
     bio: row.bio,
+    socialLinks: row.social_links,
     isVerified: row.is_verified,
     followerCount,
-    isFollowing,
+    isFollowing: followRow !== null,
+    notifyMode: followRow?.notify_mode ?? "all",
   };
 }
 
@@ -221,13 +236,17 @@ export async function getCreatorProfile(username: string, viewerId: string | nul
 // "am I following" personalization just defaults to false for them.
 export async function getFollowStatus(followerId: string | null, creatorId: string): Promise<FollowStatus> {
   if (!followerId) {
-    return { following: false, followerCount: await getFollowerCount(creatorId) };
+    return { following: false, followerCount: await getFollowerCount(creatorId), notifyMode: "all" };
   }
-  const { rows } = await pool.query(
-    `SELECT 1 FROM follows WHERE follower_id = $1 AND creator_id = $2`,
+  const { rows } = await pool.query<{ notify_mode: FollowNotifyMode }>(
+    `SELECT notify_mode FROM follows WHERE follower_id = $1 AND creator_id = $2`,
     [followerId, creatorId]
   );
-  return { following: rows.length > 0, followerCount: await getFollowerCount(creatorId) };
+  return {
+    following: rows.length > 0,
+    followerCount: await getFollowerCount(creatorId),
+    notifyMode: rows[0]?.notify_mode ?? "all",
+  };
 }
 
 export async function toggleFollow(followerId: string, creatorId: string): Promise<FollowStatus> {
@@ -250,5 +269,27 @@ export async function toggleFollow(followerId: string, creatorId: string): Promi
     ]);
   }
 
-  return { following: existing.rows.length === 0, followerCount: await getFollowerCount(creatorId) };
+  return {
+    following: existing.rows.length === 0,
+    followerCount: await getFollowerCount(creatorId),
+    // A fresh follow always starts at the column default; an unfollow has
+    // no meaningful mode (following is false), so this is just a
+    // placeholder the caller shouldn't read in that branch.
+    notifyMode: "all",
+  };
+}
+
+// Only the follower themself may change this — enforced by the WHERE
+// clause matching both follower_id and creator_id, same "no row updated"
+// -> 404 pattern as every other owned-resource mutation in this codebase.
+export async function setFollowNotifyMode(
+  followerId: string,
+  creatorId: string,
+  notifyMode: FollowNotifyMode
+): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE follows SET notify_mode = $1 WHERE follower_id = $2 AND creator_id = $3`,
+    [notifyMode, followerId, creatorId]
+  );
+  if (!rowCount) throw new AppError(404, "You are not following this creator");
 }

@@ -280,6 +280,12 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   // OTHER, non-test user. Surfaced by kyc/service.test.ts's first
   // coverage of approveKyc.
   await pool.query(`DELETE FROM kyc_submissions WHERE reviewed_by = ANY($1)`, [userIds]);
+  // Same "no CASCADE on reviewed_by" gap as kyc_submissions above
+  // (0070_emotes.sql) — created_by does cascade, so this only matters
+  // when the reviewing admin and the submitting creator aren't the same
+  // test's two tracked users. Surfaced by emotes/service.test.ts's first
+  // coverage of approveEmote/rejectEmote.
+  await pool.query(`DELETE FROM emotes WHERE reviewed_by = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM gifter_badges WHERE user_id = ANY($1) OR creator_id = ANY($1)`, [userIds]);
   // Also no CASCADE from users, same reasoning as gifter_badges above —
   // 0025_gursha_gift_economy.sql's user_ranks/platform_subscriptions.

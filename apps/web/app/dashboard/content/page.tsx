@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ClipCreatorPanel } from "@/components/ClipCreatorPanel";
+import { ClipManager } from "@/components/ClipManager";
 import { VodManager } from "@/components/VodManager";
-import { getMyVods, getStreamKey } from "@/lib/api";
+import { getMyClips, getMyVods, getStreamKey } from "@/lib/api";
 import styles from "../page.module.css";
 
 export default async function ContentPage() {
@@ -21,7 +22,7 @@ export default async function ContentPage() {
     );
   }
 
-  const myVods = await getMyVods();
+  const [myVods, myClips] = await Promise.all([getMyVods(), getMyClips()]);
 
   return (
     <>
@@ -37,6 +38,7 @@ export default async function ContentPage() {
             Clips
           </h2>
           <ClipCreatorPanel vods={myVods} />
+          <ClipManager clips={myClips} />
         </>
       )}
     </>

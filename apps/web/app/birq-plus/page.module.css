@@ -1,0 +1,53 @@
+.main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-3) 96px;
+}
+
+.heading {
+  font-family: var(--font-display, var(--font-body));
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--on-background);
+  margin: 0 0 var(--space-2);
+}
+
+.subtext {
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  margin: 0 0 var(--space-4);
+  max-width: 56ch;
+}
+
+.perkGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.perkCard {
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: 12px;
+  padding: var(--space-3);
+}
+
+.perkEmoji {
+  font-size: 24px;
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.perkTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--on-background);
+  margin: 0 0 4px;
+}
+
+.perkBody {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin: 0;
+}

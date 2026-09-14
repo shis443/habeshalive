@@ -8,10 +8,13 @@ import { env } from "./common/env.js";
 import { captureUnexpectedError, initSentry } from "./common/sentry.js";
 import { sendScheduledGiftCards } from "./gift-cards/service.js";
 import { promoteStartingStreams, reapStaleStreams } from "./streams/service.js";
+import { recomputeCreatorTiers } from "./streams/creator-tiers-service.js";
+import { autoCancelStaleScheduledStreams } from "./streams/scheduled-service.js";
 import { reconcileStreamControls } from "./streams/emergency-controls-service.js";
 import { rollupStaleViewerSamples, sampleLiveViewerCounts } from "./streams/viewer-samples-service.js";
 import { renewPlatformSubscriptions } from "./subscriptions/platform-service.js";
 import { renewSubscriptions } from "./subscriptions/service.js";
+import { processNextDownloadJob } from "./vods/download-service.js";
 import { cleanupExpiredVods } from "./vods/service.js";
 import { clearDueEarningHolds } from "./wallet/earning-holds-service.js";
 
@@ -45,6 +48,24 @@ const SUBSCRIPTION_RENEWAL_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // Same "daily in spirit" reasoning as subscription renewal above — expired
 // VODs sitting an extra few hours costs nothing.
 const VOD_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// A stale schedule (scheduled_at + STALE_SCHEDULE_GRACE_MS in
+// scheduled-service.ts elapsed with no matching stream ever going live)
+// shouldn't hang on a channel page's countdown indefinitely — this stays
+// well under that 6h grace window so a cancellation shows up promptly
+// once it actually applies.
+const SCHEDULED_STREAM_CANCEL_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+// A tier is a slow-moving, lifetime-cumulative signal — a real-time
+// recompute buys nothing a creator would notice, and this scans every
+// creator's full history each run, same cost class as
+// REVENUE_DAILY_RECOMPUTE_INTERVAL_MS above.
+const CREATOR_TIER_RECOMPUTE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// A creator is actively polling GET /vods/downloads/:jobId for this to
+// finish (see download-service.ts) — short enough that "processing" isn't
+// a long, silent wait, unlike the other lifetime/cumulative sweeps above.
+// One job per tick (processNextDownloadJob claims at most one row) is
+// intentional, not a batch size to raise — see that function's own
+// comment on why concurrent ffmpeg re-encodes stay off the table for v1.
+const DOWNLOAD_JOB_INTERVAL_MS = 30 * 1000; // 30 seconds
 // Ad revenue settlement (see ads/service.ts's settleAdRevenue — batches
 // impressions into one ledger transaction per creator instead of writing
 // on every single impression). More frequent than the other jobs since
@@ -202,6 +223,27 @@ function runRevenueDailyRecompute(): void {
   });
 }
 
+function runScheduledStreamCancel(): void {
+  autoCancelStaleScheduledStreams().catch((err) => {
+    app.log.error(err, "autoCancelStaleScheduledStreams failed");
+    captureUnexpectedError(err);
+  });
+}
+
+function runCreatorTierRecompute(): void {
+  recomputeCreatorTiers().catch((err) => {
+    app.log.error(err, "recomputeCreatorTiers failed");
+    captureUnexpectedError(err);
+  });
+}
+
+function runDownloadJobs(): void {
+  processNextDownloadJob().catch((err) => {
+    app.log.error(err, "processNextDownloadJob failed");
+    captureUnexpectedError(err);
+  });
+}
+
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })
   .then(() => {
@@ -235,6 +277,12 @@ app
     setInterval(runLeaderboardRebuild, LEADERBOARD_REBUILD_INTERVAL_MS);
     runRevenueDailyRecompute();
     setInterval(runRevenueDailyRecompute, REVENUE_DAILY_RECOMPUTE_INTERVAL_MS);
+    runScheduledStreamCancel();
+    setInterval(runScheduledStreamCancel, SCHEDULED_STREAM_CANCEL_INTERVAL_MS);
+    runCreatorTierRecompute();
+    setInterval(runCreatorTierRecompute, CREATOR_TIER_RECOMPUTE_INTERVAL_MS);
+    runDownloadJobs();
+    setInterval(runDownloadJobs, DOWNLOAD_JOB_INTERVAL_MS);
   })
   .catch((err) => {
     app.log.error(err);

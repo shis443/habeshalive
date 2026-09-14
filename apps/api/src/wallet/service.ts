@@ -19,6 +19,7 @@ import type {
   SendGiftResponse,
   StreamAlert,
   Transaction,
+  TopupProvider,
   TopupResponse,
   UserRank,
   WalletBalance,
@@ -44,6 +45,7 @@ import { getActiveSecurityHold } from "../common/security-hold.js";
 import { flagIfMatched } from "../moderation/service.js";
 import { notify } from "../notifications/service.js";
 import { chapaClient, chapaPayoutClient } from "./chapa-client.js";
+import { santimpayClient } from "./santimpay-client.js";
 import {
   isTemporalConfigured,
   signalApprove,
@@ -368,7 +370,11 @@ export async function exportEarningsCsv(userId: string): Promise<string> {
   return [header.join(","), ...lines].join("\n");
 }
 
-export async function initiateTopup(userId: string, amountSantim: number): Promise<TopupResponse> {
+export async function initiateTopup(
+  userId: string,
+  amountSantim: number,
+  provider: TopupProvider = "chapa"
+): Promise<TopupResponse> {
   const reference = `topup_${randomUUID()}`;
 
   const { rows: userRows } = await pool.query<{ email: string | null; display_name: string }>(
@@ -406,7 +412,8 @@ export async function initiateTopup(userId: string, amountSantim: number): Promi
     client.release();
   }
 
-  const { checkoutUrl } = await chapaClient.initializeCheckout(amountSantim, reference, {
+  const gateway = provider === "santimpay" ? santimpayClient : chapaClient;
+  const { checkoutUrl } = await gateway.initializeCheckout(amountSantim, reference, {
     email,
     firstName: firstName || "Birq",
     lastName: rest.join(" ") || "User",

@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { AppError } from "../common/errors.js";
 import { pool } from "../common/db.js";
 import { cleanupTestUsers, createTestCreator, createTestViewer } from "../test/fixtures.js";
-import { getCreatorProfile, listMyFollowers, toggleFollow } from "./service.js";
+import { getCreatorProfile, getFollowStatus, listMyFollowers, setFollowNotifyMode, toggleFollow } from "./service.js";
 
 const createdUserIds: string[] = [];
 
@@ -27,6 +28,23 @@ describe("getCreatorProfile", () => {
     expect(result!.username).toBe(creator.username);
     expect(result!.followerCount).toBe(0);
     expect(result!.isFollowing).toBe(false);
+    expect(result!.socialLinks).toEqual({});
+  });
+
+  it("returns real social links once set", async () => {
+    const creator = await createTestCreator();
+    createdUserIds.push(creator.id);
+    await pool.query(`UPDATE users SET social_links = $1 WHERE id = $2`, [
+      JSON.stringify({ twitch: "https://twitch.tv/example", tiktok: "https://tiktok.com/@example" }),
+      creator.id,
+    ]);
+
+    const result = await getCreatorProfile(creator.username, null);
+
+    expect(result!.socialLinks).toEqual({
+      twitch: "https://twitch.tv/example",
+      tiktok: "https://tiktok.com/@example",
+    });
   });
 
   it("reflects a real follow relationship and follower count", async () => {
@@ -44,6 +62,41 @@ describe("getCreatorProfile", () => {
     const asAnonymous = await getCreatorProfile(creator.username, null);
     expect(asAnonymous!.isFollowing).toBe(false); // personalization only, count is still public
     expect(asAnonymous!.followerCount).toBe(1);
+  });
+});
+
+describe("follow notify mode", () => {
+  it("defaults a fresh follow to 'all'", async () => {
+    const creator = await createTestCreator();
+    createdUserIds.push(creator.id);
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+
+    await toggleFollow(viewer.id, creator.id);
+
+    const status = await getFollowStatus(viewer.id, creator.id);
+    expect(status.notifyMode).toBe("all");
+  });
+
+  it("round-trips setFollowNotifyMode through getFollowStatus", async () => {
+    const creator = await createTestCreator();
+    createdUserIds.push(creator.id);
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+    await toggleFollow(viewer.id, creator.id);
+
+    await setFollowNotifyMode(viewer.id, creator.id, "muted");
+
+    expect((await getFollowStatus(viewer.id, creator.id)).notifyMode).toBe("muted");
+  });
+
+  it("404s when setting notify mode for a creator the viewer doesn't follow", async () => {
+    const creator = await createTestCreator();
+    createdUserIds.push(creator.id);
+    const viewer = await createTestViewer();
+    createdUserIds.push(viewer.id);
+
+    await expect(setFollowNotifyMode(viewer.id, creator.id, "muted")).rejects.toThrow(AppError);
   });
 });
 

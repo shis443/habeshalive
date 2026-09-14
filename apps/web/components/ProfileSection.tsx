@@ -1,31 +1,67 @@
 "use client";
 
-import type { MyAccount } from "@birq/shared";
+import type { MyAccount, SocialLinkPlatform } from "@birq/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import styles from "./AccountSection.module.css";
 
+const SOCIAL_PLATFORMS: { id: SocialLinkPlatform; label: string; placeholder: string }[] = [
+  { id: "twitch", label: "Twitch", placeholder: "https://twitch.tv/yourname" },
+  { id: "twitter", label: "X / Twitter", placeholder: "https://x.com/yourname" },
+  { id: "youtube", label: "YouTube", placeholder: "https://youtube.com/@yourname" },
+  { id: "instagram", label: "Instagram", placeholder: "https://instagram.com/yourname" },
+  { id: "discord", label: "Discord", placeholder: "https://discord.gg/yourinvite" },
+  { id: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@yourname" },
+];
+
+// A URL that fails to parse can't be rendered as a real link on the
+// public profile — checked client-side so the error surfaces on the
+// exact field, not as a generic 400 from the server's own zod .url().
+function isValidOrEmptyUrl(value: string): boolean {
+  if (!value) return true;
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ProfileSection({ account }: { account: MyAccount }) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(account.displayName);
   const [bio, setBio] = useState(account.bio ?? "");
+  const [socialLinks, setSocialLinks] = useState<Partial<Record<SocialLinkPlatform, string>>>(
+    account.socialLinks
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const avatarUrl = resolveAvatarUrl(account.avatarUrl);
+  const invalidPlatform = SOCIAL_PLATFORMS.find((p) => !isValidOrEmptyUrl(socialLinks[p.id] ?? ""));
 
   async function handleSave() {
+    if (invalidPlatform) {
+      setError(`${invalidPlatform.label} isn't a valid URL`);
+      return;
+    }
     setSaving(true);
     setError(null);
     setSuccess(false);
     try {
+      // Full replacement, not a per-key merge — send only the platforms
+      // that currently have a non-empty value, matching updateProfile's
+      // COALESCE-whole-column semantics server-side.
+      const cleanedLinks = Object.fromEntries(
+        Object.entries(socialLinks).filter(([, url]) => url && url.trim().length > 0)
+      );
       const res = await fetch("/api/backend/auth/account/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, bio }),
+        body: JSON.stringify({ displayName, bio, socialLinks: cleanedLinks }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
@@ -87,6 +123,23 @@ export function ProfileSection({ account }: { account: MyAccount }) {
           onChange={(e) => setBio(e.target.value)}
         />
       </div>
+
+      {SOCIAL_PLATFORMS.map((platform) => (
+        <div className={styles.field} key={platform.id}>
+          <label className={styles.fieldLabel} htmlFor={`social-${platform.id}`}>
+            {platform.label}
+          </label>
+          <input
+            id={`social-${platform.id}`}
+            type="url"
+            className={styles.input}
+            placeholder={platform.placeholder}
+            value={socialLinks[platform.id] ?? ""}
+            onChange={(e) => setSocialLinks((prev) => ({ ...prev, [platform.id]: e.target.value }))}
+            maxLength={300}
+          />
+        </div>
+      ))}
 
       <button type="button" className={styles.button} onClick={handleSave} disabled={saving}>
         {saving ? "Saving…" : "Save"}

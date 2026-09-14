@@ -2,6 +2,7 @@
 
 import type { Vod } from "@birq/shared";
 import { useState } from "react";
+import { DownloadButton } from "./DownloadButton";
 import styles from "./VodManager.module.css";
 
 function formatDuration(seconds: number | null): string {
@@ -108,6 +109,7 @@ export function VodManager({ vods: initialVods }: { vods: Vod[] }) {
             <button type="button" className={styles.deleteButton} onClick={() => remove(vod.id)} disabled={busyId === vod.id}>
               Delete
             </button>
+            <DownloadButton kind="vod" id={vod.id} />
           </div>
         </div>
       ))}

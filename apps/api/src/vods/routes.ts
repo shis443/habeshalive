@@ -9,8 +9,12 @@ import {
   incrementClipViews,
   listClipsByCategory,
   listClipsForCreator,
+  listMyClips,
   listTrendingClips,
+  publishClip,
+  unpublishClip,
 } from "./clip-service.js";
+import { enqueueDownload, getDownloadJobStatus } from "./download-service.js";
 import {
   deleteVodOwned,
   incrementVodViews,
@@ -49,6 +53,24 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
     await deleteVodOwned(req.params.id, req.user.sub);
     reply.status(204).send();
   });
+
+  // Build 2c — watermarked-download background job (download-service.ts).
+  // Enqueue only; the ffmpeg re-encode runs out-of-band on
+  // processNextDownloadJob's sweep (server.ts), polled via
+  // GET /downloads/:jobId below. Static "downloads" segment can't collide
+  // with the parametric "/:username" route further down regardless of
+  // registration order, same reasoning as "/mine" above.
+  app.post<{ Params: { id: string } }>(
+    "/:id/download",
+    { preHandler: app.authenticate },
+    async (req) => enqueueDownload("vod", req.params.id, req.user.sub)
+  );
+
+  app.get<{ Params: { jobId: string } }>(
+    "/downloads/:jobId",
+    { preHandler: app.authenticate },
+    async (req) => getDownloadJobStatus(req.params.jobId, req.user.sub)
+  );
 
   // Public, unauthenticated — a viewer's browser fires this once when
   // VodPlayer.tsx actually starts playback (not on every page load that
@@ -98,6 +120,29 @@ export const vodRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { username: string } }>("/:username/clips", async (req) =>
     listClipsForCreator(req.params.username)
+  );
+
+  // Build 2c — creator's own clip management (publish toggle for the
+  // profile "Posts" grid, download button). Static "clips" + "mine"
+  // segments, same non-collision reasoning as "/mine" above.
+  app.get("/clips/mine", { preHandler: app.authenticate }, async (req) => listMyClips(req.user.sub));
+
+  app.patch<{ Params: { id: string } }>(
+    "/clips/:id/publish",
+    { preHandler: app.authenticate },
+    async (req) => publishClip(req.params.id, req.user.sub)
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/clips/:id/unpublish",
+    { preHandler: app.authenticate },
+    async (req) => unpublishClip(req.params.id, req.user.sub)
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/clips/:id/download",
+    { preHandler: app.authenticate },
+    async (req) => enqueueDownload("clip", req.params.id, req.user.sub)
   );
 
   // Phase 3.3 — category detail page's Clips tab. Static "clips" segment

@@ -107,6 +107,22 @@ export async function cancelPlatformSubscription(subscriberId: string): Promise<
   );
 }
 
+// Build 3 — Birq Plus. Centralizes what was 4 separate inline
+// `EXISTS (SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1
+// AND status = 'active')` copies (ads/service.ts x3, chat/service.ts x1)
+// into one real query, flagged as duplicated by this project's own
+// backend audit. `status = 'active'` alone is the complete check — no
+// separate `expires_at` comparison needed — because renewPlatformSubscriptions
+// (the daily renewal sweep below) already keeps status in sync with real
+// expiry, same as every other status-sweep pair in this codebase.
+export async function hasActivePlatformSubscription(userId: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM platform_subscriptions WHERE subscriber_id = $1 AND status = 'active'`,
+    [userId]
+  );
+  return rows.length > 0;
+}
+
 export async function getMyPlatformSubscription(subscriberId: string): Promise<PlatformSubscription | null> {
   const { rows } = await pool.query<{ amount_santim: number; status: PlatformSubscriptionStatus; expires_at: string }>(
     `SELECT amount_santim, status, expires_at FROM platform_subscriptions

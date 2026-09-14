@@ -1,9 +1,10 @@
 "use client";
 
-import type { ChatMessage, GifterBadgeTier, GiftTier, PinnedMessage, Rank, StreamActivity } from "@birq/shared";
+import type { CatalogEmote, ChatMessage, GifterBadgeTier, GiftTier, PinnedMessage, Rank, StreamActivity } from "@birq/shared";
 import { Centrifuge } from "centrifuge";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import { API_BASE_URL, CENTRIFUGO_WS_URL } from "@/lib/config";
 import { openAuthModal } from "@/lib/useAuthModal";
 import { formatViewerCount } from "@/lib/format";
@@ -13,6 +14,7 @@ import { AnnouncementBanner } from "./AnnouncementBanner";
 import { ChatSettingsPanel } from "./ChatSettingsPanel";
 import { DonateModal } from "./DonateModal";
 import { EmojiPickerButton } from "./EmojiPickerButton";
+import { EmotePickerButton } from "./EmotePickerButton";
 import { GurshaModal } from "./GurshaModal";
 import { CloseIcon, GiftIcon, PinIcon, SendIcon, WalletIcon } from "./icons";
 import styles from "./ChatPanel.module.css";
@@ -115,6 +117,33 @@ function toEntry(m: ChatMessage): ChatEntry {
   };
 }
 
+// Build 3 — Birq Plus's global emote catalog. Only a code the catalog
+// actually contains gets replaced — a bare ":word:" a viewer typed that
+// happens to look like emote syntax (but isn't an approved emote) renders
+// as literal text, same "don't guess, only act on real matches" posture
+// as everywhere else in this codebase that parses free-form user text.
+const EMOTE_TOKEN_PATTERN = /:([a-zA-Z0-9_]{2,32}):/g;
+
+function renderMessageWithEmotes(text: string, catalog: Map<string, string>): ReactNode {
+  if (catalog.size === 0) return text;
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  EMOTE_TOKEN_PATTERN.lastIndex = 0;
+  while ((match = EMOTE_TOKEN_PATTERN.exec(text))) {
+    const imageUrl = catalog.get(match[1]!);
+    if (!imageUrl) continue;
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    parts.push(
+      // eslint-disable-next-line @next/next/no-img-element
+      <img key={match.index} src={imageUrl} alt={`:${match[1]}:`} title={`:${match[1]}:`} className={styles.emote} />
+    );
+    lastIndex = EMOTE_TOKEN_PATTERN.lastIndex;
+  }
+  parts.push(text.slice(lastIndex));
+  return <Fragment>{parts}</Fragment>;
+}
+
 async function fetchChatToken(): Promise<string> {
   // Deliberately hits the API directly (not the /api/backend proxy) — this
   // route is public on purpose, so anonymous viewers get real-time updates
@@ -165,6 +194,22 @@ export function ChatPanel({
   const [messages, setMessages] = useState<ChatEntry[]>(() => [
     { id: "sys-welcome", kind: "system", text: t("welcome") },
   ]);
+
+  const [emotes, setEmotes] = useState<CatalogEmote[]>([]);
+  const emoteLookup = useMemo(() => new Map(emotes.map((e) => [e.code, e.imageUrl])), [emotes]);
+
+  // Public, unauthenticated, direct-to-API like fetchChatToken above — a
+  // viewer with no session still needs to see emotes rendered in chat.
+  // Fetched once per mount, not re-polled: a brand-new approval showing up
+  // mid-session without a refresh is an acceptable staleness window, same
+  // posture as every other "fetch once" call in this file.
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/emotes/catalog`)
+      .then((res) => unwrapChatData<CatalogEmote[]>(res))
+      .then((catalog) => setEmotes(catalog.map((e) => ({ ...e, imageUrl: resolveAvatarUrl(e.imageUrl)! }))))
+      .catch(() => {});
+  }, []);
+
   const [pinnedMessage, setPinnedMessage] = useState<PinnedMessage | null>(null);
   const [balanceSantim, setBalanceSantim] = useState<number | null>(null);
   const [input, setInput] = useState("");
@@ -487,7 +532,7 @@ export function ChatPanel({
               <span className={styles.username} style={{ color: usernameColor(entry.username) }}>
                 {entry.username}
               </span>{" "}
-              {entry.text}
+              {renderMessageWithEmotes(entry.text, emoteLookup)}
               {canModerate && (
                 <button
                   type="button"
@@ -532,6 +577,7 @@ export function ChatPanel({
             disabled={sending}
           />
           <EmojiPickerButton onSelect={(emoji) => setInput((prev) => prev + emoji)} />
+          <EmotePickerButton emotes={emotes} onSelect={(code) => setInput((prev) => `${prev}:${code}: `)} />
           <button
             type="button"
             className={`${styles.iconButton} ${styles.giftButton}`}

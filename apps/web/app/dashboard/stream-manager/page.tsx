@@ -2,14 +2,19 @@ import Link from "next/link";
 import { GoLivePanel } from "@/components/GoLivePanel";
 import { RemoteControlAssistantsPanel } from "@/components/RemoteControlAssistantsPanel";
 import { RemoteControlPanel } from "@/components/RemoteControlPanel";
-import { getCurrentUser, getLiveStreamByUsername, getStreamKey } from "@/lib/api";
+import { ScheduleStreamPanel } from "@/components/ScheduleStreamPanel";
+import { getCurrentUser, getLiveStreamByUsername, getMyScheduledStream, getStreamKey } from "@/lib/api";
 import styles from "../page.module.css";
 
 export default async function StreamManagerPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [streamKey, liveStream] = await Promise.all([getStreamKey(), getLiveStreamByUsername(user.username)]);
+  const [streamKey, liveStream, scheduledStream] = await Promise.all([
+    getStreamKey(),
+    getLiveStreamByUsername(user.username),
+    getMyScheduledStream(),
+  ]);
 
   if (!streamKey) {
     return (
@@ -36,6 +41,7 @@ export default async function StreamManagerPage() {
         displayName={user.displayName}
         initialIsLive={!!liveStream}
       />
+      <ScheduleStreamPanel scheduledStream={scheduledStream} />
       <RemoteControlPanel streamerId={user.id} />
       <RemoteControlAssistantsPanel streamerId={user.id} />
     </>

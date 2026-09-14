@@ -23,6 +23,7 @@ import { creatorRoutes } from "./creators/routes.js";
 import { dmcaRoutes } from "./dmca/routes.js";
 import { followRoutes } from "./follows/routes.js";
 import { giftCardRoutes } from "./gift-cards/routes.js";
+import { emoteRoutes } from "./emotes/routes.js";
 import { kycRoutes } from "./kyc/routes.js";
 import { httpRequestDuration, httpRequestsTotal, registry } from "./common/metrics.js";
 import { pool } from "./common/db.js";
@@ -418,6 +419,7 @@ export function buildApp() {
   app.register(remoteControlRoutes, { prefix: "/remote-control" });
   app.register(remoteControlRelay, { prefix: "/remote-control" });
   app.register(dmcaRoutes, { prefix: "/dmca" });
+  app.register(emoteRoutes, { prefix: "/emotes" });
 
   return app;
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { socialLinksSchema } from "./auth.js";
 
 export const streamStatusSchema = z.enum(["offline", "live", "ended"]);
 
@@ -37,6 +38,7 @@ export const liveStreamSchema = z.object({
     displayName: z.string(),
     avatarUrl: z.string().nullable(),
     bio: z.string().nullable(),
+    socialLinks: socialLinksSchema,
     // Admin-set only (see admin/creators-service.ts) — no automated
     // verification criteria exist yet.
     isVerified: z.boolean(),

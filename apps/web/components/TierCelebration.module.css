@@ -1,0 +1,78 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+  z-index: 10;
+  animation: overlayIn 0.25s ease-out;
+}
+
+.frame {
+  --band-width: calc(3px + var(--elaborateness) * 5px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border-radius: 12px;
+  background: var(--surface-container-high);
+  border: var(--band-width) solid transparent;
+  border-image: repeating-linear-gradient(
+      135deg,
+      var(--primary) 0 10px,
+      var(--secondary) 10px 20px
+    )
+    1;
+  box-shadow: 0 0 calc(20px + var(--elaborateness) * 40px)
+    color-mix(in srgb, var(--primary) calc(30% + var(--elaborateness) * 40%), transparent);
+  animation: frameIn 0.4s var(--ease-spring-smooth);
+  text-align: center;
+}
+
+.label {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  margin: 0;
+}
+
+.title {
+  font-family: var(--font-headline);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--on-background);
+  margin: 4px 0 0;
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes frameIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .frame {
+    animation: none;
+  }
+}

@@ -3,6 +3,7 @@ import { AccountDeletionSection } from "@/components/AccountDeletionSection";
 import { BottomNav } from "@/components/BottomNav";
 import { ConnectedAccountsSection } from "@/components/ConnectedAccountsSection";
 import { ContactSection } from "@/components/ContactSection";
+import { EmoteSection } from "@/components/EmoteSection";
 import { KycSection } from "@/components/KycSection";
 import { NotificationPreferencesSection } from "@/components/NotificationPreferencesSection";
 import { PasswordSection } from "@/components/PasswordSection";
@@ -20,8 +21,10 @@ import {
   getCurrentUser,
   getLinkedSocialAccounts,
   getMyAccount,
+  getMyEmotes,
   getMyKycStatus,
   getMyPayoutInstruments,
+  getMyPlatformSubscription,
   getMyTaxProfile,
   getNotificationPreferences,
   getTotpStatus,
@@ -47,14 +50,17 @@ export default async function SettingsPage({
   const { tab } = await searchParams;
   const initialTab: SettingsTabId = VALID_TABS.includes(tab as SettingsTabId) ? (tab as SettingsTabId) : "profile";
 
-  const [account, socialAccounts, deletionStatus, notificationPrefs, totpStatus, kycStatus] = await Promise.all([
-    getMyAccount(),
-    getLinkedSocialAccounts(),
-    getAccountDeletionStatus(),
-    getNotificationPreferences(),
-    getTotpStatus(),
-    getMyKycStatus(),
-  ]);
+  const [account, socialAccounts, deletionStatus, notificationPrefs, totpStatus, kycStatus, platformSubscription, myEmotes] =
+    await Promise.all([
+      getMyAccount(),
+      getLinkedSocialAccounts(),
+      getAccountDeletionStatus(),
+      getNotificationPreferences(),
+      getTotpStatus(),
+      getMyKycStatus(),
+      getMyPlatformSubscription(),
+      getMyEmotes(),
+    ]);
   if (!account) redirect("/login?redirect=/settings");
 
   // Payout method + tax profile only matter for creators — fetched only
@@ -98,7 +104,12 @@ export default async function SettingsPage({
               hasPhoneOrEmail={!!account.phoneNumber || !!account.email}
             />
           }
-          preferences={<PreferencesSection isAuthed />}
+          preferences={
+            <>
+              <PreferencesSection isAuthed />
+              <EmoteSection isBirqPlus={platformSubscription?.status === "active"} initial={myEmotes} />
+            </>
+          }
         />
       </main>
       <BottomNav />
